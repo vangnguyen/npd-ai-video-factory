@@ -145,7 +145,10 @@ def _wav_duration(path: Path) -> float:
     with wave.open(str(path), "rb") as wav:
         frame_rate = wav.getframerate()
         frame_width = wav.getnchannels() * wav.getsampwidth()
-        frames = wav.readframes(wav.getnframes())
+        chunks: list[bytes] = []
+        while chunk := wav.readframes(65_536):
+            chunks.append(chunk)
+        frames = b"".join(chunks)
     if frame_rate <= 0 or frame_width <= 0 or len(frames) % frame_width:
         raise RuntimeError("TTS provider produced an invalid WAV payload")
     duration = (len(frames) // frame_width) / float(frame_rate)
