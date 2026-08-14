@@ -1,115 +1,146 @@
-# Technical Handoff: Sprint 1 Vertical Slice
+# NPD AI Video Factory — Sprint 1 Technical Handoff
 
 ## Objective
 
-Build one production-shaped vertical slice that accepts a Vietnamese real-estate video request and produces a reviewable 1080x1920 MP4 without manual editing.
+Build the first end-to-end vertical slice:
 
-## In scope
+`n8n -> FastAPI -> script/storyboard -> TTS -> local footage -> video manifest -> Remotion -> final.mp4`
 
-- n8n orchestration only; n8n must not render video.
-- FastAPI create/status/artifact endpoints.
-- Redis-backed job state and queue.
-- Pluggable text-generation and Vietnamese TTS adapters.
-- Deterministic local-footage resolver using files supplied by the operator.
-- A versioned video manifest validated before rendering.
-- Remotion renderer with one template: `real-estate-short-v1`.
-- Job artifacts and structured failure details.
-- A 45-second Vinhomes Green Paradise smoke test.
+The output target is a Vietnamese 45-second 9:16 real-estate video, rendered without manual editing and exposed as a job artifact for review.
 
-## Explicitly out of scope
+## Current implementation status
 
-- Vision or automatic scene intelligence.
-- ComfyUI, text-to-video, or image-to-video generation.
-- Stock-footage provider integrations.
-- Dashboard/review application.
-- Automatic publishing to TikTok, Facebook, or YouTube.
-- Analytics feedback loops.
+Tasks 1-9 are implemented on `codex/sprint-1-vertical-slice` and covered by API CI:
 
-## Runtime architecture
+- strict FastAPI request/status contracts
+- Redis-backed job state, idempotency, queue, monotonic transitions, and artifact registration
+- safe artifact download endpoint
+- content provider and Vietnamese TTS interfaces
+- deterministic development content provider
+- deterministic local asset resolver
+- manifest builder and Draft 2020-12 JSON Schema validation
+
+Implementation should now start at Task 10 (Remotion), then Task 11 (resumable worker), Task 12 (n8n smoke flow), and Task 13 (E2E proof).
+
+## Runtime topology
 
 ```text
 n8n
-  -> POST /api/v1/video-jobs
-FastAPI
-  -> validate request
-  -> persist job snapshot
-  -> enqueue job in Redis
-Worker
-  -> generate script and storyboard
-  -> synthesize narration
-  -> resolve local assets deterministically
-  -> build and validate video manifest
-  -> call Remotion renderer
-Renderer
-  -> render real-estate-short-v1
-  -> write final.mp4
-Worker
-  -> record artifact and complete status
-n8n
-  -> poll GET /api/v1/video-jobs/{job_id}
+  |
+  | POST /api/v1/video-jobs
+  v
+FastAPI API
+  |
+  +--> Redis job state
+  +--> npd:video-jobs:queue
+              |
+              v
+         Worker service
+              |
+              +--> Content provider
+              +--> Vietnamese TTS provider
+              +--> Subtitle generation
+              +--> Local asset resolver
+              +--> Manifest builder / validator
+              +--> Remotion renderer
+              +--> ffprobe quality check
 ```
 
-## Required pipeline stages
+## Sprint 1 service boundaries
 
-| Stage | Progress range | Required output |
-|---|---:|---|
-| `queued` | 0 | Immutable input snapshot |
-| `scripting` | 5-20 | Script JSON |
-| `storyboarding` | 20-35 | Timed scene plan |
-| `generating_voice` | 35-50 | Narration audio and measured duration |
-| `resolving_assets` | 50-65 | Local file selections with time ranges |
-| `generating_subtitles` | 65-72 | Timed subtitle cues |
-| `building_manifest` | 72-78 | Schema-valid manifest |
-| `rendering` | 78-95 | MP4 artifact |
-| `quality_check` | 95-99 | Mechanical QC report |
-| `awaiting_review` | 100 | Artifact URL ready for human review |
+### API
+- `GET /healthz`
+- `GET /readyz`
+- `POST /api/v1/video-jobs`
+- `GET /api/v1/video-jobs/{job_id}`
+- `GET /api/v1/video-jobs/{job_id}/artifacts/{artifact_name}`
 
-Terminal error state: `failed`. Sprint 1 stops at `awaiting_review`; approval and publishing are later phases.
+### Redis
+- job key: `npd:video-job:{job_id}`
+- idempotency key: `npd:video-idempotency:{key}`
+- queue: `npd:video-jobs:queue`
 
-## Artifact layout
+### Renderer
+- `POST /render`
+- reads the committed video manifest only
+- writes `final.mp4` under the job directory
+
+## Canonical state flow
 
 ```text
-storage/jobs/{job_id}/
-  request.json
-  script.json
-  storyboard.json
-  narration.mp3
-  subtitles.json
-  manifest.json
-  qc-report.json
-  final.mp4
-  job.json
+queued
+  -> scripting
+  -> storyboarding
+  -> generating_voice
+  -> generating_subtitles
+  -> resolving_assets
+  -> building_manifest
+  -> rendering
+  -> quality_check
+  -> awaiting_review
 ```
 
-Each stage writes atomically: write a temporary file, validate it, then rename it to the canonical artifact name.
+Any stage may terminate in `failed`. Progress must never decrease.
 
-## Reliability rules
+## Artifact model
 
-1. Job creation is idempotent when `Idempotency-Key` is supplied.
-2. A worker may resume from the last validated artifact after restart.
-3. Every failed job records `failed_stage`, a stable error code, a safe message, and retryability.
-4. Paths in API responses are URLs or job-relative artifact names, never host filesystem paths.
-5. Secrets exist only in `.env`; examples and logs must never contain tokens.
-6. Local media inputs must be allowlisted beneath `ASSET_STORAGE_ROOT`.
-7. Manifest duration must equal the sum of scene durations within a 100 ms tolerance.
-8. Renderer inputs are immutable for a render attempt.
+Every generated file must live below:
 
-## Template timeline
+`storage/jobs/{job_id}/`
 
-- 0-3 seconds: hook.
-- 3-8 seconds: project identity.
-- 8-20 seconds: key information.
-- 20-32 seconds: visual evidence/product.
-- 32-40 seconds: sales or investment angle.
-- 40-45 seconds: CTA and brand lockup.
+Expected artifacts:
 
-Required components: hook text, project title, feature cards, subtitles, NPD logo, CTA, progress bar, and scene transition.
+```text
+script.json
+storyboard.json
+narration.mp3 or narration.wav
+subtitles.srt
+video-manifest.json
+final.mp4
+video-metadata.json
+```
 
-## Decisions for Codex
+An artifact must be registered in Redis before the API will serve it.
 
-- Python 3.12 and FastAPI for the API/worker.
-- Redis as the only Sprint 1 external state dependency.
-- TypeScript and Remotion for rendering.
-- JSON Schema is the cross-language contract source of truth.
-- Provider interfaces must support deterministic fakes for tests.
-- No database, vector store, or cloud object storage in Sprint 1.
+## Renderer target
+
+Template: `real-estate-short-v1`
+
+- 1080x1920
+- 30 fps
+- H.264 MP4
+- local MP4/image scenes
+- optional narration audio from `voice.audio_uri`
+- subtitle overlays in mobile-safe margins
+- brand logo area
+- final CTA
+
+Renderer progress 0-1 should map to overall job progress 70-95.
+
+## Worker requirements
+
+The worker must be resumable. Before running a stage, check for a validated artifact from that stage. On restart, continue from the latest valid stage rather than starting over.
+
+Retries are allowed only for transient provider/renderer errors and must be bounded. Validation failures are not retryable.
+
+## Security constraints
+
+- no secrets in Git
+- no user-controlled arbitrary filesystem paths
+- all asset/project folders are constrained to the configured roots
+- artifact serving is allowlisted by the job record
+- public errors do not expose stack traces or host secrets
+
+## Sprint 1 exclusions
+
+Do not implement:
+- Vision AI / scene intelligence
+- ComfyUI
+- stock media providers
+- dashboard
+- automatic TikTok/Facebook/YouTube publishing
+- analytics
+
+## Acceptance target
+
+A committed 45-second Vinhomes Green Paradise request must produce a playable 1080x1920 H.264 MP4 and reach `awaiting_review` without manual video editing. The final PR must include test results and ffprobe metadata evidence.
