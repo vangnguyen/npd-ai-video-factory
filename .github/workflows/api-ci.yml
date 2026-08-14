@@ -1,4 +1,4 @@
-name: API CI
+name: Sprint 1 CI
 
 on:
   push:
@@ -25,3 +25,20 @@ jobs:
         run: python -m pip install -e '.[dev]'
       - name: Run API tests
         run: pytest -q
+
+  test-renderer:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: renderer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install renderer dependencies
+        run: npm install
+      - name: Typecheck renderer
+        run: npm run typecheck
+      - name: Bundle Remotion composition
+        run: npm run bundle:check
