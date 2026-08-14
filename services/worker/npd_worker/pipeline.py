@@ -332,7 +332,10 @@ def _read_wav_pcm(path: Path) -> tuple[tuple[int, int, int], bytes]:
         frame_rate = wav.getframerate()
         if wav.getcomptype() != "NONE":
             raise ValueError("compressed WAV audio is not supported")
-        frames = wav.readframes(wav.getnframes())
+        chunks: list[bytes] = []
+        while chunk := wav.readframes(65_536):
+            chunks.append(chunk)
+        frames = b"".join(chunks)
     frame_width = channels * sample_width
     if channels <= 0 or sample_width <= 0 or frame_rate <= 0 or len(frames) % frame_width:
         raise ValueError("audio artifact has invalid WAV framing")
