@@ -1,0 +1,585 @@
+from __future__ import annotations
+
+import asyncio
+import html
+import json
+import logging
+import os
+import re
+import wave
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, TypeVar
+
+import httpx
+from pydantic import BaseModel
+
+from app.assets import AssetResolutionError, LocalAssetResolver
+from app.manifest import ManifestValidationError, build_manifest, persist_manifest, validate_manifest
+from app.models import Artifact, JobError, JobRecord, JobStage, JobStatus, STAGE_ORDER
+from app.providers import (
+    DeterministicContentProvider,
+    EspeakVietnameseTTSProvider,
+    ScriptResult,
+    StoryboardResult,
+    TTSNotConfiguredError,
+    UnconfiguredVietnameseTTSProvider,
+)
+from app.state import RedisJobStore
+
+
+logger = logging.getLogger("npd-video-worker.pipeline")
+T = TypeVar("T", bound=BaseModel)
+JOB_ID_PATTERN = re.compile(r"^vid_[A-Za-z0-9_-]{4,76}$")
+
+
+@dataclass(frozen=True)
+class WorkerConfig:
+    job_root: Path
+    asset_root: Path
+    schema_path: Path
+    renderer_url: str
+    brand_name: str
+    logo_path: Path
+    tts_provider: str
+    espeak_voice: str
+    espeak_rate: int
+    renderer_timeout_seconds: float
+
+    @classmethod
+    def from_env(cls) -> "WorkerConfig":
+        return cls(
+            job_root=Path(os.getenv("JOB_STORAGE_ROOT", "/workspace/storage/jobs")).resolve(),
+            asset_root=Path(os.getenv("ASSET_STORAGE_ROOT", "/workspace/storage/assets")).resolve(),
+            schema_path=Path(
+                os.getenv(
+                    "VIDEO_MANIFEST_SCHEMA_PATH",
+                    "/workspace/packages/contracts/video-manifest.schema.json",
+                )
+            ).resolve(),
+            renderer_url=os.getenv("RENDERER_URL", "http://renderer:3001").rstrip("/"),
+            brand_name=os.getenv("NPD_BRAND_NAME", "Ngoc Phuong Dong"),
+            logo_path=Path(
+                os.getenv(
+                    "NPD_LOGO_PATH",
+                    "/workspace/storage/assets/brand/npd-logo.png",
+                )
+            ).resolve(),
+            tts_provider=os.getenv("TTS_PROVIDER", "espeak").lower(),
+            espeak_voice=os.getenv("ESPEAK_VOICE", "vi"),
+            espeak_rate=int(os.getenv("ESPEAK_RATE", "145")),
+            renderer_timeout_seconds=float(os.getenv("RENDERER_TIMEOUT_SECONDS", "600")),
+        )
+
+
+class PipelineFailure(RuntimeError):
+    def __init__(
+        self,
+        *,
+        code: str,
+        message: str,
+        stage: JobStage,
+        retryable: bool = False,
+        details: list[dict[str, Any]] | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.stage = stage
+        self.retryable = retryable
+        self.details = details or []
+
+
+class RendererUnavailable(RuntimeError):
+    pass
+
+
+class RendererFailed(RuntimeError):
+    pass
+
+
+class VideoQCError(RuntimeError):
+    pass
+
+
+def safe_job_dir(root: Path, job_id: str) -> Path:
+    if not JOB_ID_PATTERN.fullmatch(job_id):
+        raise ValueError("invalid job id")
+    root = root.resolve()
+    candidate = (root / job_id).resolve()
+    if candidate.parent != root:
+        raise ValueError("job directory escaped storage root")
+    return candidate
+
+
+def artifact_url(job_id: str, name: str) -> str:
+    return f"/api/v1/video-jobs/{job_id}/artifacts/{name}"
+
+
+def write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(payload, BaseModel):
+        data = payload.model_dump(mode="json")
+    else:
+        data = payload
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def load_model(path: Path, model_type: type[T]) -> T:
+    return model_type.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def build_subtitles(storyboard: StoryboardResult) -> list[dict[str, Any]]:
+    return [
+        {
+            "start_seconds": scene.start_seconds,
+            "end_seconds": round(scene.start_seconds + scene.duration_seconds, 3),
+            "text": scene.narration[:160],
+        }
+        for scene in storyboard.scenes
+        if scene.narration.strip()
+    ]
+
+
+def _srt_timestamp(seconds: float) -> str:
+    milliseconds = max(0, int(round(seconds * 1000)))
+    hours, remainder = divmod(milliseconds, 3_600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    secs, millis = divmod(remainder, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
+def write_srt(path: Path, subtitles: list[dict[str, Any]]) -> None:
+    blocks: list[str] = []
+    for index, item in enumerate(subtitles, start=1):
+        blocks.append(
+            "\n".join(
+                [
+                    str(index),
+                    f"{_srt_timestamp(float(item['start_seconds']))} --> {_srt_timestamp(float(item['end_seconds']))}",
+                    str(item["text"]),
+                ]
+            )
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n\n".join(blocks) + ("\n" if blocks else ""), encoding="utf-8")
+
+
+def validate_wav(path: Path) -> float:
+    if not path.is_file() or path.stat().st_size <= 44:
+        raise ValueError("audio artifact is missing or empty")
+    with wave.open(str(path), "rb") as wav:
+        duration = wav.getnframes() / float(wav.getframerate())
+    if duration <= 0:
+        raise ValueError("audio duration is zero")
+    return duration
+
+
+def ensure_brand_logo(config: WorkerConfig, job_dir: Path) -> Path:
+    if config.logo_path.is_file():
+        return config.logo_path
+    placeholder = job_dir / "npd-logo-placeholder.svg"
+    label = html.escape(config.brand_name)
+    placeholder.write_text(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='600' height='180' viewBox='0 0 600 180'>"
+        "<rect width='600' height='180' rx='24' fill='#111111' fill-opacity='0.72'/>"
+        f"<text x='300' y='104' text-anchor='middle' font-family='Arial,sans-serif' font-size='38' font-weight='700' fill='white'>{label}</text>"
+        "</svg>",
+        encoding="utf-8",
+    )
+    return placeholder
+
+
+def validate_probe_payload(
+    payload: dict[str, Any],
+    *,
+    expected_duration: float,
+    require_audio: bool,
+) -> dict[str, Any]:
+    streams = payload.get("streams") or []
+    video = next((stream for stream in streams if stream.get("codec_type") == "video"), None)
+    audio = next((stream for stream in streams if stream.get("codec_type") == "audio"), None)
+    if video is None:
+        raise VideoQCError("final output has no video stream")
+    if int(video.get("width", 0)) != 1080 or int(video.get("height", 0)) != 1920:
+        raise VideoQCError("final output is not 1080x1920")
+    if video.get("codec_name") != "h264":
+        raise VideoQCError(f"expected H.264 video, found {video.get('codec_name')}")
+    if require_audio and audio is None:
+        raise VideoQCError("final output has no audio stream")
+
+    raw_duration = (payload.get("format") or {}).get("duration") or video.get("duration")
+    try:
+        duration = float(raw_duration)
+    except (TypeError, ValueError) as exc:
+        raise VideoQCError("final output duration is unavailable") from exc
+    if abs(duration - expected_duration) > 3.0:
+        raise VideoQCError(
+            f"final duration {duration:.3f}s differs from expected {expected_duration:.3f}s"
+        )
+    return {
+        "duration_seconds": round(duration, 3),
+        "width": int(video["width"]),
+        "height": int(video["height"]),
+        "video_codec": video.get("codec_name"),
+        "audio_codec": audio.get("codec_name") if audio else None,
+    }
+
+
+async def probe_video(path: Path, *, expected_duration: float, require_audio: bool) -> dict[str, Any]:
+    if not path.is_file() or path.stat().st_size <= 100_000:
+        raise VideoQCError("final MP4 is missing or smaller than 100 KB")
+    process = await asyncio.create_subprocess_exec(
+        "ffprobe",
+        "-v",
+        "error",
+        "-print_format",
+        "json",
+        "-show_streams",
+        "-show_format",
+        str(path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    if process.returncode != 0:
+        raise VideoQCError(
+            f"ffprobe failed: {stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    payload = json.loads(stdout.decode("utf-8"))
+    result = validate_probe_payload(
+        payload,
+        expected_duration=expected_duration,
+        require_audio=require_audio,
+    )
+    result["size_bytes"] = path.stat().st_size
+    return result
+
+
+def get_tts_provider(config: WorkerConfig):
+    if config.tts_provider == "espeak":
+        return EspeakVietnameseTTSProvider(
+            voice=config.espeak_voice,
+            rate=config.espeak_rate,
+        )
+    if config.tts_provider in {"none", "unconfigured"}:
+        return UnconfiguredVietnameseTTSProvider()
+    raise TTSNotConfiguredError(f"unknown TTS_PROVIDER={config.tts_provider}")
+
+
+async def advance(
+    store: RedisJobStore,
+    job_id: str,
+    *,
+    stage: JobStage,
+    progress: int,
+) -> JobRecord:
+    current = await store.get(job_id)
+    if current is None:
+        raise KeyError(job_id)
+    if current.status in {JobStatus.AWAITING_REVIEW, JobStatus.FAILED}:
+        return current
+    if STAGE_ORDER[stage] < STAGE_ORDER[current.stage] or progress < current.progress:
+        return current
+    return await store.update_stage(
+        job_id,
+        status=JobStatus.RUNNING,
+        stage=stage,
+        progress=progress,
+    )
+
+
+async def register_artifact(
+    store: RedisJobStore,
+    job_id: str,
+    *,
+    kind: str,
+    path: Path,
+) -> None:
+    await store.add_artifact(
+        job_id,
+        artifact=Artifact(
+            kind=kind,
+            name=path.name,
+            url=artifact_url(job_id, path.name),
+        ),
+    )
+
+
+async def call_renderer(
+    config: WorkerConfig,
+    *,
+    job_id: str,
+    manifest_path: Path,
+    output_path: Path,
+) -> None:
+    payload = {
+        "job_id": job_id,
+        "manifest_path": str(manifest_path),
+        "output_path": str(output_path),
+    }
+    timeout = httpx.Timeout(
+        connect=10.0,
+        read=config.renderer_timeout_seconds,
+        write=30.0,
+        pool=10.0,
+    )
+    last_network_error: Exception | None = None
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for attempt in range(2):
+            try:
+                response = await client.post(f"{config.renderer_url}/render", json=payload)
+            except httpx.RequestError as exc:
+                last_network_error = exc
+                if attempt == 0:
+                    await asyncio.sleep(2)
+                    continue
+                raise RendererUnavailable(str(exc)) from exc
+
+            if response.status_code < 400:
+                return
+            try:
+                error = response.json().get("error", {})
+            except ValueError:
+                error = {}
+            retryable = bool(error.get("retryable")) or response.status_code in {502, 503, 504}
+            message = str(error.get("message") or f"renderer returned HTTP {response.status_code}")
+            if retryable and attempt == 0:
+                await asyncio.sleep(2)
+                continue
+            if response.status_code in {502, 503, 504}:
+                raise RendererUnavailable(message)
+            raise RendererFailed(message)
+    if last_network_error is not None:
+        raise RendererUnavailable(str(last_network_error))
+
+
+async def run_job(
+    store: RedisJobStore,
+    job_id: str,
+    *,
+    config: WorkerConfig,
+) -> JobRecord | None:
+    record = await store.get(job_id)
+    if record is None:
+        logger.warning("job_missing job_id=%s", job_id)
+        return None
+    if record.status in {JobStatus.AWAITING_REVIEW, JobStatus.FAILED}:
+        logger.info("job_terminal_skip job_id=%s status=%s", job_id, record.status.value)
+        return record
+
+    job_dir = safe_job_dir(config.job_root, job_id)
+    job_dir.mkdir(parents=True, exist_ok=True)
+    request = record.request
+    content_provider = DeterministicContentProvider()
+    tts_provider = get_tts_provider(config)
+    current_stage = JobStage.SCRIPTING
+
+    try:
+        script_path = job_dir / "script.json"
+        try:
+            script = load_model(script_path, ScriptResult)
+        except Exception:
+            current_stage = JobStage.SCRIPTING
+            await advance(store, job_id, stage=current_stage, progress=10)
+            try:
+                script = await content_provider.generate_script(request)
+            except Exception as exc:
+                raise PipelineFailure(
+                    code="CONTENT_PROVIDER_FAILED",
+                    message=str(exc),
+                    stage=current_stage,
+                ) from exc
+            write_json(script_path, script)
+        await register_artifact(store, job_id, kind="script", path=script_path)
+
+        storyboard_path = job_dir / "storyboard.json"
+        try:
+            storyboard = load_model(storyboard_path, StoryboardResult)
+        except Exception:
+            current_stage = JobStage.STORYBOARDING
+            await advance(store, job_id, stage=current_stage, progress=20)
+            try:
+                storyboard = await content_provider.generate_storyboard(request, script)
+            except Exception as exc:
+                raise PipelineFailure(
+                    code="CONTENT_PROVIDER_FAILED",
+                    message=str(exc),
+                    stage=current_stage,
+                ) from exc
+            if abs(storyboard.duration_seconds - request.video.duration_seconds) > 0.1:
+                raise PipelineFailure(
+                    code="CONTENT_PROVIDER_FAILED",
+                    message="storyboard duration does not match request",
+                    stage=current_stage,
+                )
+            write_json(storyboard_path, storyboard)
+        await register_artifact(store, job_id, kind="storyboard", path=storyboard_path)
+
+        voice_path = job_dir / "narration.wav"
+        try:
+            validate_wav(voice_path)
+        except Exception:
+            current_stage = JobStage.GENERATING_VOICE
+            await advance(store, job_id, stage=current_stage, progress=30)
+            try:
+                await tts_provider.synthesize(
+                    text=script.full_narration,
+                    language=request.video.language,
+                    output_path=voice_path,
+                )
+                validate_wav(voice_path)
+            except Exception as exc:
+                raise PipelineFailure(
+                    code="TTS_PROVIDER_FAILED",
+                    message=str(exc),
+                    stage=current_stage,
+                ) from exc
+        await register_artifact(store, job_id, kind="audio", path=voice_path)
+
+        current_stage = JobStage.GENERATING_SUBTITLES
+        await advance(store, job_id, stage=current_stage, progress=40)
+        subtitles = build_subtitles(storyboard)
+        subtitles_path = job_dir / "subtitles.srt"
+        write_srt(subtitles_path, subtitles)
+        await register_artifact(store, job_id, kind="subtitle", path=subtitles_path)
+
+        current_stage = JobStage.RESOLVING_ASSETS
+        await advance(store, job_id, stage=current_stage, progress=50)
+        try:
+            resolved_assets = LocalAssetResolver(config.asset_root).resolve(request, storyboard)
+        except AssetResolutionError as exc:
+            raise PipelineFailure(
+                code="ASSET_NOT_FOUND",
+                message=str(exc),
+                stage=current_stage,
+            ) from exc
+
+        current_stage = JobStage.BUILDING_MANIFEST
+        await advance(store, job_id, stage=current_stage, progress=60)
+        manifest_path = job_dir / "video-manifest.json"
+        manifest: dict[str, Any] | None = None
+        if manifest_path.is_file():
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                validate_manifest(manifest, config.schema_path)
+            except Exception:
+                manifest = None
+        if manifest is None:
+            logo_path = ensure_brand_logo(config, job_dir)
+            try:
+                manifest = build_manifest(
+                    request=request,
+                    storyboard=storyboard,
+                    resolved_assets=resolved_assets,
+                    logo_uri=str(logo_path),
+                    voice_uri=str(voice_path),
+                    subtitles=subtitles,
+                )
+                persist_manifest(manifest, manifest_path, config.schema_path)
+            except ManifestValidationError as exc:
+                raise PipelineFailure(
+                    code="MANIFEST_INVALID",
+                    message=str(exc),
+                    stage=current_stage,
+                ) from exc
+        await register_artifact(store, job_id, kind="manifest", path=manifest_path)
+
+        final_path = job_dir / "final.mp4"
+        qc: dict[str, Any] | None = None
+        if final_path.is_file():
+            try:
+                qc = await probe_video(
+                    final_path,
+                    expected_duration=float(request.video.duration_seconds),
+                    require_audio=True,
+                )
+            except VideoQCError:
+                final_path.unlink(missing_ok=True)
+                qc = None
+
+        if qc is None:
+            current_stage = JobStage.RENDERING
+            await advance(store, job_id, stage=current_stage, progress=70)
+            try:
+                await call_renderer(
+                    config,
+                    job_id=job_id,
+                    manifest_path=manifest_path,
+                    output_path=final_path,
+                )
+            except RendererUnavailable as exc:
+                raise PipelineFailure(
+                    code="RENDERER_UNAVAILABLE",
+                    message=str(exc),
+                    stage=current_stage,
+                    retryable=True,
+                ) from exc
+            except RendererFailed as exc:
+                raise PipelineFailure(
+                    code="RENDER_FAILED",
+                    message=str(exc),
+                    stage=current_stage,
+                ) from exc
+
+            current_stage = JobStage.QUALITY_CHECK
+            await advance(store, job_id, stage=current_stage, progress=95)
+            try:
+                qc = await probe_video(
+                    final_path,
+                    expected_duration=float(request.video.duration_seconds),
+                    require_audio=True,
+                )
+            except VideoQCError as exc:
+                raise PipelineFailure(
+                    code="VIDEO_QC_FAILED",
+                    message=str(exc),
+                    stage=current_stage,
+                ) from exc
+        else:
+            current_stage = JobStage.QUALITY_CHECK
+            await advance(store, job_id, stage=current_stage, progress=95)
+
+        qc_path = job_dir / "qc.json"
+        write_json(qc_path, qc)
+        await register_artifact(store, job_id, kind="video", path=final_path)
+        await register_artifact(store, job_id, kind="metadata", path=qc_path)
+        completed = await store.update_stage(
+            job_id,
+            status=JobStatus.AWAITING_REVIEW,
+            stage=JobStage.AWAITING_REVIEW,
+            progress=100,
+        )
+        logger.info("job_awaiting_review job_id=%s", job_id)
+        return completed
+
+    except PipelineFailure as exc:
+        logger.error(
+            "job_failed job_id=%s stage=%s code=%s message=%s",
+            job_id,
+            exc.stage.value,
+            exc.code,
+            exc.message,
+        )
+        return await store.fail(
+            job_id,
+            error=JobError(
+                code=exc.code,
+                message=exc.message,
+                failed_stage=exc.stage,
+                retryable=exc.retryable,
+                details=exc.details,
+            ),
+        )
+    except Exception as exc:
+        logger.exception("job_failed_unexpected job_id=%s", job_id)
+        return await store.fail(
+            job_id,
+            error=JobError(
+                code="INTERNAL_ERROR",
+                message="Unexpected worker failure.",
+                failed_stage=current_stage,
+                retryable=False,
+                details=[{"type": type(exc).__name__}],
+            ),
+        )

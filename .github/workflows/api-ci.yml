@@ -1,0 +1,75 @@
+name: Sprint 1 CI
+
+on:
+  push:
+    branches:
+      - codex/sprint-1-vertical-slice
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/api/pyproject.toml
+      - name: Install API and dev dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: Run API tests
+        run: pytest -q
+
+  test-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install shared API and worker packages
+        run: python -m pip install -e apps/api -e 'services/worker[dev]'
+      - name: Run worker tests
+        run: pytest -q services/worker/tests
+
+  test-renderer:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: renderer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install renderer dependencies
+        run: npm install
+      - name: Typecheck renderer
+        run: npm run typecheck
+      - name: Bundle Remotion composition
+        run: npm run bundle:check
+
+  e2e-vertical-slice:
+    needs: [test-api, test-worker, test-renderer]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Docker Compose E2E smoke test
+        run: |
+          chmod +x scripts/e2e-smoke.sh
+          ./scripts/e2e-smoke.sh
+      - name: Upload E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprint-1-e2e-evidence
+          path: e2e-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
