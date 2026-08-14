@@ -64,7 +64,7 @@ class DeterministicContentProvider:
             "Một: xem sa bàn để hiểu quy hoạch và vị trí từng phân khu.",
             "Hai: chọn sản phẩm phù hợp nhu cầu ở, nghỉ dưỡng hay đầu tư.",
             "Ba: đối chiếu thông tin bằng tài liệu chính thức trước khi xuống tiền.",
-            "Xem trực tiếp giúp bạn đặt đúng câu hỏi và so sánh rõ ràng hơn.",
+            "Xem trực tiếp giúp bạn hỏi đúng và so sánh dễ hơn.",
         ]
         narration = " ".join([hook, *body, request.content.cta])
         return ScriptResult(title=request.topic, hook=hook, body=body, cta=request.content.cta, full_narration=narration)
