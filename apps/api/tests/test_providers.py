@@ -8,7 +8,12 @@ from pathlib import Path
 import httpx
 import pytest
 
-from app.providers import OpenAIVietnameseTTSProvider, TTSNotConfiguredError
+from app.models import VideoJobCreate
+from app.providers import (
+    DeterministicContentProvider,
+    OpenAIVietnameseTTSProvider,
+    TTSNotConfiguredError,
+)
 
 
 def _wav_bytes(duration_seconds: float = 0.25, sample_rate: int = 16000) -> bytes:
@@ -19,6 +24,40 @@ def _wav_bytes(duration_seconds: float = 0.25, sample_rate: int = 16000) -> byte
         wav.setframerate(sample_rate)
         wav.writeframes(b"\x00\x00" * int(duration_seconds * sample_rate))
     return buffer.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_deterministic_content_uses_a_readable_project_name() -> None:
+    request = VideoJobCreate.model_validate(
+        {
+            "topic": "Ba lý do nên chú ý Vinhomes Green Paradise tuần này",
+            "project": "vinhomes-green-paradise",
+            "video": {
+                "duration_seconds": 45,
+                "aspect": "9:16",
+                "language": "vi",
+                "template": "real-estate-short-v1",
+            },
+            "content": {
+                "objective": "lead_generation",
+                "audience": "khách hàng quan tâm bất động sản Cần Giờ",
+                "tone": "thông tin, tin cậy, không phóng đại",
+                "cta": "Đăng ký tham quan sa bàn",
+            },
+            "media": {
+                "source": "local",
+                "project_asset_folder": "vinhomes-green-paradise",
+                "minimum_clips": 5,
+                "allow_stock": False,
+                "allow_ai_generation": False,
+            },
+        }
+    )
+
+    script = await DeterministicContentProvider().generate_script(request)
+
+    assert "Vinhomes Green Paradise" in script.body[0]
+    assert "vinhomes-green-paradise" not in script.full_narration
 
 
 @pytest.mark.asyncio

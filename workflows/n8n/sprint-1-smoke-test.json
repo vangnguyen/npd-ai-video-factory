@@ -19,7 +19,7 @@
         "assignments": {
           "assignments": [
             { "id": "base-url", "name": "apiBaseUrl", "value": "http://api:8000/api/v1", "type": "string" },
-            { "id": "request", "name": "request", "value": "={\"topic\":\"Ba lý do nên chú ý Vinhomes Green Paradise tuần này\",\"project\":\"vinhomes-green-paradise\",\"video\":{\"duration_seconds\":45,\"aspect\":\"9:16\",\"language\":\"vi\",\"template\":\"real-estate-short-v1\"},\"content\":{\"objective\":\"lead_generation\",\"audience\":\"khách hàng quan tâm bất động sản Cần Giờ\",\"tone\":\"thông tin, tin cậy, không phóng đại\",\"cta\":\"Đăng ký tham quan sa bàn để nhận thông tin chi tiết\"},\"media\":{\"source\":\"local\",\"project_asset_folder\":\"vinhomes-green-paradise\",\"minimum_clips\":5,\"allow_stock\":false,\"allow_ai_generation\":false}}", "type": "object" }
+            { "id": "request", "name": "request", "value": "={\"topic\":\"Ba lý do nên chú ý Vinhomes Green Paradise tuần này\",\"project\":\"vinhomes-green-paradise\",\"video\":{\"duration_seconds\":45,\"aspect\":\"9:16\",\"language\":\"vi\",\"template\":\"real-estate-short-v1\"},\"content\":{\"objective\":\"lead_generation\",\"audience\":\"khách hàng quan tâm bất động sản Cần Giờ\",\"tone\":\"thông tin, tin cậy, không phóng đại\",\"cta\":\"Đăng ký tham quan sa bàn\"},\"media\":{\"source\":\"local\",\"project_asset_folder\":\"vinhomes-green-paradise\",\"minimum_clips\":5,\"allow_stock\":false,\"allow_ai_generation\":false}}", "type": "object" }
           ]
         },
         "options": {}
