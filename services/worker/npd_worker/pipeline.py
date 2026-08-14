@@ -22,6 +22,7 @@ from app.models import Artifact, JobError, JobRecord, JobStage, JobStatus, STAGE
 from app.providers import (
     DeterministicContentProvider,
     EspeakVietnameseTTSProvider,
+    OpenAIVietnameseTTSProvider,
     ScriptResult,
     StoryboardResult,
     TTSNotConfiguredError,
@@ -33,6 +34,14 @@ from app.state import RedisJobStore
 logger = logging.getLogger("npd-video-worker.pipeline")
 T = TypeVar("T", bound=BaseModel)
 JOB_ID_PATTERN = re.compile(r"^vid_[A-Za-z0-9_-]{4,76}$")
+SUPPORTED_LOGO_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass(frozen=True)
@@ -47,6 +56,13 @@ class WorkerConfig:
     espeak_voice: str
     espeak_rate: int
     renderer_timeout_seconds: float
+    openai_api_key: str = ""
+    openai_tts_model: str = "gpt-4o-mini-tts"
+    openai_tts_voice: str = "marin"
+    openai_tts_instructions: str = ""
+    openai_base_url: str = "https://api.openai.com"
+    openai_tts_timeout_seconds: float = 120.0
+    pilot_strict_assets: bool = False
 
     @classmethod
     def from_env(cls) -> "WorkerConfig":
@@ -71,6 +87,16 @@ class WorkerConfig:
             espeak_voice=os.getenv("ESPEAK_VOICE", "vi"),
             espeak_rate=int(os.getenv("ESPEAK_RATE", "145")),
             renderer_timeout_seconds=float(os.getenv("RENDERER_TIMEOUT_SECONDS", "600")),
+            openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
+            openai_tts_model=os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts").strip(),
+            openai_tts_voice=os.getenv("OPENAI_TTS_VOICE", "marin").strip(),
+            openai_tts_instructions=os.getenv(
+                "OPENAI_TTS_INSTRUCTIONS",
+                "Đọc tiếng Việt tự nhiên, rõ ràng, đáng tin cậy, nhịp vừa phải; phong cách tư vấn bất động sản chuyên nghiệp, không cường điệu.",
+            ).strip(),
+            openai_base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com").rstrip("/"),
+            openai_tts_timeout_seconds=float(os.getenv("OPENAI_TTS_TIMEOUT_SECONDS", "120")),
+            pilot_strict_assets=_env_flag("PILOT_STRICT_ASSETS", False),
         )
 
 
@@ -306,8 +332,16 @@ def validate_wav(path: Path) -> float:
 
 
 def ensure_brand_logo(config: WorkerConfig, job_dir: Path) -> Path:
-    if config.logo_path.is_file():
-        return config.logo_path
+    if config.logo_path.is_file() and config.logo_path.stat().st_size > 0:
+        if config.logo_path.suffix.lower() in SUPPORTED_LOGO_SUFFIXES:
+            return config.logo_path
+        if config.pilot_strict_assets:
+            raise AssetResolutionError(
+                f"brand logo has unsupported format: {config.logo_path.suffix or '<none>'}"
+            )
+    elif config.pilot_strict_assets:
+        raise AssetResolutionError(f"required brand logo is missing: {config.logo_path}")
+
     placeholder = job_dir / "npd-logo-placeholder.svg"
     label = html.escape(config.brand_name)
     placeholder.write_text(
@@ -484,6 +518,15 @@ def get_tts_provider(config: WorkerConfig):
         return EspeakVietnameseTTSProvider(
             voice=config.espeak_voice,
             rate=config.espeak_rate,
+        )
+    if config.tts_provider == "openai":
+        return OpenAIVietnameseTTSProvider(
+            api_key=config.openai_api_key,
+            model=config.openai_tts_model,
+            voice=config.openai_tts_voice,
+            instructions=config.openai_tts_instructions,
+            base_url=config.openai_base_url,
+            timeout_seconds=config.openai_tts_timeout_seconds,
         )
     if config.tts_provider in {"none", "unconfigured"}:
         return UnconfiguredVietnameseTTSProvider()
@@ -717,7 +760,14 @@ async def run_job(
             except Exception:
                 manifest = None
         if manifest is None:
-            logo_path = ensure_brand_logo(config, job_dir)
+            try:
+                logo_path = ensure_brand_logo(config, job_dir)
+            except AssetResolutionError as exc:
+                raise PipelineFailure(
+                    code="ASSET_NOT_FOUND",
+                    message=str(exc),
+                    stage=current_stage,
+                ) from exc
             try:
                 manifest = build_manifest(
                     request=request,

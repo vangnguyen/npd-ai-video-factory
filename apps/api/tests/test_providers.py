@@ -1,0 +1,85 @@
+from __future__ import annotations
+
+import io
+import json
+import wave
+from pathlib import Path
+
+import httpx
+import pytest
+
+from app.providers import OpenAIVietnameseTTSProvider, TTSNotConfiguredError
+
+
+def _wav_bytes(duration_seconds: float = 0.25, sample_rate: int = 16000) -> bytes:
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(b"\x00\x00" * int(duration_seconds * sample_rate))
+    return buffer.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_openai_tts_uses_speech_endpoint_without_external_network(tmp_path: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/audio/speech"
+        assert request.headers["Authorization"] == "Bearer test-key"
+        payload = json.loads(request.content.decode("utf-8"))
+        assert payload["model"] == "gpt-4o-mini-tts"
+        assert payload["voice"] == "marin"
+        assert payload["response_format"] == "wav"
+        assert payload["input"] == "Xin chào Cần Giờ"
+        assert "tự nhiên" in payload["instructions"]
+        return httpx.Response(200, content=_wav_bytes())
+
+    provider = OpenAIVietnameseTTSProvider(
+        api_key="test-key",
+        model="gpt-4o-mini-tts",
+        voice="marin",
+        instructions="Đọc tự nhiên và rõ ràng.",
+        transport=httpx.MockTransport(handler),
+    )
+    output = tmp_path / "narration.wav"
+    result = await provider.synthesize(
+        text="Xin chào Cần Giờ",
+        language="vi",
+        output_path=output,
+    )
+
+    assert result.provider == "openai"
+    assert result.voice == "marin"
+    assert result.duration_seconds > 0
+    assert output.is_file()
+
+
+def test_openai_tts_requires_api_key() -> None:
+    with pytest.raises(TTSNotConfiguredError, match="OPENAI_API_KEY"):
+        OpenAIVietnameseTTSProvider(api_key="")
+
+
+@pytest.mark.asyncio
+async def test_openai_tts_rejects_api_error_without_writing_file(tmp_path: Path) -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": {"message": "invalid credential"}})
+
+    provider = OpenAIVietnameseTTSProvider(
+        api_key="test-key",
+        transport=httpx.MockTransport(handler),
+    )
+    output = tmp_path / "narration.wav"
+
+    with pytest.raises(RuntimeError, match="HTTP 401"):
+        await provider.synthesize(text="Xin chào", language="vi", output_path=output)
+    assert not output.exists()
+
+
+@pytest.mark.asyncio
+async def test_openai_tts_enforces_speech_input_limit(tmp_path: Path) -> None:
+    provider = OpenAIVietnameseTTSProvider(
+        api_key="test-key",
+        transport=httpx.MockTransport(lambda _request: httpx.Response(500)),
+    )
+    with pytest.raises(ValueError, match="4096"):
+        await provider.synthesize(text="x" * 4097, language="vi", output_path=tmp_path / "voice.wav")
