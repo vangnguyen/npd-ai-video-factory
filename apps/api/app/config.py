@@ -12,8 +12,11 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     job_storage_root: Path = Path("/workspace/storage/jobs")
     asset_storage_root: Path = Path("/workspace/storage/assets")
+    contracts_root: Path = Path("/workspace/packages/contracts")
     renderer_url: str = "http://renderer:3001"
     public_base_url: str = "http://localhost:8000"
+    npd_brand_name: str = "Ngoc Phuong Dong"
+    npd_logo_path: Path = Path("/workspace/storage/assets/brand/npd-logo.png")
 
 
 settings = Settings()
