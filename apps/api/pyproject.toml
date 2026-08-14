@@ -9,6 +9,7 @@ dependencies = [
   "pydantic>=2.9,<3",
   "pydantic-settings>=2.5,<3",
   "redis>=5,<7",
+  "jsonschema>=4.23,<5",
 ]
 
 [project.optional-dependencies]
