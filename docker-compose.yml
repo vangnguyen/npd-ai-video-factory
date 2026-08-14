@@ -1,0 +1,60 @@
+name: npd-ai-video-factory
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./apps/api
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RENDERER_URL: http://renderer:3001
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./storage:/workspace/storage
+      - ./packages/contracts:/workspace/packages/contracts:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./services/worker
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RENDERER_URL: http://renderer:3001
+    volumes:
+      - ./storage:/workspace/storage
+      - ./packages/contracts:/workspace/packages/contracts:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      renderer:
+        condition: service_started
+
+  renderer:
+    build:
+      context: ./renderer
+    env_file: .env
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./storage:/workspace/storage
+      - ./packages/contracts:/workspace/packages/contracts:ro
+    shm_size: "2gb"
+
+volumes:
+  redis-data:

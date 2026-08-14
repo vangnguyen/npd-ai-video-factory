@@ -1,0 +1,88 @@
+{
+  "version": "1.0",
+  "metadata": {
+    "title": "Vinhomes Green Paradise - Sprint 1 Smoke Test",
+    "project": "vinhomes-green-paradise",
+    "template": "real-estate-short-v1",
+    "duration_seconds": 45,
+    "fps": 30,
+    "width": 1080,
+    "height": 1920,
+    "language": "vi"
+  },
+  "brand": {
+    "name": "Ngoc Phuong Dong",
+    "logo_uri": "asset://brand/npd-logo.png",
+    "cta": "Dang ky tham quan sa ban",
+    "primary_color": "#111827",
+    "accent_color": "#D4AF37"
+  },
+  "voice": {
+    "audio_uri": "job://narration.mp3",
+    "gain_db": 0
+  },
+  "scenes": [
+    {
+      "id": "scene_01",
+      "start_seconds": 0,
+      "duration_seconds": 3,
+      "role": "hook",
+      "narration": "Can Gio dang buoc vao mot giai doan moi.",
+      "visual": { "type": "video", "uri": "asset://vinhomes-green-paradise/flycam-01.mp4", "trim_start_seconds": 0, "trim_end_seconds": 3, "fit": "cover" },
+      "overlay": { "headline": "CAN GIO DANG THAY DOI?" }
+    },
+    {
+      "id": "scene_02",
+      "start_seconds": 3,
+      "duration_seconds": 5,
+      "role": "identity",
+      "narration": "Vinhomes Green Paradise la tam diem dang chu y.",
+      "visual": { "type": "video", "uri": "asset://vinhomes-green-paradise/project-identity.mp4", "trim_start_seconds": 0, "trim_end_seconds": 5, "fit": "cover" },
+      "overlay": { "headline": "VINHOMES GREEN PARADISE" }
+    },
+    {
+      "id": "scene_03",
+      "start_seconds": 8,
+      "duration_seconds": 12,
+      "role": "information",
+      "narration": "Video se trinh bay ba thong tin da duoc kiem chung tu nguon dau vao.",
+      "visual": { "type": "video", "uri": "asset://vinhomes-green-paradise/information.mp4", "trim_start_seconds": 0, "trim_end_seconds": 12, "fit": "cover" },
+      "overlay": { "headline": "3 THONG TIN CAN CHU Y" }
+    },
+    {
+      "id": "scene_04",
+      "start_seconds": 20,
+      "duration_seconds": 12,
+      "role": "evidence",
+      "narration": "Canh quay dia phuong duoc dung lam bang chung truc quan.",
+      "visual": { "type": "video", "uri": "asset://vinhomes-green-paradise/evidence.mp4", "trim_start_seconds": 0, "trim_end_seconds": 12, "fit": "cover" },
+      "overlay": { "headline": "HINH ANH THUC TE" }
+    },
+    {
+      "id": "scene_05",
+      "start_seconds": 32,
+      "duration_seconds": 8,
+      "role": "sales_angle",
+      "narration": "Danh gia co hoi dua tren nhu cau va muc tieu cua tung khach hang.",
+      "visual": { "type": "video", "uri": "asset://vinhomes-green-paradise/sales-angle.mp4", "trim_start_seconds": 0, "trim_end_seconds": 8, "fit": "cover" },
+      "overlay": { "headline": "GOC NHIN TU VAN" }
+    },
+    {
+      "id": "scene_06",
+      "start_seconds": 40,
+      "duration_seconds": 5,
+      "role": "cta",
+      "narration": "Dang ky tham quan sa ban cung Ngoc Phuong Dong.",
+      "visual": { "type": "image", "uri": "asset://vinhomes-green-paradise/cta.jpg", "fit": "cover" },
+      "overlay": { "headline": "DANG KY THAM QUAN", "body": "Ngoc Phuong Dong" }
+    }
+  ],
+  "subtitles": [
+    { "start_seconds": 0, "end_seconds": 3, "text": "Can Gio dang buoc vao mot giai doan moi." },
+    { "start_seconds": 3, "end_seconds": 8, "text": "Vinhomes Green Paradise la tam diem dang chu y." },
+    { "start_seconds": 8, "end_seconds": 20, "text": "Ba thong tin duoc kiem chung tu nguon dau vao." },
+    { "start_seconds": 20, "end_seconds": 32, "text": "Canh quay dia phuong lam bang chung truc quan." },
+    { "start_seconds": 32, "end_seconds": 40, "text": "Danh gia theo nhu cau cua tung khach hang." },
+    { "start_seconds": 40, "end_seconds": 45, "text": "Dang ky tham quan sa ban cung Ngoc Phuong Dong." }
+  ]
+}
