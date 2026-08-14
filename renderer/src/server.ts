@@ -110,6 +110,7 @@ app.post("/render", async (req, res) => {
       serveUrl,
       codec: "h264",
       audioCodec: "aac",
+      crf: 23,
       outputLocation: outputPath,
       inputProps,
       onProgress: ({progress}) => {
