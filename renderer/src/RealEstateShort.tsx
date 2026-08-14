@@ -13,6 +13,7 @@ import {
 import type {RendererInputProps, VideoManifest} from "./types";
 
 const dbToAmplitude = (db = 0): number => Math.pow(10, db / 20);
+const fontFamily = '"Noto Sans", "Liberation Sans", sans-serif';
 
 const SceneLayer: React.FC<{scene: VideoManifest["scenes"][number]}> = ({scene}) => {
   const frame = useCurrentFrame();
@@ -58,7 +59,7 @@ const SceneLayer: React.FC<{scene: VideoManifest["scenes"][number]}> = ({scene})
             right: 72,
             top: scene.role === "hook" ? 220 : 150,
             color: "white",
-            fontFamily: "Arial, sans-serif",
+            fontFamily,
             fontSize: scene.role === "hook" ? 82 : 60,
             fontWeight: 800,
             lineHeight: 1.05,
@@ -78,7 +79,7 @@ const SceneLayer: React.FC<{scene: VideoManifest["scenes"][number]}> = ({scene})
             borderRadius: 14,
             backgroundColor: "rgba(0,0,0,0.62)",
             color: "white",
-            fontFamily: "Arial, sans-serif",
+            fontFamily,
             fontSize: 32,
             fontWeight: 700,
           }}
@@ -108,7 +109,7 @@ const Subtitles: React.FC<{manifest: VideoManifest}> = ({manifest}) => {
         bottom: 255,
         textAlign: "center",
         color: "white",
-        fontFamily: "Arial, sans-serif",
+        fontFamily,
         fontSize: 48,
         fontWeight: 750,
         lineHeight: 1.2,
@@ -196,7 +197,7 @@ export const RealEstateShort: React.FC<RendererInputProps> = ({manifest}) => {
             color: "white",
             padding: "28px 34px",
             textAlign: "center",
-            fontFamily: "Arial, sans-serif",
+            fontFamily,
             fontSize: 42,
             fontWeight: 800,
           }}
