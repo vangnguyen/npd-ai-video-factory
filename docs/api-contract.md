@@ -65,7 +65,14 @@ When ready for review:
 
 `GET /video-jobs/{job_id}/artifacts/{artifact_name}`
 
-Only allowlisted artifacts beneath the job directory may be served.
+An artifact is served only when all of these are true:
+
+1. the job exists;
+2. the artifact name is registered in that job's Redis record;
+3. the resolved file is a direct child of the configured job directory;
+4. the file exists.
+
+Path traversal and arbitrary host filesystem access are rejected as `404 ARTIFACT_NOT_FOUND` without exposing host paths.
 
 ## Health
 
