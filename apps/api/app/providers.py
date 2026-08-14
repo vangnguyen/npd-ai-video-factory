@@ -61,9 +61,9 @@ class DeterministicContentProvider:
         project_name = " ".join(part.capitalize() for part in request.project.split("-"))
         hook = f"Quan tâm {project_name}? Đừng chỉ nhìn phối cảnh."
         body = [
-            "Một: xem sa bàn để hiểu quy hoạch và vị trí từng phân khu.",
-            "Hai: chọn sản phẩm phù hợp nhu cầu ở, nghỉ dưỡng hay đầu tư.",
-            "Ba: đối chiếu thông tin bằng tài liệu chính thức trước khi xuống tiền.",
+            "Một: xem sa bàn, hiểu quy hoạch và vị trí từng phân khu.",
+            "Hai: chọn sản phẩm đúng nhu cầu ở, nghỉ dưỡng hay đầu tư.",
+            "Ba: đối chiếu tài liệu chính thức trước khi xuống tiền.",
             "Xem trực tiếp giúp bạn hỏi đúng và so sánh dễ hơn.",
         ]
         narration = " ".join([hook, *body, request.content.cta])
