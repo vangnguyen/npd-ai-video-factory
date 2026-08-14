@@ -59,7 +59,7 @@ class DeterministicContentProvider:
 
     async def generate_script(self, request: VideoJobCreate) -> ScriptResult:
         project_name = " ".join(part.capitalize() for part in request.project.split("-"))
-        hook = f"Quan tâm {project_name}? Đừng quyết định chỉ vì một tấm phối cảnh."
+        hook = f"Quan tâm {project_name}? Đừng chỉ nhìn phối cảnh."
         body = [
             "Một: xem sa bàn để hiểu quy hoạch và vị trí từng phân khu.",
             "Hai: chọn sản phẩm phù hợp nhu cầu ở, nghỉ dưỡng hay đầu tư.",
