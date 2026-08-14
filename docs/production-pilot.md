@@ -96,9 +96,40 @@ docker compose logs --tail=100 api worker renderer
 
 Rollback for this pilot is operationally simple: deactivate the n8n workflow, stop the stack if necessary, and check out the last known-good commit. Job artifacts stay in persistent storage for diagnosis.
 
-## 5. Start the stack and create the real-media pilot job
+## 5. Recommended one-shot production pilot
 
-Use the committed request as a starting point and update only approved product facts and the project asset folder.
+The repository includes `scripts/run-production-pilot.sh`. It performs environment guards, asset/logo preflight, stack startup, health checks, job creation, bounded polling, QC verification, and evidence collection.
+
+It deliberately refuses to run unless the operator explicitly enables the paid/production action:
+
+```bash
+RUN_PRODUCTION_PILOT=1 bash scripts/run-production-pilot.sh
+```
+
+Before running it, confirm the real footage, real logo, and production `.env` from sections 1-2 are already present on the VPS.
+
+The script writes evidence to:
+
+```text
+production-pilot-artifacts/<job_id>/
+```
+
+including:
+
+- `final.mp4`
+- `qc.json`
+- `video-manifest.json`
+- `script.json`
+- `storyboard.json`
+- `subtitles.srt`
+- `job-status.json`
+- `compose.log`
+
+The script does **not** publish the video. A human review remains mandatory.
+
+### Manual API alternative
+
+If the one-shot runner is not used, create the job manually:
 
 ```bash
 curl --fail --show-error \
