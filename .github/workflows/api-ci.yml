@@ -54,3 +54,22 @@ jobs:
         run: npm run typecheck
       - name: Bundle Remotion composition
         run: npm run bundle:check
+
+  e2e-vertical-slice:
+    needs: [test-api, test-worker, test-renderer]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Docker Compose E2E smoke test
+        run: |
+          chmod +x scripts/e2e-smoke.sh
+          ./scripts/e2e-smoke.sh
+      - name: Upload E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprint-1-e2e-evidence
+          path: e2e-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
