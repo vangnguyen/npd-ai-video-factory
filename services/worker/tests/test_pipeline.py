@@ -108,8 +108,9 @@ def test_validate_probe_payload_rejects_missing_audio() -> None:
 
 
 class _FakeTTSProvider:
-    def __init__(self) -> None:
+    def __init__(self, duration_seconds: float = 0.5) -> None:
         self.calls: list[str] = []
+        self.duration_seconds = duration_seconds
 
     async def synthesize(self, *, text: str, language: str, output_path: Path) -> None:
         assert language == "vi"
@@ -119,7 +120,7 @@ class _FakeTTSProvider:
             wav.setnchannels(1)
             wav.setsampwidth(2)
             wav.setframerate(8_000)
-            wav.writeframes(b"\x01\x00" * 4_000)
+            wav.writeframes(b"\x01\x00" * round(self.duration_seconds * 8_000))
 
 
 @pytest.mark.asyncio
@@ -159,6 +160,33 @@ async def test_storyboard_voice_is_aligned_and_padded_to_timeline(tmp_path: Path
     assert duration == pytest.approx(4.0)
     assert validate_wav(output, expected_duration=4.0) == pytest.approx(4.0)
     assert provider.calls == ["Mở đầu"]
+    assert not (tmp_path / "voice-scenes").exists()
+
+
+@pytest.mark.asyncio
+async def test_storyboard_voice_rejects_excessive_speedup(tmp_path: Path) -> None:
+    storyboard = StoryboardResult(
+        scenes=[
+            StoryboardScene(
+                id="scene_01",
+                order=1,
+                start_seconds=0,
+                duration_seconds=2,
+                role="hook",
+                narration="Nội dung quá dài",
+                visual_query="project hook",
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="production limit"):
+        await synthesize_storyboard_voice(
+            _FakeTTSProvider(duration_seconds=3),
+            storyboard=storyboard,
+            language="vi",
+            output_path=tmp_path / "narration.wav",
+        )
+
     assert not (tmp_path / "voice-scenes").exists()
 
 

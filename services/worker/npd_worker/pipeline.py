@@ -233,20 +233,23 @@ async def synthesize_storyboard_voice(
     language: str,
     output_path: Path,
     lead_in_seconds: float = 0.15,
+    max_speedup: float = 1.4,
 ) -> float:
     """Synthesize each unique scene and place it on the storyboard timeline."""
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     parts_dir = output_path.parent / "voice-scenes"
     parts_dir.mkdir(parents=True, exist_ok=True)
-    cached: dict[str, tuple[tuple[int, int, int], bytes]] = {}
+    cached: dict[tuple[str, int], tuple[tuple[int, int, int], bytes]] = {}
     scene_audio: list[tuple[Any, tuple[int, int, int], bytes]] = []
     try:
         for scene in storyboard.scenes:
             text = scene.narration.strip()
             if not text:
                 continue
-            audio = cached.get(text)
+            voice_slot_ms = round((scene.duration_seconds - lead_in_seconds) * 1_000)
+            cache_key = (text, voice_slot_ms)
+            audio = cached.get(cache_key)
             if audio is None:
                 part_path = parts_dir / f"{scene.id}.wav"
                 await tts_provider.synthesize(
@@ -255,7 +258,46 @@ async def synthesize_storyboard_voice(
                     output_path=part_path,
                 )
                 audio = _read_wav_pcm(part_path)
-                cached[text] = audio
+                (channels, sample_width, frame_rate), frames = audio
+                frame_width = channels * sample_width
+                clip_duration = (len(frames) // frame_width) / float(frame_rate)
+                voice_slot = scene.duration_seconds - lead_in_seconds
+                if clip_duration > voice_slot:
+                    target_duration = max(0.1, voice_slot - 0.04)
+                    speedup = clip_duration / target_duration
+                    if speedup > max_speedup:
+                        raise ValueError(
+                            f"scene {scene.id} narration requires {speedup:.3f}x speed, "
+                            f"above the {max_speedup:.3f}x production limit"
+                        )
+                    fitted_path = parts_dir / f"{scene.id}.fit.wav"
+                    process = await asyncio.create_subprocess_exec(
+                        "ffmpeg",
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-y",
+                        "-i",
+                        str(part_path),
+                        "-filter:a",
+                        f"atempo={speedup:.6f}",
+                        str(fitted_path),
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    _stdout, stderr = await process.communicate()
+                    if process.returncode != 0:
+                        detail = stderr.decode("utf-8", errors="replace").strip()
+                        raise RuntimeError(
+                            f"ffmpeg voice timing failed: {detail or process.returncode}"
+                        )
+                    audio = _read_wav_pcm(fitted_path)
+                    logger.info(
+                        "voice_scene_fitted scene_id=%s speedup=%.3f",
+                        scene.id,
+                        speedup,
+                    )
+                cached[cache_key] = audio
             scene_audio.append((scene, *audio))
 
         if not scene_audio:
