@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import sys
 import wave
 from array import array
@@ -25,6 +26,7 @@ from app.providers import (
     OpenAIVietnameseTTSProvider,
     ScriptResult,
     StoryboardResult,
+    TTSProvider,
     TTSNotConfiguredError,
     UnconfiguredVietnameseTTSProvider,
 )
@@ -321,14 +323,106 @@ def write_srt(path: Path, subtitles: list[dict[str, Any]]) -> None:
     path.write_text("\n\n".join(blocks) + ("\n" if blocks else ""), encoding="utf-8")
 
 
-def validate_wav(path: Path) -> float:
+def _read_wav_pcm(path: Path) -> tuple[tuple[int, int, int], bytes]:
     if not path.is_file() or path.stat().st_size <= 44:
         raise ValueError("audio artifact is missing or empty")
     with wave.open(str(path), "rb") as wav:
-        duration = wav.getnframes() / float(wav.getframerate())
+        channels = wav.getnchannels()
+        sample_width = wav.getsampwidth()
+        frame_rate = wav.getframerate()
+        if wav.getcomptype() != "NONE":
+            raise ValueError("compressed WAV audio is not supported")
+        frames = wav.readframes(wav.getnframes())
+    frame_width = channels * sample_width
+    if channels <= 0 or sample_width <= 0 or frame_rate <= 0 or len(frames) % frame_width:
+        raise ValueError("audio artifact has invalid WAV framing")
+    return (channels, sample_width, frame_rate), frames
+
+
+def validate_wav(path: Path, *, expected_duration: float | None = None) -> float:
+    (channels, sample_width, frame_rate), frames = _read_wav_pcm(path)
+    duration = (len(frames) // (channels * sample_width)) / float(frame_rate)
     if duration <= 0:
         raise ValueError("audio duration is zero")
+    if expected_duration is not None and abs(duration - expected_duration) > 0.1:
+        raise ValueError(
+            f"audio duration {duration:.3f}s does not match timeline {expected_duration:.3f}s"
+        )
     return duration
+
+
+async def synthesize_storyboard_voice(
+    tts_provider: TTSProvider,
+    *,
+    storyboard: StoryboardResult,
+    language: str,
+    output_path: Path,
+    lead_in_seconds: float = 0.15,
+) -> float:
+    """Synthesize each unique scene and place it on the storyboard timeline."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    parts_dir = output_path.parent / "voice-scenes"
+    parts_dir.mkdir(parents=True, exist_ok=True)
+    cached: dict[str, tuple[tuple[int, int, int], bytes]] = {}
+    scene_audio: list[tuple[Any, tuple[int, int, int], bytes]] = []
+    try:
+        for scene in storyboard.scenes:
+            text = scene.narration.strip()
+            if not text:
+                continue
+            audio = cached.get(text)
+            if audio is None:
+                part_path = parts_dir / f"{scene.id}.wav"
+                await tts_provider.synthesize(
+                    text=text,
+                    language=language,
+                    output_path=part_path,
+                )
+                audio = _read_wav_pcm(part_path)
+                cached[text] = audio
+            scene_audio.append((scene, *audio))
+
+        if not scene_audio:
+            raise ValueError("storyboard has no narration to synthesize")
+
+        channels, sample_width, frame_rate = scene_audio[0][1]
+        for _scene, audio_format, _frames in scene_audio[1:]:
+            if audio_format != (channels, sample_width, frame_rate):
+                raise ValueError("TTS provider returned inconsistent WAV formats")
+
+        total_seconds = max(
+            scene.start_seconds + scene.duration_seconds for scene in storyboard.scenes
+        )
+        total_frames = round(total_seconds * frame_rate)
+        silence_sample = b"\x80" if sample_width == 1 else b"\x00" * sample_width
+        silence_frame = silence_sample * channels
+        timeline = bytearray(silence_frame * total_frames)
+
+        for scene, _audio_format, frames in scene_audio:
+            frame_width = channels * sample_width
+            clip_frames = len(frames) // frame_width
+            slot_start = round((scene.start_seconds + lead_in_seconds) * frame_rate)
+            slot_end = round((scene.start_seconds + scene.duration_seconds) * frame_rate)
+            if clip_frames > slot_end - slot_start:
+                clip_duration = clip_frames / float(frame_rate)
+                raise ValueError(
+                    f"scene {scene.id} narration is {clip_duration:.3f}s, longer than its "
+                    f"{scene.duration_seconds - lead_in_seconds:.3f}s voice slot"
+                )
+            byte_start = slot_start * frame_width
+            timeline[byte_start : byte_start + len(frames)] = frames
+
+        temp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        with wave.open(str(temp_path), "wb") as wav:
+            wav.setnchannels(channels)
+            wav.setsampwidth(sample_width)
+            wav.setframerate(frame_rate)
+            wav.writeframes(timeline)
+        temp_path.replace(output_path)
+        return validate_wav(output_path, expected_duration=total_seconds)
+    finally:
+        shutil.rmtree(parts_dir, ignore_errors=True)
 
 
 def ensure_brand_logo(config: WorkerConfig, job_dir: Path) -> Path:

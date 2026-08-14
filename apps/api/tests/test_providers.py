@@ -16,14 +16,23 @@ from app.providers import (
 )
 
 
-def _wav_bytes(duration_seconds: float = 0.25, sample_rate: int = 16000) -> bytes:
+def _wav_bytes(
+    duration_seconds: float = 0.25,
+    sample_rate: int = 16000,
+    *,
+    streaming_header: bool = False,
+) -> bytes:
     buffer = io.BytesIO()
     with wave.open(buffer, "wb") as wav:
         wav.setnchannels(1)
         wav.setsampwidth(2)
         wav.setframerate(sample_rate)
         wav.writeframes(b"\x00\x00" * int(duration_seconds * sample_rate))
-    return buffer.getvalue()
+    payload = bytearray(buffer.getvalue())
+    if streaming_header:
+        payload[4:8] = b"\xff\xff\xff\xff"
+        payload[40:44] = b"\xff\xff\xff\x7f"
+    return bytes(payload)
 
 
 @pytest.mark.asyncio
@@ -91,6 +100,24 @@ async def test_openai_tts_uses_speech_endpoint_without_external_network(tmp_path
     assert result.voice == "marin"
     assert result.duration_seconds > 0
     assert output.is_file()
+
+
+@pytest.mark.asyncio
+async def test_openai_tts_measures_streaming_wav_from_actual_payload(tmp_path: Path) -> None:
+    provider = OpenAIVietnameseTTSProvider(
+        api_key="test-key",
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(200, content=_wav_bytes(streaming_header=True))
+        ),
+    )
+
+    result = await provider.synthesize(
+        text="Xin chào",
+        language="vi",
+        output_path=tmp_path / "streaming.wav",
+    )
+
+    assert result.duration_seconds == pytest.approx(0.25)
 
 
 def test_openai_tts_requires_api_key() -> None:
