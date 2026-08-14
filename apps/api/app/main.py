@@ -3,11 +3,12 @@ from __future__ import annotations
 import time
 import uuid
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Request, status
+from fastapi.responses import FileResponse
 from redis.asyncio import Redis
 
+from .artifacts import ArtifactAccessError, resolve_recorded_artifact
 from .config import settings
 from .models import JobCreateResponse, JobRecord, VideoJobCreate
 from .state import RedisJobStore
@@ -36,6 +37,10 @@ app = FastAPI(title="NPD AI Video Factory API", version="0.1.0", lifespan=lifesp
 
 def store_from(request: Request) -> RedisJobStore:
     return request.app.state.job_store
+
+
+def not_found(message: str = "Job not found.") -> HTTPException:
+    return HTTPException(status_code=404, detail={"error": {"code": "ARTIFACT_NOT_FOUND", "message": message}})
 
 
 @app.get("/healthz")
@@ -83,8 +88,20 @@ async def create_video_job(
 @app.get("/api/v1/video-jobs/{job_id}", response_model=JobRecord)
 async def get_video_job(job_id: str, request: Request) -> JobRecord:
     if not job_id.startswith("vid_") or len(job_id) > 80:
-        raise HTTPException(status_code=404, detail={"error": {"code": "ARTIFACT_NOT_FOUND", "message": "Job not found."}})
+        raise not_found()
     record = await store_from(request).get(job_id)
     if record is None:
-        raise HTTPException(status_code=404, detail={"error": {"code": "ARTIFACT_NOT_FOUND", "message": "Job not found."}})
+        raise not_found()
     return record
+
+
+@app.get("/api/v1/video-jobs/{job_id}/artifacts/{artifact_name}")
+async def get_video_artifact(job_id: str, artifact_name: str, request: Request) -> FileResponse:
+    record = await store_from(request).get(job_id)
+    if record is None:
+        raise not_found()
+    try:
+        path = resolve_recorded_artifact(settings.job_storage_root, record, artifact_name)
+    except ArtifactAccessError as exc:
+        raise not_found("Artifact not found.") from exc
+    return FileResponse(path=path, filename=artifact_name)
