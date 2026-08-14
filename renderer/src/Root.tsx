@@ -1,8 +1,8 @@
 import React from "react";
 import {Composition} from "remotion";
 
-import {RealEstateShort} from "./RealEstateShort.js";
-import type {RendererInputProps, VideoManifest} from "./types.js";
+import {RealEstateShort} from "./RealEstateShort";
+import type {RendererInputProps, VideoManifest} from "./types";
 
 const defaultManifest: VideoManifest = {
   version: "1.0",
