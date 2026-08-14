@@ -6,15 +6,24 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "start": "tsx src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bundle:check": "tsx src/smoke-bundle.ts"
   },
   "dependencies": {
+    "@remotion/bundler": "4.0.501",
+    "@remotion/cli": "4.0.501",
+    "@remotion/renderer": "4.0.501",
     "express": "^5.1.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.501",
     "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0"
   }
