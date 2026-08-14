@@ -2,11 +2,11 @@ import {bundle} from "@remotion/bundler";
 import {renderMedia, selectComposition} from "@remotion/renderer";
 import express from "express";
 import {mkdir, readFile} from "node:fs/promises";
-import {isAbsolute, relative, resolve} from "node:path";
+import {dirname, isAbsolute, relative, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {z} from "zod";
 
-import type {VideoManifest} from "./types.js";
+import type {VideoManifest} from "./types";
 
 const port = Number(process.env.PORT ?? 3001);
 const storageRoot = resolve(process.env.STORAGE_ROOT ?? "/workspace/storage");
@@ -104,7 +104,7 @@ app.post("/render", async (req, res) => {
       inputProps,
     });
 
-    await mkdir(resolve(outputPath, ".."), {recursive: true});
+    await mkdir(dirname(outputPath), {recursive: true});
     await renderMedia({
       composition,
       serveUrl,
