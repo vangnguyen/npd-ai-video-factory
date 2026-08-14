@@ -1,0 +1,27 @@
+name: API CI
+
+on:
+  push:
+    branches:
+      - codex/sprint-1-vertical-slice
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/api/pyproject.toml
+      - name: Install API and dev dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: Run API tests
+        run: pytest -q
