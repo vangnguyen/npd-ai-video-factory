@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 
 from redis.asyncio import Redis
 from redis.exceptions import WatchError
 
-from .models import JobError, JobRecord, JobStage, JobStatus, STAGE_ORDER
+from .models import Artifact, JobError, JobRecord, JobStage, JobStatus, STAGE_ORDER
 
 
 QUEUE_KEY = "npd:video-jobs:queue"
@@ -35,12 +34,13 @@ class RedisJobStore:
         if idempotency_key:
             existing_job_id = await self.redis.get(self.idempotency_key(idempotency_key))
             if existing_job_id:
-                existing = await self.get(existing_job_id.decode())
+                if isinstance(existing_job_id, bytes):
+                    existing_job_id = existing_job_id.decode()
+                existing = await self.get(existing_job_id)
                 if existing:
                     return existing
 
-        payload = record.model_dump_json()
-        created = await self.redis.set(self.job_key(record.job_id), payload, nx=True)
+        created = await self.redis.set(self.job_key(record.job_id), record.model_dump_json(), nx=True)
         if not created:
             existing = await self.get(record.job_id)
             if existing:
@@ -62,14 +62,7 @@ class RedisJobStore:
             raw = raw.decode()
         return JobRecord.model_validate_json(raw)
 
-    async def update_stage(
-        self,
-        job_id: str,
-        *,
-        status: JobStatus,
-        stage: JobStage,
-        progress: int,
-    ) -> JobRecord:
+    async def _mutate(self, job_id: str, mutate) -> JobRecord:
         key = self.job_key(job_id)
         while True:
             try:
@@ -81,15 +74,7 @@ class RedisJobStore:
                     if isinstance(raw, bytes):
                         raw = raw.decode()
                     current = JobRecord.model_validate_json(raw)
-                    validate_transition(current, stage=stage, progress=progress)
-                    updated = current.model_copy(
-                        update={
-                            "status": status,
-                            "stage": stage,
-                            "progress": progress,
-                            "updated_at": datetime.now(timezone.utc),
-                        }
-                    )
+                    updated = mutate(current)
                     pipe.multi()
                     pipe.set(key, updated.model_dump_json())
                     await pipe.execute()
@@ -97,29 +82,30 @@ class RedisJobStore:
             except WatchError:
                 continue
 
+    async def update_stage(self, job_id: str, *, status: JobStatus, stage: JobStage, progress: int) -> JobRecord:
+        def mutate(current: JobRecord) -> JobRecord:
+            validate_transition(current, stage=stage, progress=progress)
+            return current.model_copy(update={
+                "status": status,
+                "stage": stage,
+                "progress": progress,
+                "updated_at": datetime.now(timezone.utc),
+            })
+        return await self._mutate(job_id, mutate)
+
+    async def add_artifact(self, job_id: str, *, artifact: Artifact) -> JobRecord:
+        def mutate(current: JobRecord) -> JobRecord:
+            artifacts = [item for item in current.artifacts if item.name != artifact.name]
+            artifacts.append(artifact)
+            return current.model_copy(update={"artifacts": artifacts, "updated_at": datetime.now(timezone.utc)})
+        return await self._mutate(job_id, mutate)
+
     async def fail(self, job_id: str, *, error: JobError) -> JobRecord:
-        key = self.job_key(job_id)
-        while True:
-            try:
-                async with self.redis.pipeline(transaction=True) as pipe:
-                    await pipe.watch(key)
-                    raw = await pipe.get(key)
-                    if raw is None:
-                        raise KeyError(job_id)
-                    if isinstance(raw, bytes):
-                        raw = raw.decode()
-                    current = JobRecord.model_validate_json(raw)
-                    updated = current.model_copy(
-                        update={
-                            "status": JobStatus.FAILED,
-                            "stage": JobStage.FAILED,
-                            "error": error,
-                            "updated_at": datetime.now(timezone.utc),
-                        }
-                    )
-                    pipe.multi()
-                    pipe.set(key, updated.model_dump_json())
-                    await pipe.execute()
-                    return updated
-            except WatchError:
-                continue
+        def mutate(current: JobRecord) -> JobRecord:
+            return current.model_copy(update={
+                "status": JobStatus.FAILED,
+                "stage": JobStage.FAILED,
+                "error": error,
+                "updated_at": datetime.now(timezone.utc),
+            })
+        return await self._mutate(job_id, mutate)
