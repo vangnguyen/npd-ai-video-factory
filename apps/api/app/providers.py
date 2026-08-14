@@ -143,7 +143,12 @@ class EspeakVietnameseTTSProvider:
 
 def _wav_duration(path: Path) -> float:
     with wave.open(str(path), "rb") as wav:
-        duration = wav.getnframes() / float(wav.getframerate())
+        frame_rate = wav.getframerate()
+        frame_width = wav.getnchannels() * wav.getsampwidth()
+        frames = wav.readframes(wav.getnframes())
+    if frame_rate <= 0 or frame_width <= 0 or len(frames) % frame_width:
+        raise RuntimeError("TTS provider produced an invalid WAV payload")
+    duration = (len(frames) // frame_width) / float(frame_rate)
     if duration <= 0:
         raise RuntimeError("TTS provider produced empty audio")
     return duration

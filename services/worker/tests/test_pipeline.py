@@ -1,3 +1,4 @@
+import wave
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,8 @@ from npd_worker.pipeline import (
     ensure_brand_logo,
     get_tts_provider,
     safe_job_dir,
+    synthesize_storyboard_voice,
+    validate_wav,
     validate_probe_payload,
 )
 from npd_worker.preflight import validate_pilot_assets
@@ -102,6 +105,61 @@ def test_validate_probe_payload_rejects_missing_audio() -> None:
     }
     with pytest.raises(VideoQCError, match="audio"):
         validate_probe_payload(payload, expected_duration=45, require_audio=True)
+
+
+class _FakeTTSProvider:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def synthesize(self, *, text: str, language: str, output_path: Path) -> None:
+        assert language == "vi"
+        self.calls.append(text)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(output_path), "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(8_000)
+            wav.writeframes(b"\x01\x00" * 4_000)
+
+
+@pytest.mark.asyncio
+async def test_storyboard_voice_is_aligned_and_padded_to_timeline(tmp_path: Path) -> None:
+    storyboard = StoryboardResult(
+        scenes=[
+            StoryboardScene(
+                id="scene_01",
+                order=1,
+                start_seconds=0,
+                duration_seconds=2,
+                role="hook",
+                narration="Mở đầu",
+                visual_query="project hook",
+            ),
+            StoryboardScene(
+                id="scene_02",
+                order=2,
+                start_seconds=2,
+                duration_seconds=2,
+                role="cta",
+                narration="Mở đầu",
+                visual_query="project cta",
+            ),
+        ]
+    )
+    provider = _FakeTTSProvider()
+    output = tmp_path / "narration.wav"
+
+    duration = await synthesize_storyboard_voice(
+        provider,
+        storyboard=storyboard,
+        language="vi",
+        output_path=output,
+    )
+
+    assert duration == pytest.approx(4.0)
+    assert validate_wav(output, expected_duration=4.0) == pytest.approx(4.0)
+    assert provider.calls == ["Mở đầu"]
+    assert not (tmp_path / "voice-scenes").exists()
 
 
 def test_logo_placeholder_is_created_inside_job_dir(tmp_path: Path) -> None:
