@@ -3,9 +3,14 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-WORKDIR /worker
-COPY pyproject.toml ./
-COPY worker.py ./
-RUN pip install --no-cache-dir .
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends espeak-ng ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
-CMD ["python", "worker.py"]
+WORKDIR /workspace
+COPY apps/api /workspace/apps/api
+COPY services/worker /workspace/services/worker
+RUN pip install --no-cache-dir /workspace/apps/api /workspace/services/worker
+
+WORKDIR /workspace/services/worker
+CMD ["python", "-m", "npd_worker.main"]

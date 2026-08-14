@@ -26,6 +26,18 @@ jobs:
       - name: Run API tests
         run: pytest -q
 
+  test-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install shared API and worker packages
+        run: python -m pip install -e apps/api -e 'services/worker[dev]'
+      - name: Run worker tests
+        run: pytest -q services/worker/tests
+
   test-renderer:
     runs-on: ubuntu-latest
     defaults:

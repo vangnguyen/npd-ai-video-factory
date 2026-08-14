@@ -31,11 +31,13 @@ services:
 
   worker:
     build:
-      context: ./services/worker
+      context: .
+      dockerfile: services/worker/Dockerfile
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
       RENDERER_URL: http://renderer:3001
+      VIDEO_MANIFEST_SCHEMA_PATH: /workspace/packages/contracts/video-manifest.schema.json
     volumes:
       - ./storage:/workspace/storage
       - ./packages/contracts:/workspace/packages/contracts:ro

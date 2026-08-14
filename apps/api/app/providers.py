@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import wave
 from pathlib import Path
 from typing import Protocol
 
@@ -101,3 +103,43 @@ class UnconfiguredVietnameseTTSProvider:
         if language != "vi":
             raise ValueError("Sprint 1 only supports Vietnamese TTS")
         raise TTSNotConfiguredError("Vietnamese TTS provider is not configured")
+
+
+class EspeakVietnameseTTSProvider:
+    """Offline Sprint 1 TTS adapter using espeak-ng inside the worker container."""
+
+    def __init__(self, *, voice: str = "vi", rate: int = 145):
+        self.voice = voice
+        self.rate = rate
+
+    async def synthesize(self, *, text: str, language: str, output_path: Path) -> VoiceResult:
+        if language != "vi":
+            raise ValueError("Sprint 1 only supports Vietnamese TTS")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        process = await asyncio.create_subprocess_exec(
+            "espeak-ng",
+            "-v",
+            self.voice,
+            "-s",
+            str(self.rate),
+            "-w",
+            str(output_path),
+            text,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            detail = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(f"espeak-ng failed: {detail or process.returncode}")
+
+        with wave.open(str(output_path), "rb") as wav:
+            duration = wav.getnframes() / float(wav.getframerate())
+        if duration <= 0:
+            raise RuntimeError("espeak-ng produced empty audio")
+        return VoiceResult(
+            path=output_path,
+            duration_seconds=duration,
+            provider="espeak-ng",
+            voice=self.voice,
+        )
