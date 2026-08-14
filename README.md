@@ -22,7 +22,7 @@ Tasks 1-9 are implemented on the Sprint 1 branch:
 - video-manifest builder and Draft 2020-12 JSON Schema validation
 - API tests executed by GitHub Actions
 
-Next implementation targets are the Remotion renderer and resumable worker pipeline.
+Next implementation targets are **Task 10 Remotion renderer** and **Task 11 resumable worker pipeline**.
 
 ## Handoff package
 
