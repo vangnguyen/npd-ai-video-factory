@@ -15,7 +15,21 @@ if [[ ! -f .env ]]; then
   exit 2
 fi
 
-python - <<'PY'
+PYTHON_BIN="${PYTHON_BIN:-}"
+if [[ -z "$PYTHON_BIN" ]]; then
+  for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      PYTHON_BIN="$candidate"
+      break
+    fi
+  done
+fi
+if [[ -z "$PYTHON_BIN" ]]; then
+  echo "Python 3 is required to run the production pilot." >&2
+  exit 2
+fi
+
+"$PYTHON_BIN" - <<'PY'
 from pathlib import Path
 
 values = {}
@@ -92,7 +106,7 @@ create_response="$(
     -H "Idempotency-Key: production-pilot-$(date -u +%Y%m%dT%H%M%SZ)" \
     --data-binary @examples/vinhomes-green-paradise.request.json
 )"
-job_id="$(printf '%s' "$create_response" | python -c 'import json,sys; print(json.load(sys.stdin)["job_id"])')"
+job_id="$(printf '%s' "$create_response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["job_id"])')"
 evidence_dir="production-pilot-artifacts/$job_id"
 mkdir -p "$evidence_dir"
 printf '%s\n' "$create_response" > "$evidence_dir/create-response.json"
@@ -103,7 +117,7 @@ for attempt in $(seq 1 120); do
   status_json="$(curl --fail --silent --show-error "http://localhost:8000/api/v1/video-jobs/$job_id")"
   printf '%s\n' "$status_json" > "$evidence_dir/job-status.json"
   read -r status stage progress < <(
-    printf '%s' "$status_json" | python -c 'import json,sys; d=json.load(sys.stdin); print(d["status"], d["stage"], d["progress"])'
+    printf '%s' "$status_json" | "$PYTHON_BIN" -c 'import json,sys; d=json.load(sys.stdin); print(d["status"], d["stage"], d["progress"])'
   )
   echo "[pilot] poll=$attempt status=$status stage=$stage progress=$progress"
   if [[ "$status" == "awaiting_review" ]]; then
@@ -139,7 +153,7 @@ cp "$job_dir/storyboard.json" "$evidence_dir/storyboard.json"
 cp "$job_dir/subtitles.srt" "$evidence_dir/subtitles.srt"
 docker compose logs --no-color api worker renderer > "$evidence_dir/compose.log" 2>&1 || true
 
-python - "$evidence_dir/qc.json" <<'PY'
+"$PYTHON_BIN" - "$evidence_dir/qc.json" <<'PY'
 import json
 import sys
 from pathlib import Path
