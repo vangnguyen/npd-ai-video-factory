@@ -1,17 +1,48 @@
 # Sprint 1 Implementation Plan
 
-1. **Bootstrap the monorepo.** Add Python and Node toolchains, formatting, linting, tests, and developer commands.
-2. **Codify shared contracts.** Implement request/status models and compile the video-manifest schema for both runtimes.
-3. **Create the FastAPI skeleton.** Add settings, health endpoint, dependency boundaries, and structured logging.
-4. **Implement Redis job state.** Define immutable input snapshots, state transitions, progress, attempts, and TTL policy.
-5. **Implement job endpoints.** Add create, status, and artifact access with idempotency and safe validation errors.
-6. **Implement the content director.** Create provider interfaces plus deterministic fake and configured LLM adapter.
-7. **Implement Vietnamese TTS.** Create provider interface, deterministic test fixture, duration probing, and configured adapter.
-8. **Implement the local asset resolver.** Index allowlisted files and map storyboard slots without Vision AI or stock APIs.
-9. **Build and validate manifests.** Generate timed scenes/subtitles and reject contract or duration violations.
-10. **Implement Remotion rendering.** Build `real-estate-short-v1`, renderer HTTP boundary, progress reporting, and H.264 output.
-11. **Implement the resumable worker.** Orchestrate stages, persist artifacts atomically, retry transient failures, and record terminal errors.
-12. **Complete the n8n smoke workflow.** Normalize input, create job, poll with a bounded loop, and surface the artifact URL.
-13. **Prove the vertical slice.** Run contract/unit/E2E tests, inspect video metadata, document commands, and attach evidence to the PR.
+## Completed
 
-Each task must leave the repository testable. Later tasks may extend earlier interfaces but must not expand the Sprint 1 exclusions.
+1. Bootstrap the Python/TypeScript monorepo.
+2. Codify request, status, and video-manifest contracts.
+3. Create the FastAPI skeleton and health endpoints.
+4. Implement Redis-backed job state and monotonic transitions.
+5. Implement create/status/artifact endpoints.
+6. Implement content-director provider interfaces.
+7. Implement Vietnamese TTS provider interfaces.
+8. Implement deterministic local-asset resolution.
+9. Build and validate video manifests.
+
+The API foundation is covered by GitHub Actions CI. The current CI installs `apps/api[dev]` and runs pytest on pushes to the Sprint 1 branch and pull requests to `main`.
+
+## Next
+
+10. Implement the `real-estate-short-v1` Remotion renderer.
+   - create a real composition at 1080x1920, 30 fps
+   - consume the committed manifest contract only
+   - render local video/image scenes
+   - overlay logo, CTA, and subtitles
+   - expose `/render` and return structured errors
+   - emit progress that can be mapped to overall job progress 70-95
+
+11. Implement the resumable worker pipeline.
+   - dequeue `npd:video-jobs:queue`
+   - resume from the latest valid artifact/stage
+   - run content -> TTS -> subtitles -> assets -> manifest -> render -> QC
+   - persist each artifact and register it in Redis job state
+   - map provider/renderer failures to stable error codes
+
+12. Complete the inactive n8n smoke-test workflow.
+   - submit the sample request
+   - bounded polling
+   - stop at `awaiting_review` or `failed`
+   - return the final artifact URL
+
+13. Prove the vertical slice with contract, unit, renderer, and E2E evidence.
+   - GitHub Actions for Python and renderer tests
+   - Docker Compose smoke test
+   - final 45-second 1080x1920 H.264 MP4
+   - record job ID, manifest validation result, ffprobe metadata, and test results in PR #2
+
+## Scope guard
+
+Do not add Vision AI, ComfyUI, stock providers, dashboards, automatic publishing, or analytics during Sprint 1.
