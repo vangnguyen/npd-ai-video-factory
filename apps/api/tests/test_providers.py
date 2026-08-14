@@ -65,8 +65,18 @@ async def test_deterministic_content_uses_a_readable_project_name() -> None:
 
     script = await DeterministicContentProvider().generate_script(request)
 
-    assert "Vinhomes Green Paradise" in script.body[0]
+    assert "Vinhomes Green Paradise" in script.hook
     assert "vinhomes-green-paradise" not in script.full_narration
+    assert len(script.body) == 4
+    assert "tài liệu chính thức" in script.full_narration
+
+    storyboard = await DeterministicContentProvider().generate_storyboard(request, script)
+    assert len(storyboard.scenes) == 6
+    assert [scene.narration for scene in storyboard.scenes] == [
+        script.hook,
+        *script.body,
+        script.cta,
+    ]
 
 
 @pytest.mark.asyncio

@@ -92,7 +92,9 @@ class WorkerConfig:
             openai_tts_voice=os.getenv("OPENAI_TTS_VOICE", "marin").strip(),
             openai_tts_instructions=os.getenv(
                 "OPENAI_TTS_INSTRUCTIONS",
-                "Đọc tiếng Việt tự nhiên, rõ ràng, đáng tin cậy, nhịp vừa phải; phong cách tư vấn bất động sản chuyên nghiệp, không cường điệu.",
+                "Đọc tiếng Việt tự nhiên, rõ ràng, nhịp nhanh gọn và dứt khoát; "
+                "phong cách tư vấn bất động sản chuyên nghiệp, giàu năng lượng "
+                "nhưng không cường điệu; ngắt nghỉ ngắn giữa các ý.",
             ).strip(),
             openai_base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com").rstrip("/"),
             openai_tts_timeout_seconds=float(os.getenv("OPENAI_TTS_TIMEOUT_SECONDS", "120")),

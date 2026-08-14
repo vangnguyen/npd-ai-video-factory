@@ -98,13 +98,24 @@ if [[ "$api_ready" != "1" ]]; then
 fi
 curl --fail --silent http://localhost:3001/healthz >/dev/null
 
-echo "[pilot] creating the real-media 45-second job"
+request_path="examples/vinhomes-green-paradise.request.json"
+pilot_duration_seconds="$(
+  "$PYTHON_BIN" - "$request_path" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+request = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+print(request['video']['duration_seconds'])
+PY
+)"
+echo "[pilot] creating the real-media ${pilot_duration_seconds}-second job"
 create_response="$(
   curl --fail --silent --show-error \
     -X POST http://localhost:8000/api/v1/video-jobs \
     -H 'Content-Type: application/json' \
     -H "Idempotency-Key: production-pilot-$(date -u +%Y%m%dT%H%M%SZ)" \
-    --data-binary @examples/vinhomes-green-paradise.request.json
+    --data-binary @"$request_path"
 )"
 job_id="$(printf '%s' "$create_response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["job_id"])')"
 evidence_dir="production-pilot-artifacts/$job_id"
@@ -153,17 +164,19 @@ cp "$job_dir/storyboard.json" "$evidence_dir/storyboard.json"
 cp "$job_dir/subtitles.srt" "$evidence_dir/subtitles.srt"
 docker compose logs --no-color api worker renderer > "$evidence_dir/compose.log" 2>&1 || true
 
-"$PYTHON_BIN" - "$evidence_dir/qc.json" <<'PY'
+"$PYTHON_BIN" - "$evidence_dir/qc.json" "$request_path" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 qc = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+request = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
+expected_duration = float(request['video']['duration_seconds'])
 assert qc['width'] == 1080, qc
 assert qc['height'] == 1920, qc
 assert qc['video_codec'] == 'h264', qc
 assert qc['audio_codec'], qc
-assert abs(float(qc['duration_seconds']) - 45.0) <= 3.0, qc
+assert abs(float(qc['duration_seconds']) - expected_duration) <= 3.0, qc
 assert int(qc['size_bytes']) > 100_000, qc
 print('[pilot] QC verified:', json.dumps(qc, ensure_ascii=False))
 PY
