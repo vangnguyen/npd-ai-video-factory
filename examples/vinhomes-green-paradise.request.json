@@ -1,8 +1,8 @@
 {
-  "topic": "Ba lý do nên chú ý Vinhomes Green Paradise tuần này",
+  "topic": "Trước khi chọn Vinhomes Green Paradise, hãy kiểm tra 3 điều này",
   "project": "vinhomes-green-paradise",
   "video": {
-    "duration_seconds": 45,
+    "duration_seconds": 30,
     "aspect": "9:16",
     "language": "vi",
     "template": "real-estate-short-v1"
@@ -10,8 +10,8 @@
   "content": {
     "objective": "lead_generation",
     "audience": "khách hàng quan tâm bất động sản Cần Giờ",
-    "tone": "thông tin, tin cậy, không phóng đại",
-    "cta": "Đăng ký tham quan sa bàn"
+    "tone": "nhanh gọn, thực tế, tin cậy, không phóng đại",
+    "cta": "Nhắn Ngọc Phương Đông để đặt lịch xem sa bàn và nhận thông tin dự án"
   },
   "media": {
     "source": "local",

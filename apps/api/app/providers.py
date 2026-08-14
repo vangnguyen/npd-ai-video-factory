@@ -59,11 +59,12 @@ class DeterministicContentProvider:
 
     async def generate_script(self, request: VideoJobCreate) -> ScriptResult:
         project_name = " ".join(part.capitalize() for part in request.project.split("-"))
-        hook = f"{request.topic}: điều gì đáng chú ý?"
+        hook = f"Quan tâm {project_name}? Đừng quyết định chỉ vì một tấm phối cảnh."
         body = [
-            f"Điểm một: tập trung vào thông tin thực tế của {project_name}.",
-            "Điểm hai: đối chiếu sản phẩm, vị trí và trải nghiệm dự án.",
-            "Điểm ba: chỉ sử dụng dữ liệu đã được cung cấp hoặc xác minh.",
+            "Một: xem sa bàn để hiểu quy hoạch và vị trí từng phân khu.",
+            "Hai: chọn sản phẩm phù hợp nhu cầu ở, nghỉ dưỡng hay đầu tư.",
+            "Ba: đối chiếu thông tin bằng tài liệu chính thức trước khi xuống tiền.",
+            "Xem trực tiếp giúp bạn đặt đúng câu hỏi và so sánh rõ ràng hơn.",
         ]
         narration = " ".join([hook, *body, request.content.cta])
         return ScriptResult(title=request.topic, hook=hook, body=body, cta=request.content.cta, full_narration=narration)
@@ -72,7 +73,11 @@ class DeterministicContentProvider:
         count = 6 if request.video.duration_seconds >= 30 else 4
         duration = request.video.duration_seconds / count
         roles = ["hook", "identity", "information", "evidence", "sales_angle", "cta"]
-        narration_parts = [script.hook, *script.body, script.cta]
+        narration_parts = (
+            [script.hook, *script.body, script.cta]
+            if count == 6
+            else [script.hook, script.body[0], script.body[2], script.cta]
+        )
         scenes: list[StoryboardScene] = []
         for index in range(count):
             role = roles[index] if index < len(roles) else "information"
