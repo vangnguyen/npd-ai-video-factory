@@ -10,6 +10,20 @@ Deliver one end-to-end 45-second vertical video through this path:
 
 Sprint 1 deliberately excludes scene intelligence, ComfyUI, and automatic social publishing.
 
+## Current implementation checkpoint
+
+Tasks 1-9 are implemented on the Sprint 1 branch:
+
+- FastAPI health, readiness, create-job, status, and safe artifact endpoints
+- Redis-backed job records, idempotency, queue, monotonic stage/progress transitions, and artifact registration
+- provider interfaces for structured content generation and Vietnamese TTS
+- deterministic development content provider
+- deterministic local asset resolver with minimum-asset validation
+- video-manifest builder and Draft 2020-12 JSON Schema validation
+- API tests executed by GitHub Actions
+
+Next implementation targets are the Remotion renderer and resumable worker pipeline.
+
 ## Handoff package
 
 - [Technical handoff](docs/technical-handoff.md)
@@ -33,4 +47,4 @@ storage/assets/              Local Sprint 1 footage
 storage/jobs/                Generated job artifacts
 ```
 
-The Docker Compose file is a contract for the implementation. It becomes runnable as the API, worker, and renderer tasks are completed.
+The Docker Compose file is the runtime contract for the implementation.
