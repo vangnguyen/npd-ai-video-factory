@@ -1,6 +1,8 @@
-# Codex Prompt: Implement Sprint 1
+# Codex Prompt: Continue Sprint 1
 
-Implement the NPD AI Video Factory Sprint 1 vertical slice in this repository.
+Continue the NPD AI Video Factory Sprint 1 vertical slice in this repository.
+
+Tasks 1-9 are already implemented on `codex/sprint-1-vertical-slice`. Do not redo them unless a failing test requires a targeted fix.
 
 Read, in order:
 
@@ -10,18 +12,35 @@ Read, in order:
 4. `docs/implementation-plan.md`
 5. `docs/acceptance-tests.md`
 
-Work through the 13 tasks in order. Keep each task reviewable and test-backed. Preserve the API and manifest contracts unless a blocking inconsistency is documented in the pull request.
+Start at **Task 10**.
 
-Definition of done:
+## Task 10 — Remotion renderer
 
-- `docker compose up --build` starts API, Redis, worker, and renderer.
-- The sample request creates a job and returns a stable job ID.
-- The worker uses testable provider interfaces for script/storyboard and TTS.
-- At least five local fixture clips are selected without Vision AI.
-- The generated manifest validates against the committed JSON Schema.
-- Remotion produces a 1080x1920 H.264 MP4 approximately 45 seconds long.
-- The status endpoint exposes progress, stage, artifacts, and structured failures.
-- The n8n workflow is importable, inactive by default, and completes the smoke test.
-- Unit, contract, and end-to-end tests pass.
+Implement `real-estate-short-v1` as a real Remotion composition:
+- 1080x1920, 30 fps
+- consume only the committed video manifest
+- local MP4/image scene playback
+- narration audio when `voice` exists
+- subtitle overlays in mobile-safe margins
+- NPD logo area and final CTA
+- `/render` service endpoint with bounded, structured failures
+- H.264 MP4 output to the requested shared-storage path
 
-Do not add ComfyUI, Vision AI, stock providers, auto-publishing, a dashboard, or analytics in this sprint.
+## Task 11 — resumable worker
+
+Replace the worker placeholder with the pipeline:
+
+`content -> TTS -> subtitles -> local assets -> manifest -> renderer -> QC -> awaiting_review`
+
+Requirements:
+- resume from validated artifacts after restart
+- register artifacts in Redis job state
+- keep progress monotonic
+- map failures to stable contract error codes
+- retry only transient provider/renderer errors
+
+Then complete Tasks 12-13: n8n smoke flow and E2E proof.
+
+Do not add ComfyUI, Vision AI, stock providers, auto-publishing, a dashboard, or analytics in Sprint 1.
+
+Before finishing, run all CI/test commands and report any blocked external credential or missing licensed media fixture explicitly.
