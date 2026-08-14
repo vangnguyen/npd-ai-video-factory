@@ -10,7 +10,7 @@ import {
   useVideoConfig,
 } from "remotion";
 
-import type {RendererInputProps, VideoManifest} from "./types.js";
+import type {RendererInputProps, VideoManifest} from "./types";
 
 const dbToAmplitude = (db = 0): number => Math.pow(10, db / 20);
 
