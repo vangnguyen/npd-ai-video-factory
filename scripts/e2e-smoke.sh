@@ -71,7 +71,8 @@ if ! curl --fail --silent http://localhost:3001/healthz >/dev/null; then
   exit 1
 fi
 
-echo "[e2e] creating 45-second video job"
+expected_duration="$(python -c 'import json; print(json.load(open("examples/vinhomes-green-paradise.request.json", encoding="utf-8"))["video"]["duration_seconds"])')"
+echo "[e2e] creating ${expected_duration}-second video job"
 create_response="$(
   curl --fail --silent --show-error \
     -X POST http://localhost:8000/api/v1/video-jobs \
@@ -134,12 +135,16 @@ import json
 from pathlib import Path
 
 qc = json.loads(Path("e2e-artifacts/qc.json").read_text(encoding="utf-8"))
+request = json.loads(
+    Path("examples/vinhomes-green-paradise.request.json").read_text(encoding="utf-8")
+)
+expected_duration = float(request["video"]["duration_seconds"])
 assert qc["width"] == 1080, qc
 assert qc["height"] == 1920, qc
 assert abs(float(qc["fps"]) - 30.0) <= 0.01, qc
 assert qc["video_codec"] == "h264", qc
 assert qc["audio_codec"], qc
-assert abs(float(qc["duration_seconds"]) - 45.0) <= 3.0, qc
+assert abs(float(qc["duration_seconds"]) - expected_duration) <= 3.0, qc
 assert int(qc["size_bytes"]) > 100_000, qc
 assert int(qc["visual_sample_count"]) >= 40, qc
 assert float(qc["dark_visual_sample_ratio"]) <= 0.10, qc
