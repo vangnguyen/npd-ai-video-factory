@@ -14,6 +14,10 @@ class HubSettings:
     store_backend: str = "memory"
     agent_redis_url: str = "redis://redis:6379/1"
     store_namespace: str = "npd:agent-hub:v1"
+    auth_mode: str = "disabled"
+    viewer_token: str = ""
+    operator_token: str = ""
+    owner_token: str = ""
 
     @classmethod
     def from_env(cls) -> "HubSettings":
@@ -26,6 +30,10 @@ class HubSettings:
             store_backend=os.getenv("AGENT_STORE_BACKEND", "memory").strip().lower(),
             agent_redis_url=os.getenv("AGENT_REDIS_URL", "redis://redis:6379/1").strip(),
             store_namespace=os.getenv("AGENT_STORE_NAMESPACE", "npd:agent-hub:v1").strip(),
+            auth_mode=os.getenv("AGENT_AUTH_MODE", "disabled").strip().lower(),
+            viewer_token=os.getenv("AGENT_VIEWER_TOKEN", "").strip(),
+            operator_token=os.getenv("AGENT_OPERATOR_TOKEN", "").strip(),
+            owner_token=os.getenv("AGENT_OWNER_TOKEN", "").strip(),
         )
 
 
