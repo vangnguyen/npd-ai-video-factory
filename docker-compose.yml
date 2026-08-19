@@ -29,6 +29,19 @@ services:
       redis:
         condition: service_healthy
 
+  agent-hub:
+    build:
+      context: .
+      dockerfile: services/agent_hub/Dockerfile
+    env_file: .env
+    environment:
+      VIDEO_API_URL: http://api:8000
+    ports:
+      - "8010:8010"
+    depends_on:
+      api:
+        condition: service_started
+
   worker:
     build:
       context: .
