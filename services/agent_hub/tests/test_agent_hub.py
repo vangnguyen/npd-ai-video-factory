@@ -28,6 +28,21 @@ class StubExecutor:
         )
 
 
+class FailOnceExecutor:
+    def __init__(self):
+        self.calls = 0
+
+    async def execute(self, *, task, action):
+        self.calls += 1
+        return ToolExecutionResult(
+            task_id=task.task_id,
+            action_id=action.action_id,
+            tool=action.tool,
+            status=ExecutionStatus.FAILED if self.calls == 1 else ExecutionStatus.SUCCEEDED,
+            detail="simulated partial failure" if self.calls == 1 else None,
+        )
+
+
 def test_broad_objective_routes_to_all_specialists():
     hub = AgentHub()
     report = hub.run(AgentTask(objective="Quản lý công việc toàn bộ hệ thống marketing và sales"))
@@ -97,6 +112,41 @@ def test_write_execution_is_blocked_until_commander_approval():
     assert result.status.value == "succeeded"
     assert publish.status.value == "executed"
     assert executor.calls == [(report.task_id, publish.action_id, "social.publish")]
+
+
+def test_failed_write_requires_reapproval_before_retry():
+    executor = FailOnceExecutor()
+    hub = AgentHub(executor=executor)
+    report = hub.run(
+        AgentTask(
+            objective="Đăng video đã duyệt",
+            preferred_agents=[AgentName.SOCIAL_MEDIA],
+        )
+    )
+    publish = next(
+        action
+        for agent_report in report.reports
+        for action in agent_report.actions
+        if action.tool == "social.publish"
+    )
+
+    hub.decide(report.task_id, publish.action_id, ApprovalDecision(approved=True))
+    first = asyncio.run(hub.execute(report.task_id, publish.action_id))
+    assert first.status.value == "failed"
+    assert publish.status.value == "execution_failed"
+
+    try:
+        asyncio.run(hub.execute(report.task_id, publish.action_id))
+        assert False, "failed write should require re-approval"
+    except ValueError as exc:
+        assert "re-approval" in str(exc)
+    assert executor.calls == 1
+
+    hub.decide(report.task_id, publish.action_id, ApprovalDecision(approved=True))
+    second = asyncio.run(hub.execute(report.task_id, publish.action_id))
+    assert second.status.value == "succeeded"
+    assert publish.status.value == "executed"
+    assert executor.calls == 2
 
 
 def test_http_surface():
