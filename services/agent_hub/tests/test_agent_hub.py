@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from npd_agent_hub.main import app
-from npd_agent_hub.models import AgentName, AgentTask
+from npd_agent_hub.models import AgentName, AgentTask, ApprovalDecision
 from npd_agent_hub.orchestrator import AgentHub
 
 
@@ -38,7 +38,7 @@ def test_approval_changes_action_status():
     decided = hub.decide(
         report.task_id,
         target.action_id,
-        decision={"approved": True},
+        decision=ApprovalDecision(approved=True),
     )
 
     assert decided.status.value == "approved"
