@@ -1,0 +1,30 @@
+# Add this site block to the EXISTING VPS Caddy configuration.
+# Do not start a second Caddy instance.
+# Replace the hostname with the already-approved Agent Hub hostname; Phase 5 does not change domains.
+
+agent-hub.example.invalid {
+    encode zstd gzip
+
+    reverse_proxy 127.0.0.1:8010 {
+        health_uri /health
+        health_interval 30s
+        health_timeout 5s
+    }
+
+    header {
+        Strict-Transport-Security "max-age=15552000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+
+    log {
+        output file /var/log/caddy/npd-agent-hub-access.log {
+            roll_size 25MiB
+            roll_keep 5
+            roll_keep_for 168h
+        }
+        format json
+    }
+}
