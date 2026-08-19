@@ -208,6 +208,15 @@ def validate_probe_payload(
     if require_audio and audio is None:
         raise VideoQCError("final output has no audio stream")
 
+    frame_rate = video.get("avg_frame_rate") or video.get("r_frame_rate")
+    try:
+        numerator, denominator = str(frame_rate).split("/", maxsplit=1)
+        fps = float(numerator) / float(denominator)
+    except (TypeError, ValueError, ZeroDivisionError) as exc:
+        raise VideoQCError("final output frame rate is unavailable") from exc
+    if abs(fps - 30.0) > 0.01:
+        raise VideoQCError(f"expected 30 fps video, found {fps:.3f}")
+
     raw_duration = (payload.get("format") or {}).get("duration") or video.get("duration")
     try:
         duration = float(raw_duration)
@@ -221,6 +230,7 @@ def validate_probe_payload(
         "duration_seconds": round(duration, 3),
         "width": int(video["width"]),
         "height": int(video["height"]),
+        "fps": round(fps, 3),
         "video_codec": video.get("codec_name"),
         "audio_codec": audio.get("codec_name") if audio else None,
     }
@@ -312,7 +322,7 @@ async def call_renderer(
     job_id: str,
     manifest_path: Path,
     output_path: Path,
-) -> None:
+) -> dict[str, Any]:
     payload = {
         "job_id": job_id,
         "manifest_path": str(manifest_path),
@@ -337,13 +347,20 @@ async def call_renderer(
                 raise RendererUnavailable(str(exc)) from exc
 
             if response.status_code < 400:
-                return
+                try:
+                    result = response.json()
+                except ValueError as exc:
+                    raise RendererFailed("renderer returned invalid JSON") from exc
+                if result.get("status") != "success" or result.get("output_path") != str(output_path):
+                    raise RendererFailed("renderer returned an invalid success response")
+                return result
             try:
-                error = response.json().get("error", {})
+                body = response.json()
             except ValueError:
-                error = {}
-            retryable = bool(error.get("retryable")) or response.status_code in {502, 503, 504}
-            message = str(error.get("message") or f"renderer returned HTTP {response.status_code}")
+                body = {}
+            error = body.get("error", {})
+            retryable = bool(body.get("retryable") or error.get("retryable")) or response.status_code in {502, 503, 504}
+            message = str(body.get("message") or error.get("message") or f"renderer returned HTTP {response.status_code}")
             if retryable and attempt == 0:
                 await asyncio.sleep(2)
                 continue
@@ -372,10 +389,14 @@ async def run_job(
     job_dir.mkdir(parents=True, exist_ok=True)
     request = record.request
     content_provider = DeterministicContentProvider()
-    tts_provider = get_tts_provider(config)
     current_stage = JobStage.SCRIPTING
 
     try:
+        request_path = job_dir / "request.json"
+        if not request_path.is_file():
+            write_json(request_path, request)
+        await register_artifact(store, job_id, kind="request", path=request_path)
+
         script_path = job_dir / "script.json"
         try:
             script = load_model(script_path, ScriptResult)
@@ -387,8 +408,9 @@ async def run_job(
             except Exception as exc:
                 raise PipelineFailure(
                     code="CONTENT_PROVIDER_FAILED",
-                    message=str(exc),
+                    message="Content provider could not generate the script.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
             write_json(script_path, script)
         await register_artifact(store, job_id, kind="script", path=script_path)
@@ -404,8 +426,9 @@ async def run_job(
             except Exception as exc:
                 raise PipelineFailure(
                     code="CONTENT_PROVIDER_FAILED",
-                    message=str(exc),
+                    message="Content provider could not generate the storyboard.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
             if abs(storyboard.duration_seconds - request.video.duration_seconds) > 0.1:
                 raise PipelineFailure(
@@ -423,6 +446,7 @@ async def run_job(
             current_stage = JobStage.GENERATING_VOICE
             await advance(store, job_id, stage=current_stage, progress=30)
             try:
+                tts_provider = get_tts_provider(config)
                 await tts_provider.synthesize(
                     text=script.full_narration,
                     language=request.video.language,
@@ -432,8 +456,9 @@ async def run_job(
             except Exception as exc:
                 raise PipelineFailure(
                     code="TTS_PROVIDER_FAILED",
-                    message=str(exc),
+                    message="TTS provider could not generate narration audio.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
         await register_artifact(store, job_id, kind="audio", path=voice_path)
 
@@ -450,10 +475,14 @@ async def run_job(
             resolved_assets = LocalAssetResolver(config.asset_root).resolve(request, storyboard)
         except AssetResolutionError as exc:
             raise PipelineFailure(
-                code="ASSET_NOT_FOUND",
-                message=str(exc),
+                code="ASSET_RESOLUTION_FAILED",
+                message="Local assets could not be resolved for every scene.",
                 stage=current_stage,
+                details=[{"type": type(exc).__name__}],
             ) from exc
+        assets_path = job_dir / "resolved-assets.json"
+        write_json(assets_path, [item.model_dump(mode="json") for item in resolved_assets])
+        await register_artifact(store, job_id, kind="assets", path=assets_path)
 
         current_stage = JobStage.BUILDING_MANIFEST
         await advance(store, job_id, stage=current_stage, progress=60)
@@ -479,9 +508,10 @@ async def run_job(
                 persist_manifest(manifest, manifest_path, config.schema_path)
             except ManifestValidationError as exc:
                 raise PipelineFailure(
-                    code="MANIFEST_INVALID",
-                    message=str(exc),
+                    code="MANIFEST_VALIDATION_FAILED",
+                    message="Video manifest validation failed.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
         await register_artifact(store, job_id, kind="manifest", path=manifest_path)
 
@@ -511,15 +541,17 @@ async def run_job(
             except RendererUnavailable as exc:
                 raise PipelineFailure(
                     code="RENDERER_UNAVAILABLE",
-                    message=str(exc),
+                    message="Renderer service is unavailable after bounded retries.",
                     stage=current_stage,
                     retryable=True,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
             except RendererFailed as exc:
                 raise PipelineFailure(
                     code="RENDER_FAILED",
-                    message=str(exc),
+                    message="Renderer could not produce the final video.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
 
             current_stage = JobStage.QUALITY_CHECK
@@ -532,9 +564,10 @@ async def run_job(
                 )
             except VideoQCError as exc:
                 raise PipelineFailure(
-                    code="VIDEO_QC_FAILED",
-                    message=str(exc),
+                    code="QC_FAILED",
+                    message="Final video failed quality-control verification.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
         else:
             current_stage = JobStage.QUALITY_CHECK
@@ -543,7 +576,7 @@ async def run_job(
         qc_path = job_dir / "qc.json"
         write_json(qc_path, qc)
         await register_artifact(store, job_id, kind="video", path=final_path)
-        await register_artifact(store, job_id, kind="metadata", path=qc_path)
+        await register_artifact(store, job_id, kind="qc", path=qc_path)
         completed = await store.update_stage(
             job_id,
             status=JobStatus.AWAITING_REVIEW,

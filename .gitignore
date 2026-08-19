@@ -15,3 +15,4 @@ storage/jobs/*
 *.wav
 coverage/
 .pytest_cache/
+e2e-artifacts/

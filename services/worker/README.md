@@ -24,5 +24,6 @@ The worker runs FFprobe after render and requires:
 - MP4 larger than 100 KB;
 - H.264 video;
 - 1080x1920 dimensions;
+- 30 fps;
 - audio stream;
 - duration within 3 seconds of the requested duration.

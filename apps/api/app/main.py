@@ -72,9 +72,9 @@ async def create_video_job(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=200),
 ) -> JobCreateResponse:
     store = store_from(request)
-    record = JobRecord.new(job_id=new_job_id(), request=payload)
-    record = await store.create(record, idempotency_key=idempotency_key)
-    if record.stage.value == "queued":
+    candidate = JobRecord.new(job_id=new_job_id(), request=payload)
+    record = await store.create(candidate, idempotency_key=idempotency_key)
+    if record.job_id == candidate.job_id:
         await store.enqueue(record.job_id)
     return JobCreateResponse(
         job_id=record.job_id,

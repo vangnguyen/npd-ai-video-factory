@@ -3,11 +3,17 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+  echo "Python interpreter not found: $PYTHON_BIN" >&2
+  exit 1
+fi
 
 mkdir -p e2e-artifacts storage/assets/vinhomes-green-paradise storage/jobs
 cp .env.example .env
 
-python - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 import base64
 from pathlib import Path
 
@@ -59,7 +65,7 @@ create_response="$(
     --data-binary @examples/vinhomes-green-paradise.request.json
 )"
 printf '%s\n' "$create_response" > e2e-artifacts/create-response.json
-job_id="$(printf '%s' "$create_response" | python -c 'import json,sys; print(json.load(sys.stdin)["job_id"])')"
+job_id="$(printf '%s' "$create_response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["job_id"])')"
 echo "[e2e] job_id=$job_id"
 
 terminal=0
@@ -67,7 +73,7 @@ for attempt in $(seq 1 120); do
   status_json="$(curl --fail --silent --show-error "http://localhost:8000/api/v1/video-jobs/$job_id")"
   printf '%s\n' "$status_json" > e2e-artifacts/job-status.json
   read -r job_status job_stage progress < <(
-    printf '%s' "$status_json" | python -c 'import json,sys; d=json.load(sys.stdin); print(d["status"], d["stage"], d["progress"])'
+    printf '%s' "$status_json" | "$PYTHON_BIN" -c 'import json,sys; d=json.load(sys.stdin); print(d["status"], d["stage"], d["progress"])'
   )
   echo "[e2e] poll=$attempt status=$job_status stage=$job_stage progress=$progress"
   if [[ "$job_status" == "awaiting_review" ]]; then
@@ -99,13 +105,14 @@ cp "$job_dir/final.mp4" e2e-artifacts/final.mp4
 cp "$job_dir/qc.json" e2e-artifacts/qc.json
 cp "$job_dir/video-manifest.json" e2e-artifacts/video-manifest.json
 
-python - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 import json
 from pathlib import Path
 
 qc = json.loads(Path("e2e-artifacts/qc.json").read_text(encoding="utf-8"))
 assert qc["width"] == 1080, qc
 assert qc["height"] == 1920, qc
+assert abs(float(qc["fps"]) - 30.0) <= 0.01, qc
 assert qc["video_codec"] == "h264", qc
 assert qc["audio_codec"], qc
 assert abs(float(qc["duration_seconds"]) - 45.0) <= 3.0, qc
