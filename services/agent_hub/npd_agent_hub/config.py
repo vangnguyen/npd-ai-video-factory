@@ -11,6 +11,9 @@ class HubSettings:
     espocrm_api_key: str = ""
     n8n_executor_webhook_url: str = ""
     request_timeout_seconds: float = 30.0
+    store_backend: str = "memory"
+    agent_redis_url: str = "redis://redis:6379/1"
+    store_namespace: str = "npd:agent-hub:v1"
 
     @classmethod
     def from_env(cls) -> "HubSettings":
@@ -20,6 +23,9 @@ class HubSettings:
             espocrm_api_key=os.getenv("ESPOCRM_API_KEY", "").strip(),
             n8n_executor_webhook_url=os.getenv("N8N_AGENT_EXECUTOR_WEBHOOK_URL", "").strip(),
             request_timeout_seconds=float(os.getenv("AGENT_TOOL_TIMEOUT_SECONDS", "30")),
+            store_backend=os.getenv("AGENT_STORE_BACKEND", "memory").strip().lower(),
+            agent_redis_url=os.getenv("AGENT_REDIS_URL", "redis://redis:6379/1").strip(),
+            store_namespace=os.getenv("AGENT_STORE_NAMESPACE", "npd:agent-hub:v1").strip(),
         )
 
 
