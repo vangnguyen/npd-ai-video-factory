@@ -10,20 +10,21 @@ from .models import (
     AgentTask,
     ApprovalDecision,
     CommandCenterReport,
+    ExecutionStatus,
     PlannedAction,
+    ToolExecutionResult,
 )
+from .tools import ToolExecutor
 
 
 @dataclass
 class AgentHub:
-    """In-process control plane for planning, approval and future connector execution.
-
-    This MVP deliberately stops at approval. Tool adapters (n8n, EspoCRM,
-    analytics, social publishers and the video API) can consume approved actions
-    without giving the planning layer unrestricted write access.
-    """
+    """Control plane for planning, approval and narrowly-scoped tool execution."""
 
     reports: dict[str, CommandCenterReport] = field(default_factory=dict)
+    tasks: dict[str, AgentTask] = field(default_factory=dict)
+    execution_history: dict[str, list[ToolExecutionResult]] = field(default_factory=dict)
+    executor: ToolExecutor = field(default_factory=ToolExecutor)
 
     def list_agents(self) -> list[AgentDescriptor]:
         commander = AgentDescriptor(
@@ -34,6 +35,7 @@ class AgentHub:
                 "cross-agent coordination",
                 "priority synthesis",
                 "approval control",
+                "controlled tool execution",
             ],
         )
         return [commander, *[agent.descriptor for agent in SPECIALIST_AGENTS.values()]]
@@ -48,7 +50,7 @@ class AgentHub:
             if planned_action.requires_approval
         ]
 
-        priorities = []
+        priorities: list[str] = []
         for report in reports:
             for priority in report.priorities:
                 if priority not in priorities:
@@ -67,11 +69,22 @@ class AgentHub:
             reports=reports,
             approvals_required=approvals,
         )
+        self.tasks[task.task_id] = task
         self.reports[task.task_id] = command_report
         return command_report
 
     def get(self, task_id: str) -> CommandCenterReport | None:
         return self.reports.get(task_id)
+
+    def _get_action(self, task_id: str, action_id: str) -> PlannedAction:
+        report = self.reports.get(task_id)
+        if report is None:
+            raise KeyError(task_id)
+        for agent_report in report.reports:
+            for planned_action in agent_report.actions:
+                if planned_action.action_id == action_id:
+                    return planned_action
+        raise LookupError(action_id)
 
     def decide(
         self,
@@ -82,20 +95,11 @@ class AgentHub:
         report = self.reports.get(task_id)
         if report is None:
             raise KeyError(task_id)
-
-        target: PlannedAction | None = None
-        for agent_report in report.reports:
-            for planned_action in agent_report.actions:
-                if planned_action.action_id == action_id:
-                    target = planned_action
-                    break
-            if target is not None:
-                break
-
-        if target is None:
-            raise LookupError(action_id)
+        target = self._get_action(task_id, action_id)
         if not target.requires_approval:
             raise ValueError("action does not require approval")
+        if target.status not in {ActionStatus.PROPOSED, ActionStatus.APPROVED}:
+            raise ValueError(f"action cannot be approved from status={target.status.value}")
 
         target.status = ActionStatus.APPROVED if decision.approved else ActionStatus.REJECTED
         report.approvals_required = [
@@ -104,6 +108,31 @@ class AgentHub:
             if action.action_id != action_id
         ]
         return target
+
+    async def execute(self, task_id: str, action_id: str) -> ToolExecutionResult:
+        task = self.tasks.get(task_id)
+        if task is None:
+            raise KeyError(task_id)
+        action = self._get_action(task_id, action_id)
+
+        if action.status == ActionStatus.REJECTED:
+            raise ValueError("rejected action cannot be executed")
+        if action.status == ActionStatus.EXECUTED:
+            raise ValueError("action has already been executed")
+        if action.requires_approval and action.status not in {
+            ActionStatus.APPROVED,
+            ActionStatus.EXECUTION_FAILED,
+        }:
+            raise ValueError("action requires approval before execution")
+
+        result = await self.executor.execute(task=task, action=action)
+        action.status = (
+            ActionStatus.EXECUTED
+            if result.status == ExecutionStatus.SUCCEEDED
+            else ActionStatus.EXECUTION_FAILED
+        )
+        self.execution_history.setdefault(task_id, []).append(result)
+        return result
 
 
 hub = AgentHub()
