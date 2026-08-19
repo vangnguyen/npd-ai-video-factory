@@ -101,7 +101,7 @@ class AgentHub:
         report.approvals_required = [
             action
             for action in report.approvals_required
-            if action.status == ActionStatus.PROPOSED
+            if action.action_id != action_id
         ]
         return target
 
