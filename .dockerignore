@@ -1,0 +1,10 @@
+.git
+.venv
+**/__pycache__
+**/*.egg-info
+**/.pytest_cache
+**/node_modules
+e2e-artifacts
+storage/jobs/*
+!storage/jobs/.gitkeep
+
