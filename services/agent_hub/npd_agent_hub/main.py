@@ -2,13 +2,20 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
 
-from .models import AgentDescriptor, AgentTask, ApprovalDecision, CommandCenterReport, PlannedAction
+from .models import (
+    AgentDescriptor,
+    AgentTask,
+    ApprovalDecision,
+    CommandCenterReport,
+    PlannedAction,
+    ToolExecutionResult,
+)
 from .orchestrator import hub
 
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.1.0",
+    version="0.2.0",
     description="Multi-agent management control plane for marketing, content, video, social, sales and CRM.",
 )
 
@@ -43,6 +50,21 @@ def get_agent_task(task_id: str) -> CommandCenterReport:
 def decide_action(task_id: str, action_id: str, decision: ApprovalDecision) -> PlannedAction:
     try:
         return hub.decide(task_id, action_id, decision)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="agent task not found") from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="planned action not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/agent-tasks/{task_id}/actions/{action_id}/execute",
+    response_model=ToolExecutionResult,
+)
+async def execute_action(task_id: str, action_id: str) -> ToolExecutionResult:
+    try:
+        return await hub.execute(task_id, action_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="agent task not found") from exc
     except LookupError as exc:
