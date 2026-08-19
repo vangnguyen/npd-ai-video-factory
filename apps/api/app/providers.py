@@ -57,11 +57,13 @@ class DeterministicContentProvider:
     """Test/dev provider. Production LLM adapters must implement ContentProvider."""
 
     async def generate_script(self, request: VideoJobCreate) -> ScriptResult:
-        hook = f"{request.topic}: điều gì đáng chú ý?"
+        project_name = request.project.replace("-", " ").title()
+        hook = f"{request.topic}. Đây là ba điểm cần kiểm tra."
         body = [
-            f"Điểm một: tập trung vào thông tin thực tế của {request.project}.",
-            "Điểm hai: đối chiếu sản phẩm, vị trí và trải nghiệm dự án.",
-            "Điểm ba: chỉ sử dụng dữ liệu đã được cung cấp hoặc xác minh.",
+            f"Thứ nhất, hãy tập trung vào thông tin thực tế của dự án {project_name}.",
+            "Thứ hai, hãy đối chiếu loại sản phẩm, vị trí và trải nghiệm tại dự án.",
+            "Thứ ba, chỉ sử dụng dữ liệu đã được cung cấp hoặc đã xác minh.",
+            "Hãy hoàn tất các bước kiểm tra này trước khi đưa ra quyết định.",
         ]
         narration = " ".join([hook, *body, request.content.cta])
         return ScriptResult(title=request.topic, hook=hook, body=body, cta=request.content.cta, full_narration=narration)

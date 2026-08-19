@@ -25,6 +25,12 @@ export const activeSubtitleAt = (manifest: VideoManifest, seconds: number) => ma
   (item) => seconds >= item.start_seconds && seconds < item.end_seconds,
 );
 
+export const secondsToFrameRange = (startSeconds: number, endSeconds: number, fps: number) => {
+  const from = Math.round(startSeconds * fps);
+  const end = Math.round(endSeconds * fps);
+  return {from, durationInFrames: Math.max(1, end - from)};
+};
+
 const SceneLayer: React.FC<{scene: VideoManifest["scenes"][number]}> = ({scene}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
@@ -120,15 +126,8 @@ const SceneLayer: React.FC<{scene: VideoManifest["scenes"][number]}> = ({scene})
   );
 };
 
-const Subtitles: React.FC<{manifest: VideoManifest}> = ({manifest}) => {
-  const frame = useCurrentFrame();
-  const {fps} = useVideoConfig();
-  const seconds = frame / fps;
-  const active = activeSubtitleAt(manifest, seconds);
-  if (!active) return null;
-
-  return (
-    <div
+const SubtitleCue: React.FC<{text: string}> = ({text}) => (
+  <div
       style={{
         position: "absolute",
         left: SUBTITLE_SAFE_AREA.left,
@@ -148,9 +147,20 @@ const Subtitles: React.FC<{manifest: VideoManifest}> = ({manifest}) => {
         textShadow: "0 3px 8px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,1)",
       }}
     >
-      {active.text}
-    </div>
-  );
+      {text}
+  </div>
+);
+
+const Subtitles: React.FC<{manifest: VideoManifest}> = ({manifest}) => {
+  const {fps} = useVideoConfig();
+  return manifest.subtitles.map((subtitle, index) => {
+    const range = secondsToFrameRange(subtitle.start_seconds, subtitle.end_seconds, fps);
+    return (
+      <Sequence key={`${subtitle.start_seconds}-${index}`} {...range}>
+        <SubtitleCue text={subtitle.text} />
+      </Sequence>
+    );
+  });
 };
 
 export const RealEstateShort: React.FC<RendererInputProps> = ({manifest}) => {

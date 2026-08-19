@@ -58,6 +58,7 @@ export const videoManifestSchema = strictObject({
     text: z.string().min(1).max(160),
   })),
 }).superRefine((manifest, context) => {
+  const frameTolerance = 1 / manifest.metadata.fps;
   const sceneDuration = manifest.scenes.reduce((sum, scene) => sum + scene.duration_seconds, 0);
   if (Math.abs(sceneDuration - manifest.metadata.duration_seconds) > 0.1) {
     context.addIssue({
@@ -66,15 +67,19 @@ export const videoManifestSchema = strictObject({
       message: "scene duration total must match metadata duration",
     });
   }
-  for (let index = 1; index < manifest.scenes.length; index += 1) {
-    if (manifest.scenes[index].start_seconds < manifest.scenes[index - 1].start_seconds) {
+  let expectedSceneStart = 0;
+  for (let index = 0; index < manifest.scenes.length; index += 1) {
+    const scene = manifest.scenes[index];
+    if (Math.abs(scene.start_seconds - expectedSceneStart) > frameTolerance) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["scenes", index, "start_seconds"],
-        message: "scene start times must be monotonic",
+        message: "scenes must form a contiguous global timeline",
       });
     }
+    expectedSceneStart = scene.start_seconds + scene.duration_seconds;
   }
+  let previousSubtitleEnd = 0;
   for (let index = 0; index < manifest.subtitles.length; index += 1) {
     const subtitle = manifest.subtitles[index];
     if (subtitle.end_seconds <= subtitle.start_seconds) {
@@ -84,6 +89,21 @@ export const videoManifestSchema = strictObject({
         message: "subtitle end must be after start",
       });
     }
+    if (subtitle.start_seconds < previousSubtitleEnd - frameTolerance) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["subtitles", index, "start_seconds"],
+        message: "subtitle cues must be monotonic and non-overlapping",
+      });
+    }
+    if (subtitle.end_seconds > manifest.metadata.duration_seconds + frameTolerance) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["subtitles", index, "end_seconds"],
+        message: "subtitle cue exceeds the composition duration",
+      });
+    }
+    previousSubtitleEnd = subtitle.end_seconds;
   }
 });
 

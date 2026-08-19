@@ -84,9 +84,23 @@ def validate_manifest(manifest: dict, schema_path: Path) -> None:
     if abs(actual - expected) > 0.1:
         raise ManifestValidationError(f"scene duration total {actual} does not match metadata duration {expected}")
 
-    starts = [float(scene["start_seconds"]) for scene in scenes]
-    if starts != sorted(starts):
-        raise ManifestValidationError("scene start times are not monotonic")
+    frame_tolerance = 1 / float(manifest["metadata"]["fps"])
+    expected_start = 0.0
+    for scene in scenes:
+        start = float(scene["start_seconds"])
+        if abs(start - expected_start) > frame_tolerance:
+            raise ManifestValidationError("scenes must form a contiguous global timeline")
+        expected_start = start + float(scene["duration_seconds"])
+
+    previous_subtitle_end = 0.0
+    for subtitle in manifest.get("subtitles", []):
+        start = float(subtitle["start_seconds"])
+        end = float(subtitle["end_seconds"])
+        if start < previous_subtitle_end - frame_tolerance:
+            raise ManifestValidationError("subtitle cues must be monotonic and non-overlapping")
+        if end > expected + frame_tolerance:
+            raise ManifestValidationError("subtitle cue exceeds composition duration")
+        previous_subtitle_end = end
 
 
 def persist_manifest(manifest: dict, output_path: Path, schema_path: Path) -> Path:

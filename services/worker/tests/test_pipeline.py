@@ -10,14 +10,20 @@ from app.models import Artifact, JobError, JobRecord, JobStage, JobStatus, Video
 from app.providers import StoryboardResult, StoryboardScene, VoiceResult
 from npd_worker.pipeline import (
     ManifestValidationError,
+    NarrationCue,
+    NarrationTiming,
     RendererFailed,
     VideoQCError,
     WorkerConfig,
     build_subtitles,
     call_renderer,
     ensure_brand_logo,
+    parse_volume_output,
     safe_job_dir,
+    synthesize_timed_narration,
+    validate_narration_audio,
     validate_probe_payload,
+    validate_visual_luma_values,
     run_job,
 )
 
@@ -56,7 +62,7 @@ class FixtureTTS:
             wav.setnchannels(1)
             wav.setsampwidth(2)
             wav.setframerate(8_000)
-            wav.writeframes(b"\x00\x00" * 8_000)
+            wav.writeframes(b"\xe8\x03" * 8_000)
         return VoiceResult(path=output_path, duration_seconds=1, provider="fixture", voice="vi")
 
 
@@ -110,36 +116,78 @@ def test_safe_job_dir_rejects_invalid_ids(tmp_path: Path, job_id: str) -> None:
         safe_job_dir(tmp_path, job_id)
 
 
-def test_build_subtitles_tracks_storyboard_timeline() -> None:
+def test_build_subtitles_tracks_measured_narration_timing() -> None:
+    timing = NarrationTiming(
+        duration_seconds=7.5,
+        cues=[
+            NarrationCue(scene_id="scene_01", start_seconds=0.15, end_seconds=1.15, text="Mở đầu"),
+            NarrationCue(
+                scene_id="scene_02",
+                start_seconds=3.65,
+                end_seconds=4.65,
+                text="Thông tin chính",
+            ),
+        ],
+    )
+    subtitles = build_subtitles(timing)
+    assert subtitles == [
+        {"start_seconds": 0.15, "end_seconds": 1.15, "text": "Mở đầu"},
+        {"start_seconds": 3.65, "end_seconds": 4.65, "text": "Thông tin chính"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_timed_narration_master_aligns_audio_and_subtitle_cues(tmp_path: Path) -> None:
     storyboard = StoryboardResult(
         scenes=[
             StoryboardScene(
                 id="scene_01",
                 order=1,
                 start_seconds=0,
-                duration_seconds=3.5,
+                duration_seconds=2,
                 role="hook",
-                narration="Mở đầu",
-                on_screen_text="Mở đầu",
-                visual_query="project hook",
+                narration="Mở đầu rõ ràng",
+                on_screen_text=None,
+                visual_query="hook",
             ),
             StoryboardScene(
                 id="scene_02",
                 order=2,
-                start_seconds=3.5,
-                duration_seconds=4.0,
+                start_seconds=2,
+                duration_seconds=2,
                 role="information",
                 narration="Thông tin chính",
                 on_screen_text=None,
-                visual_query="project information",
+                visual_query="information",
             ),
         ]
     )
-    subtitles = build_subtitles(storyboard)
-    assert subtitles == [
-        {"start_seconds": 0.0, "end_seconds": 3.5, "text": "Mở đầu"},
-        {"start_seconds": 3.5, "end_seconds": 7.5, "text": "Thông tin chính"},
+    output = tmp_path / "narration.wav"
+    timing_path = tmp_path / "narration-timing.json"
+    timing = await synthesize_timed_narration(
+        FixtureTTS(),
+        storyboard=storyboard,
+        language="vi",
+        output_path=output,
+        timing_path=timing_path,
+        duration_seconds=4,
+    )
+
+    assert validate_narration_audio(output, timing, expected_duration=4) == pytest.approx(4)
+    assert [(cue.scene_id, cue.start_seconds, cue.end_seconds) for cue in timing.cues] == [
+        ("scene_01", 0.15, 1.15),
+        ("scene_02", 2.15, 3.15),
     ]
+    assert NarrationTiming.model_validate_json(timing_path.read_text(encoding="utf-8")) == timing
+
+
+def test_visual_and_audio_qc_reject_black_or_silent_outputs() -> None:
+    assert validate_visual_luma_values([35.0, 42.0])["dark_visual_sample_ratio"] == 0
+    with pytest.raises(VideoQCError, match="black"):
+        validate_visual_luma_values([0.0, 0.0, 20.0])
+    assert parse_volume_output("mean_volume: -24.8 dB\nmax_volume: -3.0 dB")["audio_peak_db"] == -3
+    with pytest.raises(VideoQCError, match="silent"):
+        parse_volume_output("mean_volume: -70.0 dB\nmax_volume: -55.0 dB")
 
 
 def test_validate_probe_payload_accepts_target_video() -> None:
@@ -226,6 +274,7 @@ async def test_pipeline_completes_and_registers_stage_artifacts(tmp_path: Path, 
         "script.json",
         "storyboard.json",
         "narration.wav",
+        "narration-timing.json",
         "subtitles.srt",
         "resolved-assets.json",
         "video-manifest.json",
