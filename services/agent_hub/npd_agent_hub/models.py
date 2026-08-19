@@ -27,6 +27,12 @@ class ActionStatus(str, Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
     EXECUTED = "executed"
+    EXECUTION_FAILED = "execution_failed"
+
+
+class ExecutionStatus(str, Enum):
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
 
 
 class AgentTask(BaseModel):
@@ -77,3 +83,13 @@ class AgentDescriptor(BaseModel):
     name: AgentName
     role: str
     capabilities: list[str]
+
+
+class ToolExecutionResult(BaseModel):
+    task_id: str
+    action_id: str
+    tool: str
+    status: ExecutionStatus
+    detail: str | None = None
+    external_id: str | None = None
+    data: dict[str, object] = Field(default_factory=dict)
