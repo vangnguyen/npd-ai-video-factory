@@ -153,6 +153,10 @@ def test_http_surface():
     client = TestClient(app)
 
     assert client.get("/health").json() == {"status": "ok"}
+    ready = client.get("/readyz")
+    assert ready.status_code == 200
+    assert ready.json()["status"] == "ready"
+
     agents = client.get("/api/v1/agents")
     assert agents.status_code == 200
     assert len(agents.json()) == 7
@@ -166,3 +170,13 @@ def test_http_surface():
     assert payload["task_id"].startswith("agt_")
     assert "sales" in payload["selected_agents"]
     assert "crm_manager" in payload["selected_agents"]
+
+    audit = client.get(f"/api/v1/agent-tasks/{payload['task_id']}/audit")
+    assert audit.status_code == 200
+    assert audit.json()[0]["event_type"] == "task_created"
+
+    command_center = client.get("/api/v1/command-center")
+    assert command_center.status_code == 200
+    command_payload = command_center.json()
+    assert command_payload["storage_backend"] == "memory"
+    assert any(item["task_id"] == payload["task_id"] for item in command_payload["tasks"])
