@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
@@ -33,6 +34,14 @@ class ActionStatus(str, Enum):
 class ExecutionStatus(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+
+
+class AuditEventType(str, Enum):
+    TASK_CREATED = "task_created"
+    APPROVAL_DECIDED = "approval_decided"
+    EXECUTION_STARTED = "execution_started"
+    EXECUTION_SUCCEEDED = "execution_succeeded"
+    EXECUTION_FAILED = "execution_failed"
 
 
 class AgentTask(BaseModel):
@@ -93,3 +102,35 @@ class ToolExecutionResult(BaseModel):
     detail: str | None = None
     external_id: str | None = None
     data: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AuditEvent(BaseModel):
+    event_id: str = Field(default_factory=lambda: f"aud_{uuid4().hex[:16]}")
+    task_id: str
+    action_id: str | None = None
+    event_type: AuditEventType
+    actor: str = Field(min_length=1, max_length=100)
+    detail: str | None = Field(default=None, max_length=1000)
+    metadata: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class TaskSummary(BaseModel):
+    task_id: str
+    objective: str
+    selected_agents: list[AgentName]
+    total_actions: int
+    approvals_pending: int
+    executed_actions: int
+    failed_actions: int
+    updated_at: datetime
+
+
+class CommandCenterSnapshot(BaseModel):
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    storage_backend: str
+    tasks: list[TaskSummary]
+    approvals_pending: int
+    execution_failures: int
+    recent_audit: list[AuditEvent]
