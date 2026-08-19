@@ -98,7 +98,11 @@ class AgentHub:
         target = self._get_action(task_id, action_id)
         if not target.requires_approval:
             raise ValueError("action does not require approval")
-        if target.status not in {ActionStatus.PROPOSED, ActionStatus.APPROVED}:
+        if target.status not in {
+            ActionStatus.PROPOSED,
+            ActionStatus.APPROVED,
+            ActionStatus.EXECUTION_FAILED,
+        }:
             raise ValueError(f"action cannot be approved from status={target.status.value}")
 
         target.status = ActionStatus.APPROVED if decision.approved else ActionStatus.REJECTED
@@ -119,10 +123,9 @@ class AgentHub:
             raise ValueError("rejected action cannot be executed")
         if action.status == ActionStatus.EXECUTED:
             raise ValueError("action has already been executed")
-        if action.requires_approval and action.status not in {
-            ActionStatus.APPROVED,
-            ActionStatus.EXECUTION_FAILED,
-        }:
+        if action.requires_approval and action.status != ActionStatus.APPROVED:
+            if action.status == ActionStatus.EXECUTION_FAILED:
+                raise ValueError("failed write action requires re-approval before retry")
             raise ValueError("action requires approval before execution")
 
         result = await self.executor.execute(task=task, action=action)
