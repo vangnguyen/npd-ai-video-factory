@@ -171,4 +171,3 @@ export const createRendererApp = ({engine, port, storageRoot}: RendererAppOption
 
   return app;
 };
-

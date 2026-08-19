@@ -30,4 +30,3 @@ describe("renderer contracts", () => {
     expect(videoManifestSchema.safeParse(brokenTimeline).success).toBe(false);
   });
 });
-

@@ -92,4 +92,3 @@ describe("renderer HTTP service", () => {
     expect(JSON.stringify(response.body)).not.toContain("secret internal path");
   });
 });
-
