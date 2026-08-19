@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Query
 
+from .espocrm_schema import (
+    EspoEntitySchema,
+    EspoSchemaError,
+    EspoSchemaNotConfigured,
+    EspoSchemaReader,
+)
 from .models import (
     AgentDescriptor,
     AgentTask,
@@ -20,6 +26,7 @@ app = FastAPI(
     version="0.3.0",
     description="Multi-agent management control plane for marketing, content, video, social, sales and CRM.",
 )
+schema_reader = EspoSchemaReader()
 
 
 @app.get("/health")
@@ -119,3 +126,16 @@ def command_center(
     audit_limit: int = Query(default=50, ge=1, le=1000),
 ) -> CommandCenterSnapshot:
     return hub.command_center(limit=limit, audit_limit=audit_limit)
+
+
+@app.get(
+    "/api/v1/integrations/espocrm/schema/{entity_type}",
+    response_model=EspoEntitySchema,
+)
+async def espocrm_schema(entity_type: str) -> EspoEntitySchema:
+    try:
+        return await schema_reader.read_entity(entity_type)
+    except EspoSchemaNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except EspoSchemaError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
