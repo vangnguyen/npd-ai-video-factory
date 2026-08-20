@@ -437,13 +437,23 @@ Acceptance evidence:
 
 No Caddy cutover, second n8n/Caddy/Redis service, social publish, Ads mutation, customer message, CRM write or Redis restore occurred in this upgrade. PR #9 remains draft/unmerged.
 
-### CRM funnel analytics upgrade candidate (Agent Hub 0.8.0)
+### CRM funnel analytics upgrade accepted (Agent Hub 0.8.0, 2026-08-20)
 
-The next guarded Agent Hub-only rollout adds `analytics.read` to the auto-execution read allowlist. It derives aggregate marketing/funnel metrics from the existing EspoCRM read-only Lead source, persists no lead names/contact details/assignee names in the analytics execution, and explicitly refuses to infer CPL, CAC or ROAS without an Ads/website data source. CRM follow-up analysis also aligns its default thresholds with the accepted Sales Hub care rules: 15 minutes for New/Assigned and 24 hours for In Process/Recycled, while an explicit user-supplied day threshold remains authoritative.
+The guarded Agent Hub-only rollout from commit `8d298acebc759b81d8eee4d2638e66bdcea1cf4f` added `analytics.read` to the auto-execution read allowlist. It derives aggregate marketing/funnel metrics from the existing EspoCRM read-only Lead source, persists no lead names/contact details/assignee names in the analytics execution, and explicitly refuses to infer CPL, CAC or ROAS without an Ads/website data source. CRM follow-up analysis also aligns its default thresholds with the accepted Sales Hub care rules: 15 minutes for New/Assigned and 24 hours for In Process/Recycled, while an explicit user-supplied day threshold remains authoritative.
+
+Acceptance evidence:
+
+- Agent Hub CI run `32335479316`, Phase 5 Deployment Bundle CI run `32335479321`, and all jobs in Sprint 1 CI run `32335479341` passed, including Docker Compose E2E.
+- Guarded preflight passed against `/opt/npd-ai-video-factory-phase5`; the primary `/opt/npd-ai-video-factory` checkout remained unchanged at `a92785dc1721ec4e991bf12655629d809e13c241`.
+- Deployment created rollback image `npd-agent-hub:rollback-20260820T052844Z`, namespace backup `/var/backups/npd-agent-hub/agent-hub-20260820T052844Z.json`, and receipt `/var/lib/npd-ai/agent-hub-deployments/deploy-20260820T052844Z.json`.
+- The resulting single Agent Hub container is healthy, reports version `0.8.0`, remains on `npd-ai-video-factory_default` plus `n8n-marketing_n8n_net`, and Caddy still validates inside `n8n-marketing-caddy-1` without a Caddy configuration change.
+- Loopback smoke passed with tasks `agt_9e606fad3c554ef3` and `agt_25edccd3b7a84fb9`; public `https://mkt.ngocphuongdong.com` smoke passed with tasks `agt_dd4de21dc3eb4d7d` and `agt_78f9f5019e28425d`. Both paths completed the CRM-care answer and aggregate analytics answer, rejected their write proposals, and performed no external write.
+- The Google owner browser session showed `nguyenvanvangct@gmail.com · owner`. The public analytics result reported 3 analyzed leads, 3 recent leads, 0 Converted, 2 contactable, 3 active over 24 hours, and `Web Site` as 100% of the current CRM sample. It displayed the explicit no-Ads-data caveat and did not expose raw contact details in the aggregate answer.
+- The original user test task `agt_1c55c3f081894ecc` was re-analyzed. It now reports 3 leads requiring care, 2 high priority, the applicable 15-minute/24-hour SLA, actionable next steps and evidence; the page contains no `undefined` value.
 
 The production audit found a Meta Page token only inside the existing lead-ingestion service. Agent Hub does not copy or reuse it because its effective permissions are broader than the read-only analytics contract. A future Meta/Ads adapter requires a separately reviewed least-privilege credential or internal aggregate endpoint.
 
-This candidate is not production-accepted until Agent Hub/Phase 5/Sprint 1 CI, guarded deployment, loopback/public smoke, browser QA and rollback evidence all pass. All external write tools remain approval-gated and the n8n executor must remain disabled.
+No Caddy cutover, second n8n/Caddy/Redis service, social publish, Ads mutation, customer message, CRM write or Redis restore occurred in this upgrade. The n8n executor remains disabled. PR #9 remains draft/unmerged.
 
 ## Phase 5 acceptance criteria
 
