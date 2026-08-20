@@ -406,6 +406,9 @@ Conservative mapping deliberately leaves unknown custom fields as `missing`. Do 
 - Caddy was backed up, validated and reloaded inside `n8n-marketing-caddy-1`. The live proxy target is `npd-agent-hub:8010`, and HTTPS `/readyz` returns HTTP 200 with a valid public certificate.
 - Public HTTPS smoke passed the complete RBAC and real EspoCRM schema/mapping suite.
 - Image rollback was exercised with `npd-agent-hub:accepted-1aa06dd` and passed loopback smoke. Caddy rollback was exercised from `/opt/n8n/Caddyfile.before-agent-hub-20260820T034702Z`, then the public route was re-applied and public smoke passed again.
+- Google browser login was activated with a dedicated Web OAuth client limited to `openid email profile`. The exact allowlist maps `nguyenvanvangct@gmail.com` to `owner`; the Google Auth project remains in Testing with that account already registered as a test user.
+- Agent Hub `0.6.0` was deployed from commit `d17a65d` after preflight. Public `/command-center` redirected to `/login`, Google callback created the secure session, and the live page displayed `nguyenvanvangct@gmail.com · owner` with Redis-backed data.
+- The login upgrade passed public bearer-token RBAC and real EspoCRM smoke with 60 Lead fields. Its rollback image is `npd-agent-hub:rollback-20260820T043019Z`, namespace backup is `/var/backups/npd-agent-hub/agent-hub-20260820T043019Z.json`, and deployment receipt is `/var/lib/npd-ai/agent-hub-deployments/deploy-20260820T043019Z.json`.
 
 Recorded recovery artifacts:
 
@@ -414,6 +417,7 @@ Recorded recovery artifacts:
 - first Caddy pre-cutover backup: `/opt/n8n/Caddyfile.before-agent-hub-20260820T034702Z`;
 - Caddy pre-rollback safety backup: `/opt/n8n/Caddyfile.before-agent-hub-rollback-20260820T035732Z`;
 - final Caddy pre-reapply backup: `/opt/n8n/Caddyfile.before-agent-hub-20260820T035733Z`.
+- pre-login OAuth environment backup: `/var/backups/npd-agent-hub/agent-hub.env.before-google-login-20260820T042858Z`.
 
 No social publish, Ads mutation, customer message, CRM write or Redis restore was executed. This acceptance makes the deployment live, but it does not authorize merging PR #9 or enabling the inactive production-write workflow.
 
@@ -432,6 +436,7 @@ Production-live acceptance additionally requires:
 - local smoke passes;
 - Caddy configuration validates and reloads;
 - public HTTPS smoke passes;
+- allowlisted Google owner login completes through the production callback and `/api/v1/whoami` returns the exact email with role `owner`;
 - real EspoCRM Lead schema/mapping smoke passes;
 - deployment receipt and rollback image exist after an upgrade;
 - no production write workflow has been activated as part of this phase.
