@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "services/agent_hub/**"
+      - "deploy/phase5/**"
+      - "scripts/phase5/**"
       - ".github/workflows/agent-hub-ci.yml"
       - "docker-compose.yml"
   push:

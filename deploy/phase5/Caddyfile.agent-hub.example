@@ -1,11 +1,15 @@
-# Add this site block to the EXISTING VPS Caddy configuration.
-# Do not start a second Caddy instance.
-# Replace the hostname with the already-approved Agent Hub hostname; Phase 5 does not change domains.
+# Managed by scripts/phase5/caddy-cutover.sh.
+# Add this block to /opt/n8n/Caddyfile, which is mounted read-only into
+# n8n-marketing-caddy-1 at /etc/caddy/Caddyfile.
+# Do not start a second Caddy instance. Replace only the placeholder hostname.
+# The Caddy container reaches Agent Hub through n8n-marketing_n8n_net; container
+# loopback (127.0.0.1) would point back to Caddy, not to the VPS host.
 
+# BEGIN NPD AGENT HUB PHASE 5
 agent-hub.example.invalid {
     encode zstd gzip
 
-    reverse_proxy 127.0.0.1:8010 {
+    reverse_proxy npd-agent-hub:8010 {
         health_uri /health
         health_interval 30s
         health_timeout 5s
@@ -20,11 +24,8 @@ agent-hub.example.invalid {
     }
 
     log {
-        output file /var/log/caddy/npd-agent-hub-access.log {
-            roll_size 25MiB
-            roll_keep 5
-            roll_keep_for 168h
-        }
+        output stdout
         format json
     }
 }
+# END NPD AGENT HUB PHASE 5

@@ -103,6 +103,8 @@ payload = json.load(open(sys.argv[1], encoding='utf-8'))
 print(payload.get('field_count', 0))
 PY
 )"
-[[ "$field_count" =~ ^[0-9]+$ ]] && (( field_count > 0 )) || fail "EspoCRM Lead schema returned no fields"
+if ! [[ "$field_count" =~ ^[0-9]+$ ]] || (( field_count <= 0 )); then
+  fail "EspoCRM Lead schema returned no fields"
+fi
 
 printf 'smoke ok: url=%s auth=viewer/operator/owner espocrm_lead_fields=%s task=%s\n' "$BASE_URL" "$field_count" "$task_id"

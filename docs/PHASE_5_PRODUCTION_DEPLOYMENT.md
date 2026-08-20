@@ -15,6 +15,25 @@ Phase 5 invariants:
 - EspoCRM credential is a read-only API user;
 - write workflows remain inactive/dry-run until separately approved.
 
+## Verified production topology
+
+The following values were verified by a read-only VPS audit on 2026-08-20 and are the Phase 5 defaults:
+
+| Purpose | Production value |
+|---|---|
+| VPS / SSH | `root@157.10.201.169` with the fixed verified host key |
+| Video Factory checkout | `/opt/npd-ai-video-factory` |
+| Video API / Redis network | `npd-ai-video-factory_default` |
+| Video API / Redis aliases | `api`, `redis` |
+| n8n Compose file | `/opt/n8n/docker-compose.yml` |
+| n8n Compose project | `n8n-marketing` |
+| n8n / Caddy network | `n8n-marketing_n8n_net` |
+| Caddy container | `n8n-marketing-caddy-1` |
+| Host Caddyfile | `/opt/n8n/Caddyfile` |
+| Caddy container config | `/etc/caddy/Caddyfile` (read-only bind mount) |
+
+Agent Hub joins both existing networks. It reaches the video API and Redis through `api`/`redis`, while the existing Caddy container reaches Agent Hub through the `npd-agent-hub` alias. The loopback port remains available only on the host for local smoke. A Caddy container must not proxy `127.0.0.1:8010`, because that address is the Caddy container's own loopback.
+
 ## Files added for Phase 5
 
 - `deploy/phase5/docker-compose.agent-hub.prod.yml`
@@ -25,18 +44,26 @@ Phase 5 invariants:
 - `scripts/phase5/smoke.sh`
 - `scripts/phase5/backup.sh`
 - `scripts/phase5/rollback.sh`
+- `scripts/phase5/caddy-cutover.sh`
+- `scripts/phase5/remote-deploy.ps1`
 - `npd_agent_hub.maintenance` backup/restore CLI
 - `.github/workflows/phase5-deploy-bundle-ci.yml`
 
 ## Required VPS state
 
-The existing stack must already provide Docker containers named/identified as API and Redis on the Docker network used by the video factory. The default expected network is:
+The existing video stack must provide API and Redis on:
 
 ```text
 npd-ai-video-factory_default
 ```
 
-Override it with `NPD_DOCKER_NETWORK` if the existing Compose project uses another network name.
+The existing Caddy service must remain in project `n8n-marketing` on:
+
+```text
+n8n-marketing_n8n_net
+```
+
+Override these only after a fresh read-only audit with `NPD_DOCKER_NETWORK` and `N8N_DOCKER_NETWORK`.
 
 Required host commands:
 
@@ -46,8 +73,9 @@ docker compose
 git
 curl
 python3
-caddy
 ```
+
+The host does not need a Caddy binary. Validation, formatting, reload and rollback use `docker exec n8n-marketing-caddy-1 caddy ...` against the existing container.
 
 Do not deploy Agent Hub if the existing API/Redis services are unhealthy.
 
@@ -101,6 +129,11 @@ From a clean checkout of the target commit:
 ```bash
 export AGENT_HUB_ENV_FILE=/etc/npd-ai/agent-hub.env
 export NPD_DOCKER_NETWORK=npd-ai-video-factory_default
+export N8N_DOCKER_NETWORK=n8n-marketing_n8n_net
+export N8N_COMPOSE_FILE=/opt/n8n/docker-compose.yml
+export N8N_COMPOSE_PROJECT=n8n-marketing
+export N8N_CADDY_CONTAINER=n8n-marketing-caddy-1
+export N8N_CADDYFILE=/opt/n8n/Caddyfile
 bash scripts/phase5/preflight.sh
 ```
 
@@ -113,6 +146,9 @@ Preflight fails closed when:
 - role tokens are short, duplicated, or still placeholders;
 - EspoCRM URL/key is missing;
 - existing API or Redis is not present on the expected Docker network;
+- the production `n8n-marketing` Compose file, network or Caddy container does not match the verified topology;
+- `/opt/n8n/Caddyfile` is not the file mounted at `/etc/caddy/Caddyfile`;
+- current Caddy configuration fails validation inside `n8n-marketing-caddy-1`;
 - the Git checkout contains uncommitted changes;
 - production Compose cannot render.
 
@@ -123,6 +159,7 @@ Deploy with:
 ```bash
 export AGENT_HUB_ENV_FILE=/etc/npd-ai/agent-hub.env
 export NPD_DOCKER_NETWORK=npd-ai-video-factory_default
+export N8N_DOCKER_NETWORK=n8n-marketing_n8n_net
 bash scripts/phase5/deploy.sh
 ```
 
@@ -137,6 +174,33 @@ If an Agent Hub deployment already exists, the script first:
 7. writes a deployment receipt to `/var/lib/npd-ai/agent-hub-deployments/`.
 
 No Redis restore occurs automatically on deployment failure. An image rollback is attempted, but state restore is always an explicit operator decision.
+
+Deployment only recreates `agent-hub`. It does not run `docker compose up` against `/opt/n8n/docker-compose.yml` and does not recreate n8n, Caddy, Redis, API, worker or renderer.
+
+## Guarded SSH helper
+
+From the handoff workspace on Windows, use the verified key and fixed known-hosts file. The helper always sets `StrictHostKeyChecking=yes` and `BatchMode=yes`; it never falls back to the global `known_hosts` file.
+
+Read-only audit:
+
+```powershell
+pwsh -File scripts/phase5/remote-deploy.ps1 `
+  -Action Audit `
+  -SshKeyPath work/n8n-vps/codex_n8n_vps_ed25519 `
+  -KnownHostsPath work/n8n-vps/known_hosts_test
+```
+
+Preflight requires the exact reviewed 40-character commit but does not change production:
+
+```powershell
+pwsh -File scripts/phase5/remote-deploy.ps1 `
+  -Action Preflight `
+  -ExpectedCommit <reviewed-pr-9-head> `
+  -SshKeyPath work/n8n-vps/codex_n8n_vps_ed25519 `
+  -KnownHostsPath work/n8n-vps/known_hosts_test
+```
+
+Every deploy, Caddy, smoke or rollback action additionally requires the literal `-Confirm PHASE5_REMOTE_CHANGE`. The helper refuses to continue when the remote commit differs, tracked changes exist, required parameters contain unsafe characters, or strict host verification fails. It intentionally does not fetch, switch or pull the VPS checkout; synchronization to the reviewed commit is a separate operator step so runtime directories are not overwritten.
 
 ## What the smoke test verifies
 
@@ -165,7 +229,7 @@ Agent Hub is intentionally not exposed directly. Its Compose port is loopback-on
 127.0.0.1:8010 -> container:8010
 ```
 
-Use the existing VPS Caddy instance. Do not start another Caddy container.
+Use the existing `n8n-marketing-caddy-1` container. Do not start another Caddy container and do not use `systemctl`.
 
 Take the site block from:
 
@@ -173,17 +237,31 @@ Take the site block from:
 deploy/phase5/Caddyfile.agent-hub.example
 ```
 
-Replace `agent-hub.example.invalid` with the already-approved hostname only. Merge the block into the existing Caddy configuration according to the current VPS layout.
+The site block proxies to `npd-agent-hub:8010` on `n8n-marketing_n8n_net`. Replace `agent-hub.example.invalid` with the already-approved hostname only.
 
-Validate before reload:
+Guarded apply:
 
 ```bash
-sudo caddy fmt --overwrite /etc/caddy/Caddyfile
-sudo caddy validate --config /etc/caddy/Caddyfile
-sudo systemctl reload caddy
+export AGENT_HUB_HOSTNAME=<already-approved-hostname>
+bash scripts/phase5/caddy-cutover.sh --apply --confirm APPLY_CADDY
 ```
 
-Do not reload Caddy if validation fails.
+The script:
+
+1. rejects a placeholder, duplicate hostname or duplicate managed block;
+2. backs up `/opt/n8n/Caddyfile` as `/opt/n8n/Caddyfile.before-agent-hub-<timestamp>`;
+3. copies the candidate into `n8n-marketing-caddy-1`;
+4. runs `caddy fmt` and `caddy validate` inside that container;
+5. writes the validated candidate back to `/opt/n8n/Caddyfile` **in place** so the read-only bind mount keeps the same inode;
+6. validates `/etc/caddy/Caddyfile` and runs `caddy reload` inside the existing container;
+7. restores the backup in place and reloads it if apply fails.
+
+Manual read-only validation is:
+
+```bash
+docker exec n8n-marketing-caddy-1 \
+  caddy validate --config /etc/caddy/Caddyfile
+```
 
 After HTTPS is live, run smoke again against the public hostname:
 
@@ -240,6 +318,16 @@ bash scripts/phase5/rollback.sh \
 
 The restore CLI requires the literal confirmation `RESTORE_AGENT_HUB` internally and refuses namespace mismatches. It deletes/replaces only the Agent Hub namespace, never unrelated Redis keys.
 
+Caddy rollback uses the exact backup emitted by `caddy-cutover.sh`:
+
+```bash
+bash scripts/phase5/caddy-cutover.sh \
+  --rollback /opt/n8n/Caddyfile.before-agent-hub-<timestamp> \
+  --confirm ROLLBACK_CADDY
+```
+
+The rollback candidate is validated inside `n8n-marketing-caddy-1` before the live host file is changed. A second safety backup of the pre-rollback Caddyfile is created. The Agent Hub image rollback now runs the complete loopback smoke before reporting success. Redis state restore remains optional and explicit.
+
 ## Observability
 
 Container status:
@@ -254,10 +342,10 @@ Agent Hub logs:
 docker compose -f deploy/phase5/docker-compose.agent-hub.prod.yml logs --tail=200 agent-hub
 ```
 
-Caddy access log configured by the example site block:
+Caddy access logs use container stdout and the existing Docker logging policy:
 
-```text
-/var/log/caddy/npd-agent-hub-access.log
+```bash
+docker logs --tail=200 n8n-marketing-caddy-1
 ```
 
 Application operational history remains available through the authenticated Command Center audit endpoints and Redis persistence.
@@ -275,13 +363,27 @@ using a viewer/owner bearer token.
 
 Conservative mapping deliberately leaves unknown custom fields as `missing`. Do not enable CRM write automation merely because a field name looks similar. Real NPD custom-field mapping should be reviewed and recorded before any write workflow is activated.
 
+## Current live status (read-only audit, 2026-08-20)
+
+- `npd-ai-video-factory-api-1`, worker, renderer and Redis are running on `npd-ai-video-factory_default`.
+- `n8n-marketing-caddy-1` is running on `n8n-marketing_n8n_net`; current Caddy validation passed.
+- `https://n8n.ngocphuongdong.com/healthz` and `https://crm.ngocphuongdong.com` returned HTTP 200.
+- Host port 8010 is free.
+- `/etc/npd-ai/agent-hub.env` is missing.
+- `/opt/npd-ai-video-factory` is still on `codex/production-pilot` at `a92785dc1721ec4e991bf12655629d809e13c241`, not the reviewed PR #9 head. Its untracked `.runtime/` and `production-pilot-artifacts/` directories must be preserved.
+
+Therefore no Agent Hub deployment, Caddy change, TLS issuance, local/public Agent Hub smoke or real Agent Hub-to-EspoCRM smoke was executed during this audit.
+
 ## Phase 5 acceptance criteria
 
-Phase 5 is deployment-ready when all are true:
+Repository deployment-bundle readiness requires:
 
 - Phase 5 Deployment Bundle CI is green;
 - Agent Hub CI is green;
-- existing API/worker/renderer regression is green;
+- existing API/worker/renderer/Sprint 1 regression is green.
+
+Production-live acceptance additionally requires:
+
 - production preflight passes on the VPS;
 - Agent Hub becomes healthy on loopback;
 - local smoke passes;

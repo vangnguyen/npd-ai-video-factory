@@ -46,6 +46,9 @@ container_id="$(docker compose -f "$COMPOSE_FILE" ps -q agent-hub)"
 for _ in $(seq 1 24); do
   status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")"
   if [[ "$status" == "healthy" ]]; then
+    AGENT_HUB_ENV_FILE="$ENV_FILE" \
+    AGENT_HUB_PUBLIC_URL="${AGENT_HUB_PUBLIC_URL:-http://127.0.0.1:${AGENT_HUB_PORT:-8010}}" \
+      bash "$ROOT_DIR/scripts/phase5/smoke.sh"
     printf 'rollback ok: image=%s container=%s\n' "$IMAGE" "$container_id"
     exit 0
   fi

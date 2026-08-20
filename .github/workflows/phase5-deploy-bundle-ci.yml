@@ -18,6 +18,21 @@ jobs:
       - name: Validate shell syntax
         run: bash -n scripts/phase5/*.sh
 
+      - name: Validate PowerShell remote helper syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "scripts/phase5/remote-deploy.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) > $null
+          if ($errors.Count) {
+            $errors | Format-List | Out-String | Write-Error
+            exit 1
+          }
+
       - name: Create non-secret CI env fixture
         run: |
           cat > /tmp/npd-agent-hub-ci.env <<'EOF'
@@ -40,8 +55,16 @@ jobs:
         env:
           AGENT_HUB_ENV_FILE: /tmp/npd-agent-hub-ci.env
           NPD_DOCKER_NETWORK: npd-ai-video-factory_default
+          N8N_DOCKER_NETWORK: n8n-marketing_n8n_net
           AGENT_HUB_PORT: "8010"
         run: docker compose -f deploy/phase5/docker-compose.agent-hub.prod.yml config --quiet
+
+      - name: Validate Caddy site-block syntax in the production image
+        run: >-
+          docker run --rm
+          -v "$PWD/deploy/phase5/Caddyfile.agent-hub.example:/etc/caddy/Caddyfile:ro"
+          caddy:2.11.4
+          caddy validate --config /etc/caddy/Caddyfile
 
       - name: Build production Agent Hub image
         run: docker build -f services/agent_hub/Dockerfile -t npd-agent-hub:phase5-ci .
