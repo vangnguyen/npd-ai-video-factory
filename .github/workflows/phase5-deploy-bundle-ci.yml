@@ -45,6 +45,15 @@ jobs:
           AGENT_VIEWER_TOKEN=viewer-ci-token-00000000000000000000000000000000
           AGENT_OPERATOR_TOKEN=operator-ci-token-000000000000000000000000000000
           AGENT_OWNER_TOKEN=owner-ci-token-000000000000000000000000000000000
+          AGENT_BROWSER_AUTH_MODE=google_oidc
+          AGENT_PUBLIC_BASE_URL=https://mkt.example.invalid
+          AGENT_GOOGLE_CLIENT_ID=ci-client.apps.googleusercontent.com
+          AGENT_GOOGLE_CLIENT_SECRET=ci-client-secret-placeholder
+          AGENT_SESSION_SIGNING_KEY=ci-session-key-00000000000000000000000000000000
+          AGENT_SESSION_TTL_SECONDS=28800
+          AGENT_OWNER_EMAILS=owner@example.invalid
+          AGENT_OPERATOR_EMAILS=
+          AGENT_VIEWER_EMAILS=
           ESPOCRM_URL=https://crm.example.invalid
           ESPOCRM_API_KEY=ci-read-only-placeholder
           N8N_AGENT_EXECUTOR_WEBHOOK_URL=

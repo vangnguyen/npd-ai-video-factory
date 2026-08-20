@@ -67,6 +67,65 @@ def test_disabled_auth_is_explicit_owner_for_dev_only():
     assert principal.subject == "auth-disabled"
 
 
+def test_google_session_maps_allowlisted_email_to_owner_and_enforces_origin():
+    settings = auth_settings(
+        browser_auth_mode="google_oidc",
+        public_base_url="https://mkt.ngocphuongdong.com",
+        google_client_id="client-id",
+        google_client_secret="client-secret",
+        session_signing_key="s" * 48,
+        owner_emails=("nguyenvanvangct@gmail.com",),
+    )
+    auth = StaticTokenAuthorizer(settings)
+    session = auth.create_session("nguyenvanvangct@gmail.com", Role.OWNER, now=2_000_000_000)
+
+    principal = auth.authenticate_session(session)
+    assert principal.role == Role.OWNER
+    assert principal.subject == "nguyenvanvangct@gmail.com"
+    assert principal.auth_method == "session"
+
+    try:
+        auth.require(Role.OWNER, None, session, method="POST", origin=None)
+        assert False, "cookie-authenticated writes must require the configured origin"
+    except HTTPException as exc:
+        assert exc.status_code == 403
+
+    assert auth.require(
+        Role.OWNER,
+        None,
+        session,
+        method="POST",
+        origin="https://mkt.ngocphuongdong.com",
+    ).role == Role.OWNER
+
+
+def test_google_session_is_revoked_when_email_leaves_allowlist():
+    enabled = auth_settings(
+        browser_auth_mode="google_oidc",
+        public_base_url="https://mkt.ngocphuongdong.com",
+        google_client_id="client-id",
+        google_client_secret="client-secret",
+        session_signing_key="s" * 48,
+        owner_emails=("nguyenvanvangct@gmail.com",),
+    )
+    session = StaticTokenAuthorizer(enabled).create_session(
+        "nguyenvanvangct@gmail.com", Role.OWNER, now=2_000_000_000
+    )
+    revoked = StaticTokenAuthorizer(HubSettings(**{**enabled.__dict__, "owner_emails": ("other@example.com",)}))
+    try:
+        revoked.authenticate_session(session)
+        assert False, "email allowlist removal must revoke existing sessions"
+    except HTTPException as exc:
+        assert exc.status_code == 403
+
+
+def test_google_login_configuration_is_fail_closed():
+    auth = StaticTokenAuthorizer(auth_settings(browser_auth_mode="google_oidc"))
+    errors = auth.configuration_errors()
+    assert any("AGENT_GOOGLE_CLIENT_ID" in error for error in errors)
+    assert any("AGENT_OWNER_EMAILS" in error for error in errors)
+
+
 def test_http_rbac_enforces_viewer_operator_owner_boundaries():
     previous = authorizer.settings
     authorizer.settings = auth_settings()

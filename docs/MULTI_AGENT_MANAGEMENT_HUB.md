@@ -47,6 +47,12 @@ AGENT_AUTH_MODE=static_token
 AGENT_VIEWER_TOKEN=<random-viewer-token>
 AGENT_OPERATOR_TOKEN=<random-operator-token>
 AGENT_OWNER_TOKEN=<random-owner-token>
+AGENT_BROWSER_AUTH_MODE=google_oidc
+AGENT_PUBLIC_BASE_URL=https://mkt.ngocphuongdong.com
+AGENT_GOOGLE_CLIENT_ID=<dedicated-web-client-id>
+AGENT_GOOGLE_CLIENT_SECRET=<dedicated-web-client-secret>
+AGENT_SESSION_SIGNING_KEY=<random-value-at-least-32-characters>
+AGENT_OWNER_EMAILS=nguyenvanvangct@gmail.com
 ```
 
 Quyền:
@@ -65,7 +71,7 @@ UI tối giản nằm tại:
 /command-center
 ```
 
-Trang HTML không nhúng sẵn dữ liệu. Token được nhập ở trình duyệt, lưu trong `sessionStorage`, và gửi bằng `Authorization: Bearer` cho API same-origin. UI hỗ trợ xem snapshot, tạo task, xem approval queue, approve/reject và audit gần đây.
+Khi `AGENT_BROWSER_AUTH_MODE=google_oidc`, truy cập trang sẽ chuyển tới `/login` và xác minh danh tính bằng Google. Chỉ email nằm trong allowlist role mới nhận được signed session cookie `HttpOnly`, `Secure`, `SameSite=Lax`; production không lưu bearer token trong `sessionStorage`. Bearer token vẫn được giữ cho smoke test và automation không dùng trình duyệt. UI hỗ trợ xem snapshot, tạo task, xem approval queue, approve/reject và audit gần đây.
 
 ## Phase 2 tool matrix
 
@@ -153,6 +159,15 @@ AGENT_AUTH_MODE=static_token
 AGENT_VIEWER_TOKEN=
 AGENT_OPERATOR_TOKEN=
 AGENT_OWNER_TOKEN=
+AGENT_BROWSER_AUTH_MODE=google_oidc
+AGENT_PUBLIC_BASE_URL=https://mkt.ngocphuongdong.com
+AGENT_GOOGLE_CLIENT_ID=
+AGENT_GOOGLE_CLIENT_SECRET=
+AGENT_SESSION_SIGNING_KEY=
+AGENT_SESSION_TTL_SECONDS=28800
+AGENT_OWNER_EMAILS=nguyenvanvangct@gmail.com
+AGENT_OPERATOR_EMAILS=
+AGENT_VIEWER_EMAILS=
 ```
 
 Secret không commit vào repo.
@@ -166,7 +181,7 @@ Secret không commit vào repo.
 - Write tools chỉ đi qua một configured n8n webhook.
 - Commander và operator không bypass approval policy.
 - Write failure phải owner approve lại.
-- Token auth không được ghi vào Redis/audit.
+- Token và browser session không được ghi vào Redis/audit.
 - Không commit secret.
 - n8n write executor mặc định inactive và dry-run.
 
@@ -175,6 +190,6 @@ Secret không commit vào repo.
 1. Cấp `ESPOCRM_URL` và API key read-only trên VPS để chạy schema/mapping thật của NPD.
 2. Review rồi pin mapping custom fields được chấp nhận.
 3. Đặt Agent Hub sau TLS reverse proxy/VPN trước khi public exposure.
-4. Nâng static-token auth lên OIDC/SSO nếu nhiều người vận hành.
+4. Thêm email operator/viewer vào allowlist sau khi owner phê duyệt.
 5. Bổ sung analytics/website/ads/social read adapters.
 6. Chỉ sau acceptance test mới bật từng production n8n write mapping.

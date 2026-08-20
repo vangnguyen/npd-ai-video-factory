@@ -51,11 +51,17 @@ source "$ENV_FILE"
 set +a
 
 [[ "${AGENT_AUTH_MODE:-}" == "static_token" ]] || fail "AGENT_AUTH_MODE must be static_token in production"
+[[ "${AGENT_BROWSER_AUTH_MODE:-}" == "google_oidc" ]] || fail "AGENT_BROWSER_AUTH_MODE must be google_oidc in production"
 [[ "${AGENT_STORE_BACKEND:-}" == "redis" ]] || fail "AGENT_STORE_BACKEND must be redis in production"
 
 require_value AGENT_VIEWER_TOKEN
 require_value AGENT_OPERATOR_TOKEN
 require_value AGENT_OWNER_TOKEN
+require_value AGENT_PUBLIC_BASE_URL
+require_value AGENT_GOOGLE_CLIENT_ID
+require_value AGENT_GOOGLE_CLIENT_SECRET
+require_value AGENT_SESSION_SIGNING_KEY
+require_value AGENT_OWNER_EMAILS
 require_value ESPOCRM_URL
 require_value ESPOCRM_API_KEY
 
@@ -67,6 +73,11 @@ done
 [[ "$AGENT_VIEWER_TOKEN" != "$AGENT_OPERATOR_TOKEN" ]] || fail "viewer/operator tokens must differ"
 [[ "$AGENT_VIEWER_TOKEN" != "$AGENT_OWNER_TOKEN" ]] || fail "viewer/owner tokens must differ"
 [[ "$AGENT_OPERATOR_TOKEN" != "$AGENT_OWNER_TOKEN" ]] || fail "operator/owner tokens must differ"
+
+[[ ${#AGENT_SESSION_SIGNING_KEY} -ge 32 ]] || fail "AGENT_SESSION_SIGNING_KEY must be at least 32 characters"
+[[ "$AGENT_PUBLIC_BASE_URL" =~ ^https://[^/]+$ ]] \
+  || fail "AGENT_PUBLIC_BASE_URL must be an HTTPS origin without a path or trailing slash"
+[[ "$AGENT_OWNER_EMAILS" == *"@"* ]] || fail "AGENT_OWNER_EMAILS must contain at least one email"
 
 case "$ESPOCRM_URL" in
   http://*|https://*) ;;
@@ -114,5 +125,5 @@ export NPD_DOCKER_NETWORK="$VIDEO_NETWORK"
 export N8N_DOCKER_NETWORK="$N8N_NETWORK"
 docker compose -f "$COMPOSE_FILE" config --quiet
 
-printf 'preflight ok: compose=%s video_network=%s n8n_network=%s caddy=%s auth=static_token store=redis\n' \
+printf 'preflight ok: compose=%s video_network=%s n8n_network=%s caddy=%s auth=static_token+google_oidc store=redis\n' \
   "$COMPOSE_FILE" "$VIDEO_NETWORK" "$N8N_NETWORK" "$CADDY_CONTAINER"

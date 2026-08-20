@@ -1,8 +1,17 @@
 from __future__ import annotations
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
 
-from .auth import Principal, authorizer, require_operator, require_owner, require_viewer
+from .auth import (
+    OAUTH_STATE_COOKIE,
+    SESSION_COOKIE,
+    Principal,
+    authorizer,
+    require_operator,
+    require_owner,
+    require_viewer,
+)
 from .dashboard import command_center_html
 from .espocrm_mapping import EspoMappingReader, EspoMappingRecommendation
 from .espocrm_schema import (
@@ -21,12 +30,18 @@ from .models import (
     PlannedAction,
     ToolExecutionResult,
 )
+from .google_login import (
+    begin_google_login,
+    complete_google_login,
+    login_page,
+    logout_response,
+)
 from .orchestrator import hub
 
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.5.0",
+    version="0.6.0",
     description="Multi-agent management control plane for marketing, content, video, social, sales and CRM.",
 )
 schema_reader = EspoSchemaReader()
@@ -66,9 +81,60 @@ def readyz() -> dict[str, str]:
     }
 
 
+@app.get("/login")
+def login(request: Request, error: str = Query(default="")):
+    if authorizer.browser_login_enabled:
+        session_cookie = request.cookies.get(SESSION_COOKIE)
+        if session_cookie:
+            try:
+                authorizer.authenticate_session(session_cookie)
+                return RedirectResponse("/command-center", status_code=303)
+            except HTTPException:
+                pass
+    return login_page(enabled=authorizer.browser_login_enabled, error=error)
+
+
+@app.get("/auth/google/login")
+def google_login():
+    return begin_google_login(authorizer)
+
+
+@app.get("/auth/google/callback")
+def google_callback(
+    request: Request,
+    code: str = Query(default=""),
+    state: str = Query(default=""),
+    error: str = Query(default=""),
+):
+    if error or not code or not state:
+        return RedirectResponse("/login?error=Google+login+was+cancelled", status_code=303)
+    state_cookie = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not state_cookie:
+        raise HTTPException(status_code=401, detail="login state cookie is missing")
+    return complete_google_login(
+        authorizer,
+        code=code,
+        state=state,
+        state_cookie=state_cookie,
+    )
+
+
+@app.get("/logout")
+def logout():
+    return logout_response()
+
+
 @app.get("/command-center")
-def command_center_page():
-    return command_center_html()
+def command_center_page(request: Request):
+    if authorizer.browser_login_enabled:
+        session_cookie = request.cookies.get(SESSION_COOKIE)
+        if not session_cookie:
+            return RedirectResponse("/login", status_code=303)
+        try:
+            authorizer.authenticate_session(session_cookie)
+        except HTTPException:
+            return RedirectResponse("/login", status_code=303)
+    return command_center_html(browser_login_enabled=authorizer.browser_login_enabled)
 
 
 @app.get("/api/v1/whoami")

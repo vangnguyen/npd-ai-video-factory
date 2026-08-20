@@ -48,6 +48,23 @@ code="$(http_code GET "$BASE_URL/health" '' '' "$workdir/health.json")"
 code="$(http_code GET "$BASE_URL/readyz" '' '' "$workdir/ready.json")"
 [[ "$code" == "200" ]] || fail "/readyz returned HTTP $code"
 
+if [[ "${AGENT_BROWSER_AUTH_MODE:-}" == "google_oidc" ]]; then
+  code="$(curl -sS -D "$workdir/command-center.headers" -o "$workdir/command-center.html" -w '%{http_code}' "$BASE_URL/command-center")"
+  [[ "$code" == "303" ]] || fail "unauthenticated browser must be redirected to login; got HTTP $code"
+  grep -Eiq '^location:[[:space:]]*/login' "$workdir/command-center.headers" \
+    || fail "Command Center redirect did not target /login"
+
+  code="$(curl -sS -o "$workdir/login.html" -w '%{http_code}' "$BASE_URL/login")"
+  [[ "$code" == "200" ]] || fail "/login returned HTTP $code"
+  grep -Fq '/auth/google/login' "$workdir/login.html" \
+    || fail "login page does not expose the Google login action"
+
+  code="$(curl -sS -D "$workdir/google-login.headers" -o /dev/null -w '%{http_code}' "$BASE_URL/auth/google/login")"
+  [[ "$code" == "302" ]] || fail "Google login start returned HTTP $code"
+  grep -Eiq '^location:[[:space:]]*https://accounts\.google\.com/' "$workdir/google-login.headers" \
+    || fail "Google login start did not redirect to Google"
+fi
+
 code="$(http_code GET "$BASE_URL/api/v1/command-center" '' '' "$workdir/unauth.json")"
 [[ "$code" == "401" ]] || fail "unauthenticated Command Center must return 401, got $code"
 
@@ -107,4 +124,4 @@ if ! [[ "$field_count" =~ ^[0-9]+$ ]] || (( field_count <= 0 )); then
   fail "EspoCRM Lead schema returned no fields"
 fi
 
-printf 'smoke ok: url=%s auth=viewer/operator/owner espocrm_lead_fields=%s task=%s\n' "$BASE_URL" "$field_count" "$task_id"
+printf 'smoke ok: url=%s auth=viewer/operator/owner+google_oidc espocrm_lead_fields=%s task=%s\n' "$BASE_URL" "$field_count" "$task_id"

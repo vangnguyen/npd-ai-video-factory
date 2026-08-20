@@ -107,6 +107,34 @@ AGENT_OWNER_TOKEN
 
 Do not reuse tokens between roles and do not commit them.
 
+Browser access uses a dedicated Google Web OAuth client while bearer tokens remain available
+for smoke tests and automation. Configure the client with:
+
+```text
+Authorized JavaScript origin: https://mkt.ngocphuongdong.com
+Authorized redirect URI: https://mkt.ngocphuongdong.com/auth/google/callback
+```
+
+Then set the following outside the repository. `AGENT_OWNER_EMAILS` is an exact,
+case-normalized allowlist; a successful Google login does not grant access unless the email is
+listed:
+
+```text
+AGENT_BROWSER_AUTH_MODE=google_oidc
+AGENT_PUBLIC_BASE_URL=https://mkt.ngocphuongdong.com
+AGENT_GOOGLE_CLIENT_ID=...
+AGENT_GOOGLE_CLIENT_SECRET=...
+AGENT_SESSION_SIGNING_KEY=<independent-random-value-at-least-32-characters>
+AGENT_SESSION_TTL_SECONDS=28800
+AGENT_OWNER_EMAILS=nguyenvanvangct@gmail.com
+AGENT_OPERATOR_EMAILS=
+AGENT_VIEWER_EMAILS=
+```
+
+The browser receives only a signed `HttpOnly`, `Secure`, `SameSite=Lax` session cookie. The
+OAuth code, client secret and bearer tokens are never stored in browser storage. Cookie-authenticated
+write requests must carry the exact configured same-origin `Origin` header.
+
 Configure the existing EspoCRM host and a read-only API-user key:
 
 ```text
@@ -141,9 +169,10 @@ Preflight fails closed when:
 
 - required software is missing;
 - env file is missing or has unsafe permissions;
-- auth is not `static_token`;
+- API auth is not `static_token` or browser auth is not `google_oidc`;
 - Redis persistence is not enabled;
 - role tokens are short, duplicated, or still placeholders;
+- Google OAuth, public HTTPS origin, session signing key or owner email allowlist is missing;
 - EspoCRM URL/key is missing;
 - existing API or Redis is not present on the expected Docker network;
 - the production `n8n-marketing` Compose file, network or Caddy container does not match the verified topology;
@@ -209,6 +238,8 @@ The smoke test does not execute any external write action.
 It verifies:
 
 - `/health` and `/readyz`;
+- unauthenticated browser access redirects to `/login`;
+- `/login` exposes Google login and the OAuth start redirects only to Google;
 - unauthenticated API access is rejected;
 - viewer can read Command Center;
 - owner token resolves as `owner`;

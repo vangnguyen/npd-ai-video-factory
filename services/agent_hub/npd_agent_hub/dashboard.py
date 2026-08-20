@@ -10,7 +10,7 @@ DASHBOARD_HTML = r'''<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>NPD AI Command Center</title>
 <style>
-:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f5f7fb}*{box-sizing:border-box}body{margin:0}.top{background:#111827;color:#fff;padding:18px 22px;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}.top h1{font-size:20px;margin:0}.auth{display:flex;gap:8px;flex-wrap:wrap}.auth input,.auth select,.auth button,textarea,button{font:inherit}.auth input{width:min(420px,70vw);padding:9px 11px;border:1px solid #4b5563;border-radius:8px;background:#fff;color:#111827}.auth button,.primary{padding:9px 13px;border:0;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer}.wrap{max-width:1280px;margin:auto;padding:20px}.notice{padding:12px 14px;border-radius:10px;background:#fff;border:1px solid #e5e7eb;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:15px}.metric{font-size:28px;font-weight:750;margin-top:5px}.muted{color:#667085;font-size:13px}.section{margin-top:20px}.section h2{font-size:17px}.panel{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:auto}table{width:100%;border-collapse:collapse;min-width:760px}th,td{text-align:left;padding:11px;border-bottom:1px solid #edf0f4;font-size:13px;vertical-align:top}th{background:#f8fafc}.tag{display:inline-block;padding:3px 7px;border-radius:999px;background:#eef2ff;margin:2px;font-size:12px}.danger{background:#b42318!important}.secondary{background:#475467!important}textarea{width:100%;min-height:76px;padding:10px;border:1px solid #d0d5dd;border-radius:8px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.smallbtn{padding:6px 9px;border:0;border-radius:7px;background:#2563eb;color:#fff;cursor:pointer;font-size:12px}.smallbtn.secondary{background:#667085}.smallbtn.danger{background:#b42318}.error{color:#b42318}.ok{color:#027a48}@media(max-width:600px){.wrap{padding:12px}.top{padding:14px}.auth input{width:100%}}
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f5f7fb}*{box-sizing:border-box}body{margin:0}.top{background:#111827;color:#fff;padding:18px 22px;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}.top h1{font-size:20px;margin:0}.auth{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.auth input,.auth select,.auth button,textarea,button{font:inherit}.auth input{width:min(420px,70vw);padding:9px 11px;border:1px solid #4b5563;border-radius:8px;background:#fff;color:#111827}.auth button,.auth a,.primary{padding:9px 13px;border:0;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer;text-decoration:none}.wrap{max-width:1280px;margin:auto;padding:20px}.notice{padding:12px 14px;border-radius:10px;background:#fff;border:1px solid #e5e7eb;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:15px}.metric{font-size:28px;font-weight:750;margin-top:5px}.muted{color:#667085;font-size:13px}.section{margin-top:20px}.section h2{font-size:17px}.panel{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:auto}table{width:100%;border-collapse:collapse;min-width:760px}th,td{text-align:left;padding:11px;border-bottom:1px solid #edf0f4;font-size:13px;vertical-align:top}th{background:#f8fafc}.tag{display:inline-block;padding:3px 7px;border-radius:999px;background:#eef2ff;margin:2px;font-size:12px}.danger{background:#b42318!important}.secondary{background:#475467!important}textarea{width:100%;min-height:76px;padding:10px;border:1px solid #d0d5dd;border-radius:8px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.smallbtn{padding:6px 9px;border:0;border-radius:7px;background:#2563eb;color:#fff;cursor:pointer;font-size:12px}.smallbtn.secondary{background:#667085}.smallbtn.danger{background:#b42318}.error{color:#b42318}.ok{color:#027a48}@media(max-width:600px){.wrap{padding:12px}.top{padding:14px}.auth input{width:100%}}
 </style>
 </head>
 <body>
@@ -44,9 +44,30 @@ if(token)refreshAll();
 </body></html>'''
 
 
-def command_center_html() -> HTMLResponse:
+def command_center_html(*, browser_login_enabled: bool = False) -> HTMLResponse:
+    content = DASHBOARD_HTML
+    if browser_login_enabled:
+        content = content.replace(
+            '<div class="auth"><input id="token" type="password" autocomplete="off" placeholder="Bearer token (owner/operator/viewer)"/><button onclick="saveToken()">Kết nối</button></div>',
+            '<div class="auth"><span id="identity">Đang xác thực…</span><a class="secondary" href="/logout">Đăng xuất</a></div>',
+        ).replace(
+            'Nhập token để tải dữ liệu. Token chỉ lưu trong sessionStorage của trình duyệt.',
+            'Đang tải dữ liệu Command Center…',
+        ).replace(
+            "const $=id=>document.getElementById(id);let token=sessionStorage.getItem('npd_agent_token')||'';$('token').value=token;",
+            "const $=id=>document.getElementById(id);let token='';",
+        ).replace(
+            "function saveToken(){token=$('token').value.trim();sessionStorage.setItem('npd_agent_token',token);refreshAll()}",
+            "function saveToken(){}",
+        ).replace(
+            "if(!r.ok){let d;try{d=await r.json()}catch{d={detail:r.statusText}};throw new Error((d&&d.detail)||('HTTP '+r.status))}",
+            "if(r.status===401){location.href='/login';throw new Error('login required')}if(!r.ok){let d;try{d=await r.json()}catch{d={detail:r.statusText}};throw new Error((d&&d.detail)||('HTTP '+r.status))}",
+        ).replace(
+            "setStatus('Đã xác thực: '+me.role+' · storage: '+s.storage_backend,'ok');render(s)",
+            "$('identity').textContent=me.subject+' · '+me.role;setStatus('Đã xác thực: '+me.subject+' · '+me.role+' · storage: '+s.storage_backend,'ok');render(s)",
+        ).replace("if(token)refreshAll();", "refreshAll();")
     return HTMLResponse(
-        DASHBOARD_HTML,
+        content,
         headers={
             "Cache-Control": "no-store",
             "Content-Security-Policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'",

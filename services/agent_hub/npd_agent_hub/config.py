@@ -18,9 +18,27 @@ class HubSettings:
     viewer_token: str = ""
     operator_token: str = ""
     owner_token: str = ""
+    browser_auth_mode: str = "disabled"
+    public_base_url: str = ""
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    session_signing_key: str = ""
+    session_ttl_seconds: int = 28800
+    owner_emails: tuple[str, ...] = ()
+    operator_emails: tuple[str, ...] = ()
+    viewer_emails: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls) -> "HubSettings":
+        def email_list(name: str) -> tuple[str, ...]:
+            return tuple(
+                dict.fromkeys(
+                    value.strip().lower()
+                    for value in os.getenv(name, "").split(",")
+                    if value.strip()
+                )
+            )
+
         return cls(
             video_api_url=os.getenv("VIDEO_API_URL", "http://api:8000").rstrip("/"),
             espocrm_url=os.getenv("ESPOCRM_URL", "").rstrip("/"),
@@ -34,6 +52,15 @@ class HubSettings:
             viewer_token=os.getenv("AGENT_VIEWER_TOKEN", "").strip(),
             operator_token=os.getenv("AGENT_OPERATOR_TOKEN", "").strip(),
             owner_token=os.getenv("AGENT_OWNER_TOKEN", "").strip(),
+            browser_auth_mode=os.getenv("AGENT_BROWSER_AUTH_MODE", "disabled").strip().lower(),
+            public_base_url=os.getenv("AGENT_PUBLIC_BASE_URL", "").strip().rstrip("/"),
+            google_client_id=os.getenv("AGENT_GOOGLE_CLIENT_ID", "").strip(),
+            google_client_secret=os.getenv("AGENT_GOOGLE_CLIENT_SECRET", "").strip(),
+            session_signing_key=os.getenv("AGENT_SESSION_SIGNING_KEY", "").strip(),
+            session_ttl_seconds=int(os.getenv("AGENT_SESSION_TTL_SECONDS", "28800")),
+            owner_emails=email_list("AGENT_OWNER_EMAILS"),
+            operator_emails=email_list("AGENT_OPERATOR_EMAILS"),
+            viewer_emails=email_list("AGENT_VIEWER_EMAILS"),
         )
 
 
