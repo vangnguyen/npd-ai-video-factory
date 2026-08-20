@@ -421,9 +421,21 @@ Recorded recovery artifacts:
 
 No social publish, Ads mutation, customer message, CRM write or Redis restore was executed. This acceptance makes the deployment live, but it does not authorize merging PR #9 or enabling the inactive production-write workflow.
 
-### Business-answer upgrade candidate (Agent Hub 0.7.0)
+### Business-answer upgrade accepted (Agent Hub 0.7.0, 2026-08-20)
 
-The next guarded Agent Hub-only rollout adds read-only CRM auto-analysis and an evidence-backed answer panel. Task creation and explicit re-analysis may execute only `crm.leads.read` and `crm.audit.read`; all write actions remain approval-gated and the n8n executor remains inactive/unconfigured. The Lead adapter requests only the business fields needed for triage and removes raw email/phone values before persistence. Live cutover, smoke evidence, rollback artifacts and the final deployed commit must be recorded here only after the guarded VPS deployment actually succeeds.
+The guarded Agent Hub-only rollout from commit `6be623705a0e53c51be74a667e89114c86534b74` added read-only CRM auto-analysis and an evidence-backed answer panel. Task creation and explicit re-analysis may execute only `crm.leads.read` and `crm.audit.read`; all write actions remain approval-gated and the n8n executor remains inactive/unconfigured. The Lead adapter requests only the business fields needed for triage and removes raw email/phone values before persistence.
+
+Acceptance evidence:
+
+- Agent Hub CI run `32333949233`, Phase 5 Deployment Bundle CI run `32333949253`, and all jobs in Sprint 1 CI run `32333949231` passed, including Docker Compose E2E.
+- Guarded preflight passed against `/opt/npd-ai-video-factory-phase5`; the primary `/opt/npd-ai-video-factory` checkout remained unchanged at `a92785dc1721ec4e991bf12655629d809e13c241`.
+- Deployment created rollback image `npd-agent-hub:rollback-20260820T050522Z`, namespace backup `/var/backups/npd-agent-hub/agent-hub-20260820T050522Z.json`, and receipt `/var/lib/npd-ai/agent-hub-deployments/deploy-20260820T050522Z.json` before/after the Agent Hub-only replacement as appropriate.
+- The resulting single Agent Hub container is healthy, reports version `0.7.0`, remains on `npd-ai-video-factory_default` plus `n8n-marketing_n8n_net`, and Caddy still validates inside `n8n-marketing-caddy-1` without a Caddy configuration change.
+- Loopback and public `https://mkt.ngocphuongdong.com` smoke both passed RBAC, Google login route, 60-field EspoCRM discovery, business-answer generation and raw-contact-field persistence checks. Both returned `crm_answer=completed`; smoke write proposals were explicitly rejected and not executed.
+- The original user test task `agt_1c55c3f081894ecc` was re-analyzed through the owner browser session. The UI returned 3 checked leads, 3 needing care at the 7-day threshold, 0 high priority, 0 unassigned and 1 missing contact; the old `undefined` Pending display no longer appears.
+- The Google owner session still showed `nguyenvanvangct@gmail.com · owner`. The answer panel displayed per-lead reason, business fields and next-best-action while preserving the explicit caveat that activity timestamps are a proxy for last contact.
+
+No Caddy cutover, second n8n/Caddy/Redis service, social publish, Ads mutation, customer message, CRM write or Redis restore occurred in this upgrade. PR #9 remains draft/unmerged.
 
 ## Phase 5 acceptance criteria
 
