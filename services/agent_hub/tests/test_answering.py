@@ -78,6 +78,42 @@ def test_crm_answer_identifies_and_prioritizes_stale_leads_without_pii():
     assert any("lastContactAt" in caveat for caveat in answer.caveats)
 
 
+def test_default_crm_answer_uses_status_specific_care_sla():
+    task = AgentTask(objective="Tìm lead chưa được chăm sóc")
+    report = _crm_report(task)
+    execution = ToolExecutionResult(
+        task_id=task.task_id,
+        action_id="act-read",
+        tool="crm.leads.read",
+        status=ExecutionStatus.SUCCEEDED,
+        data={
+            "total": 1,
+            "list": [
+                {
+                    "id": "in-process-overdue",
+                    "name": "Lead overdue",
+                    "status": "In Process",
+                    "assignedUserId": "sale-1",
+                    "modifiedAt": "2026-08-18 00:00:00",
+                    "hasPhone": True,
+                }
+            ],
+        },
+    )
+
+    answer = synthesize_business_answer(
+        task,
+        report,
+        [execution],
+        now=datetime(2026, 8, 20, tzinfo=timezone.utc),
+    )
+
+    assert answer.metrics["SLA New/Assigned (phút)"] == 15
+    assert answer.metrics["SLA In Process/Recycled (giờ)"] == 24
+    assert "SLA theo trạng thái" in answer.summary
+    assert "quá SLA 24 giờ" in answer.items[0].reason
+
+
 def test_crm_answer_is_honest_when_read_adapter_fails():
     task = AgentTask(objective="Kiểm tra CRM và lead")
     report = _crm_report(task)
@@ -94,3 +130,39 @@ def test_crm_answer_is_honest_when_read_adapter_fails():
     assert answer.status.value == "failed"
     assert answer.items == []
     assert "Chưa đọc được dữ liệu" in answer.summary
+
+
+def test_marketing_answer_uses_aggregated_crm_analytics_and_states_limits():
+    task = AgentTask(objective="Báo cáo hiệu quả marketing theo nguồn lead 30 ngày")
+    report = _crm_report(task)
+    execution = ToolExecutionResult(
+        task_id=task.task_id,
+        action_id="act-analytics",
+        tool="analytics.read",
+        status=ExecutionStatus.SUCCEEDED,
+        data={
+            "data_source": "EspoCRM Lead read-only",
+            "period_days": 30,
+            "records_analyzed": 10,
+            "reported_total": 10,
+            "coverage_complete": True,
+            "recent_leads": 4,
+            "converted_leads": 2,
+            "conversion_rate_pct": 20.0,
+            "assigned_leads": 9,
+            "contactable_leads": 8,
+            "stale_active_leads": 3,
+            "by_source": [
+                {"name": "Facebook", "count": 6, "share_pct": 60.0},
+                {"name": "Website", "count": 4, "share_pct": 40.0},
+            ],
+        },
+    )
+
+    answer = synthesize_business_answer(task, report, [execution])
+
+    assert answer.status.value == "completed"
+    assert answer.metrics["Tỷ lệ Converted (%)"] == 20.0
+    assert answer.items[0].title == "Nguồn lead: Facebook"
+    assert any("chưa có Ads spend" in caveat for caveat in answer.caveats)
+    assert any("analytics.read" in evidence for evidence in answer.evidence)

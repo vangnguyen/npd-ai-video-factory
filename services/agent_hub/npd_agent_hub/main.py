@@ -41,7 +41,7 @@ from .orchestrator import hub
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.7.0",
+    version="0.8.0",
     description="Multi-agent management control plane for marketing, content, video, social, sales and CRM.",
 )
 schema_reader = EspoSchemaReader()

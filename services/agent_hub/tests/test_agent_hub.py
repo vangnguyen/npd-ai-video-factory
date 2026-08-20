@@ -73,6 +73,36 @@ class CrmReadExecutor:
         )
 
 
+class AnalyticsReadExecutor:
+    def __init__(self):
+        self.calls = []
+
+    async def execute(self, *, task, action):
+        self.calls.append(action.tool)
+        return ToolExecutionResult(
+            task_id=task.task_id,
+            action_id=action.action_id,
+            tool=action.tool,
+            status=ExecutionStatus.SUCCEEDED,
+            data={
+                "data_source": "EspoCRM Lead read-only",
+                "period_days": 30,
+                "records_analyzed": 3,
+                "reported_total": 3,
+                "coverage_complete": True,
+                "recent_leads": 1,
+                "converted_leads": 1,
+                "conversion_rate_pct": 33.3,
+                "assigned_leads": 3,
+                "contactable_leads": 2,
+                "stale_active_leads": 1,
+                "by_source": [
+                    {"name": "Website", "count": 3, "share_pct": 100.0}
+                ],
+            },
+        )
+
+
 def test_broad_objective_routes_to_all_specialists():
     hub = AgentHub()
     report = hub.run(AgentTask(objective="Quản lý công việc toàn bộ hệ thống marketing và sales"))
@@ -105,6 +135,38 @@ def test_crm_follow_up_question_routes_to_crm_and_sales_without_marketing():
     )
 
     assert report.selected_agents == [AgentName.CRM_MANAGER, AgentName.SALES]
+
+
+def test_marketing_source_report_routes_only_to_marketing_leader():
+    hub = AgentHub()
+    report = hub.run(
+        AgentTask(objective="Báo cáo hiệu quả marketing theo nguồn trong 30 ngày")
+    )
+
+    assert report.selected_agents == [AgentName.MARKETING_LEADER]
+
+
+def test_analyze_auto_executes_analytics_read_without_budget_write():
+    executor = AnalyticsReadExecutor()
+    hub = AgentHub(executor=executor)
+    report = hub.run(
+        AgentTask(objective="Báo cáo hiệu quả marketing theo nguồn trong 30 ngày")
+    )
+
+    analyzed = asyncio.run(hub.analyze(report.task_id))
+
+    assert executor.calls == ["analytics.read"]
+    assert analyzed.answer is not None
+    assert analyzed.answer.status.value == "completed"
+    assert analyzed.answer.metrics["Tỷ lệ Converted (%)"] == 33.3
+    budget_write = next(
+        action
+        for agent_report in analyzed.reports
+        for action in agent_report.actions
+        if action.tool == "ads.budget.update"
+    )
+    assert budget_write.status.value == "proposed"
+    assert budget_write in analyzed.approvals_required
 
 
 def test_analyze_auto_executes_only_crm_reads_and_returns_evidence_based_answer():

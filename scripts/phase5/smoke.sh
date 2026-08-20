@@ -131,9 +131,17 @@ if 'crm_manager' not in payload.get('selected_agents', []):
 if 'marketing_leader' in payload.get('selected_agents', []):
     raise SystemExit('pure CRM follow-up question was incorrectly routed to marketing')
 metrics = answer.get('metrics') or {}
-for metric in ('Lead đã kiểm tra', 'Cần chăm sóc', 'Ngưỡng quá hạn (ngày)'):
+for metric in ('Lead đã kiểm tra', 'Cần chăm sóc'):
     if metric not in metrics:
         raise SystemExit(f'CRM answer is missing metric: {metric}')
+if not (
+    'Ngưỡng quá hạn (ngày)' in metrics
+    or (
+        'SLA New/Assigned (phút)' in metrics
+        and 'SLA In Process/Recycled (giờ)' in metrics
+    )
+):
+    raise SystemExit('CRM answer is missing care threshold/SLA metrics')
 if not answer.get('evidence'):
     raise SystemExit('CRM answer has no read-only evidence')
 raw = json.dumps(payload, ensure_ascii=False)
@@ -170,6 +178,61 @@ while IFS= read -r crm_action_id; do
   [[ "$code" == "200" ]] || fail "owner CRM smoke reject returned HTTP $code"
 done < "$workdir/crm-approval-ids.txt"
 
+analytics_body='{"objective":"Báo cáo hiệu quả marketing theo nguồn trong 30 ngày"}'
+code="$(http_code POST "$BASE_URL/api/v1/agent-tasks" "$AGENT_OPERATOR_TOKEN" "$analytics_body" "$workdir/analytics-answer.json")"
+[[ "$code" == "200" ]] || fail "marketing analytics task returned HTTP $code"
+
+read -r analytics_task_id analytics_answer_status < <(python3 - "$workdir/analytics-answer.json" <<'PY'
+import json, sys
+
+payload = json.load(open(sys.argv[1], encoding='utf-8'))
+answer = payload.get('answer') or {}
+status = answer.get('status', '')
+if status != 'completed':
+    raise SystemExit(f'analytics answer is not completed: {status}')
+if payload.get('selected_agents') != ['marketing_leader']:
+    raise SystemExit(f'unexpected analytics routing: {payload.get("selected_agents")}')
+metrics = answer.get('metrics') or {}
+for metric in ('Lead đã phân tích', 'Đã chuyển đổi', 'Tỷ lệ Converted (%)', 'Active quá 24 giờ'):
+    if metric not in metrics:
+        raise SystemExit(f'analytics answer is missing metric: {metric}')
+if not any('analytics.read' in item for item in answer.get('evidence', [])):
+    raise SystemExit('analytics answer has no read-only evidence')
+raw = json.dumps(payload, ensure_ascii=False)
+for forbidden in ('emailAddress', 'phoneNumber', 'assignedUserName'):
+    if forbidden in raw:
+        raise SystemExit(f'analytics answer persisted forbidden field: {forbidden}')
+print(payload['task_id'], status)
+PY
+)
+
+code="$(http_code GET "$BASE_URL/api/v1/agent-tasks/$analytics_task_id/executions" "$AGENT_VIEWER_TOKEN" '' "$workdir/analytics-executions.json")"
+[[ "$code" == "200" ]] || fail "analytics execution evidence returned HTTP $code"
+python3 - "$workdir/analytics-executions.json" <<'PY'
+import json, sys
+
+payload = json.load(open(sys.argv[1], encoding='utf-8'))
+if {item.get('tool') for item in payload} != {'analytics.read'}:
+    raise SystemExit('analytics auto-executed a tool outside analytics.read')
+raw = json.dumps(payload, ensure_ascii=False)
+for forbidden in ('emailAddress', 'phoneNumber', 'assignedUserName'):
+    if forbidden in raw:
+        raise SystemExit(f'analytics execution persisted forbidden field: {forbidden}')
+PY
+
+python3 - "$workdir/analytics-answer.json" <<'PY' > "$workdir/analytics-approval-ids.txt"
+import json, sys
+
+payload = json.load(open(sys.argv[1], encoding='utf-8'))
+for action in payload.get('approvals_required', []):
+    print(action['action_id'])
+PY
+while IFS= read -r analytics_action_id; do
+  [[ -n "$analytics_action_id" ]] || continue
+  code="$(http_code POST "$BASE_URL/api/v1/agent-tasks/$analytics_task_id/actions/$analytics_action_id/decision" "$AGENT_OWNER_TOKEN" '{"approved":false,"note":"phase5 analytics smoke reject - no external side effect"}' "$workdir/analytics-reject-$analytics_action_id.json")"
+  [[ "$code" == "200" ]] || fail "owner analytics smoke reject returned HTTP $code"
+done < "$workdir/analytics-approval-ids.txt"
+
 field_count="$(python3 - "$workdir/espo-schema.json" <<'PY'
 import json, sys
 payload = json.load(open(sys.argv[1], encoding='utf-8'))
@@ -180,4 +243,4 @@ if ! [[ "$field_count" =~ ^[0-9]+$ ]] || (( field_count <= 0 )); then
   fail "EspoCRM Lead schema returned no fields"
 fi
 
-printf 'smoke ok: url=%s auth=viewer/operator/owner+google_oidc espocrm_lead_fields=%s task=%s crm_task=%s crm_answer=%s\n' "$BASE_URL" "$field_count" "$task_id" "$crm_task_id" "$crm_answer_status"
+printf 'smoke ok: url=%s auth=viewer/operator/owner+google_oidc espocrm_lead_fields=%s task=%s crm_task=%s crm_answer=%s analytics_task=%s analytics_answer=%s\n' "$BASE_URL" "$field_count" "$task_id" "$crm_task_id" "$crm_answer_status" "$analytics_task_id" "$analytics_answer_status"

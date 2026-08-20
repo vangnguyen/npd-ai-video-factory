@@ -119,6 +119,83 @@ def test_espocrm_lead_read_is_get_only_and_uses_api_key():
     assert "modifiedAt" in seen["select"]
 
 
+def test_analytics_read_returns_only_aggregated_crm_funnel_metrics():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        return httpx.Response(
+            200,
+            json={
+                "total": 3,
+                "list": [
+                    {
+                        "id": "1",
+                        "name": "Private lead 1",
+                        "status": "Converted",
+                        "source": "Facebook",
+                        "cDuAnQuanTam": "Project A",
+                        "cMucDoQuanTam": "Nong",
+                        "assignedUserId": "sale-1",
+                        "createdAt": "2026-08-18 00:00:00",
+                        "modifiedAt": "2026-08-19 00:00:00",
+                        "emailAddress": "private@example.com",
+                    },
+                    {
+                        "id": "2",
+                        "name": "Private lead 2",
+                        "status": "In Process",
+                        "source": "Facebook",
+                        "cDuAnQuanTam": "Project A",
+                        "cMucDoQuanTam": "Am",
+                        "assignedUserId": "sale-1",
+                        "createdAt": "2026-07-01 00:00:00",
+                        "modifiedAt": "2026-07-02 00:00:00",
+                        "phoneNumber": "0900000000",
+                    },
+                    {
+                        "id": "3",
+                        "name": "Private lead 3",
+                        "status": "New",
+                        "source": "Website",
+                        "cDuAnQuanTam": "Project B",
+                        "createdAt": "2026-08-19 00:00:00",
+                        "modifiedAt": "2026-08-19 00:00:00",
+                    },
+                ],
+            },
+        )
+
+    task = AgentTask(
+        objective="Báo cáo hiệu quả marketing 30 ngày",
+        context={"analytics_days": 30},
+    )
+    action = PlannedAction(
+        agent=AgentName.MARKETING_LEADER,
+        title="Đọc funnel",
+        description="test",
+        tool="analytics.read",
+    )
+    executor = ToolExecutor(
+        HubSettings(espocrm_url="https://crm.local", espocrm_api_key="read-only-key"),
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = run(executor.execute(task=task, action=action))
+
+    assert result.status.value == "succeeded"
+    assert result.data["records_analyzed"] == 3
+    assert result.data["converted_leads"] == 1
+    assert result.data["conversion_rate_pct"] == 33.3
+    assert result.data["by_source"][0] == {
+        "name": "Facebook",
+        "count": 2,
+        "share_pct": 66.7,
+    }
+    serialized = json.dumps(result.data)
+    assert "Private lead" not in serialized
+    assert "private@example.com" not in serialized
+    assert "0900000000" not in serialized
+
+
 def test_n8n_write_requires_approved_action_and_uses_fixed_webhook():
     calls = []
 

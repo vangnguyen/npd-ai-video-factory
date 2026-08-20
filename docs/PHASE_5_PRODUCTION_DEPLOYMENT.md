@@ -437,6 +437,14 @@ Acceptance evidence:
 
 No Caddy cutover, second n8n/Caddy/Redis service, social publish, Ads mutation, customer message, CRM write or Redis restore occurred in this upgrade. PR #9 remains draft/unmerged.
 
+### CRM funnel analytics upgrade candidate (Agent Hub 0.8.0)
+
+The next guarded Agent Hub-only rollout adds `analytics.read` to the auto-execution read allowlist. It derives aggregate marketing/funnel metrics from the existing EspoCRM read-only Lead source, persists no lead names/contact details/assignee names in the analytics execution, and explicitly refuses to infer CPL, CAC or ROAS without an Ads/website data source. CRM follow-up analysis also aligns its default thresholds with the accepted Sales Hub care rules: 15 minutes for New/Assigned and 24 hours for In Process/Recycled, while an explicit user-supplied day threshold remains authoritative.
+
+The production audit found a Meta Page token only inside the existing lead-ingestion service. Agent Hub does not copy or reuse it because its effective permissions are broader than the read-only analytics contract. A future Meta/Ads adapter requires a separately reviewed least-privilege credential or internal aggregate endpoint.
+
+This candidate is not production-accepted until Agent Hub/Phase 5/Sprint 1 CI, guarded deployment, loopback/public smoke, browser QA and rollback evidence all pass. All external write tools remain approval-gated and the n8n executor must remain disabled.
+
 ## Phase 5 acceptance criteria
 
 Repository deployment-bundle readiness requires:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
@@ -17,6 +19,7 @@ N8N_WRITE_TOOLS = {
 }
 
 AUTO_READ_TOOLS = {
+    "analytics.read",
     "crm.leads.read",
     "crm.audit.read",
 }
@@ -80,6 +83,8 @@ class ToolExecutor:
                 data = await self._read_crm_leads(task)
             elif action.tool == "crm.audit.read":
                 data = await self._audit_crm(task)
+            elif action.tool == "analytics.read":
+                data = await self._read_analytics(task)
             elif action.tool in N8N_WRITE_TOOLS:
                 data = await self._execute_n8n(task, action)
             else:
@@ -237,6 +242,102 @@ class ToolExecutor:
             "stale": stale,
             "stale_days": stale_days,
             "records": records,
+        }
+
+    @staticmethod
+    def _analytics_period_days(task: AgentTask) -> int:
+        configured = task.context.get("analytics_days")
+        if configured is not None:
+            try:
+                return max(1, min(int(configured), 365))
+            except (TypeError, ValueError):
+                pass
+        match = re.search(r"(\d{1,3})\s*ngày", task.objective.casefold())
+        if match:
+            return max(1, min(int(match.group(1)), 365))
+        return 30
+
+    @staticmethod
+    def _parse_espo_datetime(value: object) -> datetime | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        normalized = value.strip().replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    @staticmethod
+    def _distribution(records: list[dict[str, Any]], field: str) -> list[dict[str, object]]:
+        counts = Counter(str(record.get(field) or "Chưa xác định") for record in records)
+        total = len(records)
+        return [
+            {
+                "name": name,
+                "count": count,
+                "share_pct": round(count * 100 / total, 1) if total else 0.0,
+            }
+            for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        ]
+
+    async def _read_analytics(self, task: AgentTask) -> dict[str, Any]:
+        payload = await self._read_crm_leads(task)
+        raw_records = payload.get("list")
+        records = [record for record in raw_records or [] if isinstance(record, dict)]
+        now = datetime.now(timezone.utc)
+        period_days = self._analytics_period_days(task)
+        recent_cutoff = now.timestamp() - period_days * 86400
+
+        recent_leads = 0
+        stale_active_leads = 0
+        active_statuses = {"New", "Assigned", "In Process", "Recycled"}
+        for record in records:
+            created = self._parse_espo_datetime(record.get("createdAt"))
+            if created and created.timestamp() >= recent_cutoff:
+                recent_leads += 1
+            modified = (
+                self._parse_espo_datetime(record.get("streamUpdatedAt"))
+                or self._parse_espo_datetime(record.get("modifiedAt"))
+                or created
+            )
+            if (
+                record.get("status") in active_statuses
+                and modified
+                and (now - modified).total_seconds() >= 86400
+            ):
+                stale_active_leads += 1
+
+        converted = sum(record.get("status") == "Converted" for record in records)
+        assigned = sum(bool(record.get("assignedUserId")) for record in records)
+        contactable = sum(
+            bool(record.get("hasEmail") or record.get("hasPhone")) for record in records
+        )
+        reported_total = payload.get("total")
+        try:
+            coverage_complete = int(reported_total) <= len(records)
+        except (TypeError, ValueError):
+            coverage_complete = True
+
+        return {
+            "data_source": "EspoCRM Lead read-only",
+            "period_days": period_days,
+            "records_analyzed": len(records),
+            "reported_total": reported_total,
+            "coverage_complete": coverage_complete,
+            "recent_leads": recent_leads,
+            "converted_leads": converted,
+            "conversion_rate_pct": round(converted * 100 / len(records), 1) if records else 0.0,
+            "assigned_leads": assigned,
+            "contactable_leads": contactable,
+            "stale_active_leads": stale_active_leads,
+            "by_status": self._distribution(records, "status"),
+            "by_source": self._distribution(records, "source"),
+            "by_project": self._distribution(records, "cDuAnQuanTam"),
+            "by_interest": self._distribution(records, "cMucDoQuanTam"),
+            "generated_at": now.isoformat(),
         }
 
     async def _execute_n8n(self, task: AgentTask, action: PlannedAction) -> dict[str, Any]:

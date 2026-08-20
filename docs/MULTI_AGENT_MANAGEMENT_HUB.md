@@ -82,13 +82,15 @@ Khi `AGENT_BROWSER_AUTH_MODE=google_oidc`, truy cập trang sẽ chuyển tới 
 Luồng CRM hiện hỗ trợ:
 
 - đọc Lead thật từ EspoCRM bằng API user read-only;
-- lọc lead ở trạng thái đang hoạt động theo New, chưa phân công, quá thời gian liên hệ mong muốn hoặc không có cập nhật quá ngưỡng;
+- lọc lead ở trạng thái đang hoạt động theo New, chưa phân công, quá thời gian liên hệ mong muốn hoặc quá SLA chăm sóc; mặc định New/Assigned là 15 phút, In Process/Recycled là 24 giờ, và yêu cầu có số ngày cụ thể sẽ ghi đè SLA;
 - xếp ưu tiên theo mức độ quan tâm, tuổi dữ liệu, trạng thái, phân công và điểm lead;
 - không lưu email/số điện thoại thô trong execution/answer, chỉ lưu cờ có/không có kênh liên hệ;
 - nói rõ `streamUpdatedAt`/`modifiedAt` chỉ là proxy khi CRM chưa có `lastContactAt`;
 - phân biệt `completed`, `partial`, `planned`, `failed`, không biến kế hoạch thành kết luận giả khi adapter chưa có hoặc đọc dữ liệu thất bại.
 
 Auto-analysis không chạy write tool. `crm.records.update`, `ads.budget.update`, `sales.contact.send` và `social.publish` vẫn nằm sau owner approval và executor được cấu hình riêng.
+
+Luồng analytics marketing hiện dùng dữ liệu Lead tổng hợp từ EspoCRM read-only để trả lời theo nguồn, trạng thái, dự án và mức độ quan tâm. Kết quả có số lead mới theo kỳ, tỷ lệ Converted, khả năng liên hệ và lead active quá 24 giờ. Payload chỉ chứa số liệu tổng hợp, không chứa tên lead, email, số điện thoại hoặc người phụ trách. Nếu chưa có Ads spend, impressions, clicks và website sessions, câu trả lời phải ghi rõ chưa thể kết luận CPL, CAC hoặc ROAS.
 
 ## Phase 2 tool matrix
 
@@ -97,12 +99,13 @@ Auto-analysis không chạy write tool. `crm.records.update`, `ads.budget.update
 | `video.jobs.create` | NPD Video API | tạo internal video job | không bắt buộc |
 | `crm.leads.read` | EspoCRM REST API | read-only | không |
 | `crm.audit.read` | EspoCRM REST API | read-only | không |
+| `analytics.read` | EspoCRM Lead aggregate | read-only | không |
 | `ads.budget.update` | n8n executor | write | bắt buộc |
 | `social.publish` | n8n executor | write | bắt buộc |
 | `sales.contact.send` | n8n executor | write | bắt buộc |
 | `crm.records.update` | n8n executor | write | bắt buộc |
 
-Các tool planning-only như `analytics.read`, `research.search`, `content.idea_score`, `video.brief.create` và `social.package.create` chưa có adapter thực thi thật.
+Các tool planning-only như `research.search`, `content.idea_score`, `video.brief.create` và `social.package.create` chưa có adapter thực thi thật.
 
 ## Phase 3 persistence
 
@@ -208,5 +211,5 @@ Secret không commit vào repo.
 2. Review rồi pin mapping custom fields được chấp nhận.
 3. Đặt Agent Hub sau TLS reverse proxy/VPN trước khi public exposure.
 4. Thêm email operator/viewer vào allowlist sau khi owner phê duyệt.
-5. Bổ sung analytics/website/ads/social read adapters.
+5. Bổ sung website/Ads/social read adapters bằng credential chỉ-đọc riêng; không tái sử dụng Meta token có quyền rộng từ dịch vụ nhận lead.
 6. Chỉ sau acceptance test mới bật từng production n8n write mapping.

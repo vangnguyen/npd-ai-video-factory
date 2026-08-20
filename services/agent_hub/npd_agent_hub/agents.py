@@ -321,7 +321,7 @@ ROUTING_KEYWORDS: dict[AgentName, tuple[str, ...]] = {
     AgentName.CONTENT_TREND: ("trend", "content", "ý tưởng", "chủ đề", "viral", "hook", "niche"),
     AgentName.VIDEO_PRODUCER: ("video", "script", "storyboard", "voice", "subtitle", "render"),
     AgentName.SOCIAL_MEDIA: ("tiktok", "youtube", "facebook", "reel", "instagram", "social", "đăng bài"),
-    AgentName.SALES: ("sales", "sale", "khách", "lead", "tư vấn", "follow-up", "booking"),
+    AgentName.SALES: ("sales", "sale", "khách", "tư vấn", "chăm sóc", "follow-up", "booking"),
     AgentName.CRM_MANAGER: (
         "crm",
         "espo",
