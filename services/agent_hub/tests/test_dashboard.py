@@ -28,6 +28,18 @@ def test_dashboard_renders_campaign_comparison_as_vnd_table():
     assert "Intl.NumberFormat('vi-VN'" in DASHBOARD_HTML
 
 
+def test_dashboard_explains_approval_scope_and_separate_execution():
+    assert "Sau khi được phê duyệt" in DASHBOARD_HTML
+    assert "Chưa tự ghi dữ liệu hoặc liên hệ bên ngoài" in DASHBOARD_HTML
+    assert "lệnh thực thi riêng" in DASHBOARD_HTML
+    assert "Còn thiếu trước khi thực thi" in DASHBOARD_HTML
+    assert "approval_reason" in DASHBOARD_HTML
+    assert "crm.records.update" in DASHBOARD_HTML
+    assert "ads.budget.update" in DASHBOARD_HTML
+    assert "social.publish" in DASHBOARD_HTML
+    assert "sales.contact.send" in DASHBOARD_HTML
+
+
 def test_google_login_dashboard_keeps_questions_and_removes_token_input():
     response = command_center_html(browser_login_enabled=True)
     content = response.body.decode("utf-8")
