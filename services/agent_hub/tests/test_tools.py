@@ -76,12 +76,18 @@ def test_espocrm_lead_read_is_get_only_and_uses_api_key():
         seen["method"] = request.method
         seen["path"] = request.url.path
         seen["api_key"] = request.headers.get("X-Api-Key")
+        seen["select"] = request.url.params.get("select")
         return httpx.Response(
             200,
             json={
                 "total": 2,
                 "list": [
-                    {"id": "1", "name": "Lead A"},
+                    {
+                        "id": "1",
+                        "name": "Lead A",
+                        "emailAddress": "private@example.com",
+                        "phoneNumber": "0900000000",
+                    },
                     {"id": "2", "name": "Lead B"},
                 ],
             },
@@ -103,11 +109,14 @@ def test_espocrm_lead_read_is_get_only_and_uses_api_key():
 
     assert result.status.value == "succeeded"
     assert result.data["total"] == 2
-    assert seen == {
-        "method": "GET",
-        "path": "/api/v1/Lead",
-        "api_key": "read-only-key",
-    }
+    assert result.data["list"][0]["hasEmail"] is True
+    assert result.data["list"][0]["hasPhone"] is True
+    assert "emailAddress" not in result.data["list"][0]
+    assert "phoneNumber" not in result.data["list"][0]
+    assert seen["method"] == "GET"
+    assert seen["path"] == "/api/v1/Lead"
+    assert seen["api_key"] == "read-only-key"
+    assert "modifiedAt" in seen["select"]
 
 
 def test_n8n_write_requires_approved_action_and_uses_fixed_webhook():

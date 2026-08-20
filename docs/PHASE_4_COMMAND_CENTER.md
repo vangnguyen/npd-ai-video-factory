@@ -73,6 +73,7 @@ The current UI supports:
 - recent task metrics;
 - task creation for operator/owner;
 - task table and selected agents;
+- evidence-backed answer display and operator-triggered re-analysis;
 - approval queue;
 - owner approve/reject controls;
 - recent audit events.
@@ -98,6 +99,7 @@ Operator or higher:
 
 ```text
 POST /api/v1/agent-tasks
+POST /api/v1/agent-tasks/{task_id}/analyze
 POST /api/v1/agent-tasks/{task_id}/actions/{action_id}/execute
 ```
 

@@ -114,6 +114,62 @@ code="$(http_code GET "$BASE_URL/api/v1/integrations/espocrm/schema/Lead" "$AGEN
 code="$(http_code GET "$BASE_URL/api/v1/integrations/espocrm/mapping/Lead" "$AGENT_VIEWER_TOKEN" '' "$workdir/espo-mapping.json")"
 [[ "$code" == "200" ]] || fail "EspoCRM Lead mapping returned HTTP $code"
 
+crm_body='{"objective":"Kiểm tra CRM và tìm các lead chưa được chăm sóc"}'
+code="$(http_code POST "$BASE_URL/api/v1/agent-tasks" "$AGENT_OPERATOR_TOKEN" "$crm_body" "$workdir/crm-answer.json")"
+[[ "$code" == "200" ]] || fail "CRM business-answer task returned HTTP $code"
+
+read -r crm_task_id crm_answer_status < <(python3 - "$workdir/crm-answer.json" <<'PY'
+import json, sys
+
+payload = json.load(open(sys.argv[1], encoding='utf-8'))
+answer = payload.get('answer') or {}
+status = answer.get('status', '')
+if status != 'completed':
+    raise SystemExit(f'CRM answer is not completed: {status}')
+if 'crm_manager' not in payload.get('selected_agents', []):
+    raise SystemExit('CRM manager was not selected')
+if 'marketing_leader' in payload.get('selected_agents', []):
+    raise SystemExit('pure CRM follow-up question was incorrectly routed to marketing')
+metrics = answer.get('metrics') or {}
+for metric in ('Lead đã kiểm tra', 'Cần chăm sóc', 'Ngưỡng quá hạn (ngày)'):
+    if metric not in metrics:
+        raise SystemExit(f'CRM answer is missing metric: {metric}')
+if not answer.get('evidence'):
+    raise SystemExit('CRM answer has no read-only evidence')
+raw = json.dumps(payload, ensure_ascii=False)
+if 'emailAddress' in raw or 'phoneNumber' in raw:
+    raise SystemExit('CRM answer persisted raw contact fields')
+print(payload['task_id'], status)
+PY
+)
+
+code="$(http_code GET "$BASE_URL/api/v1/agent-tasks/$crm_task_id/executions" "$AGENT_VIEWER_TOKEN" '' "$workdir/crm-executions.json")"
+[[ "$code" == "200" ]] || fail "CRM execution evidence returned HTTP $code"
+python3 - "$workdir/crm-executions.json" <<'PY'
+import json, sys
+
+payload = json.load(open(sys.argv[1], encoding='utf-8'))
+tools = {item.get('tool') for item in payload}
+if not tools or not tools.issubset({'crm.leads.read', 'crm.audit.read'}):
+    raise SystemExit(f'unexpected auto-executed tools: {sorted(tools)}')
+raw = json.dumps(payload, ensure_ascii=False)
+if 'emailAddress' in raw or 'phoneNumber' in raw:
+    raise SystemExit('CRM execution evidence persisted raw contact fields')
+PY
+
+python3 - "$workdir/crm-answer.json" <<'PY' > "$workdir/crm-approval-ids.txt"
+import json, sys
+
+payload = json.load(open(sys.argv[1], encoding='utf-8'))
+for action in payload.get('approvals_required', []):
+    print(action['action_id'])
+PY
+while IFS= read -r crm_action_id; do
+  [[ -n "$crm_action_id" ]] || continue
+  code="$(http_code POST "$BASE_URL/api/v1/agent-tasks/$crm_task_id/actions/$crm_action_id/decision" "$AGENT_OWNER_TOKEN" '{"approved":false,"note":"phase5 CRM answer smoke reject - no external side effect"}' "$workdir/crm-reject-$crm_action_id.json")"
+  [[ "$code" == "200" ]] || fail "owner CRM smoke reject returned HTTP $code"
+done < "$workdir/crm-approval-ids.txt"
+
 field_count="$(python3 - "$workdir/espo-schema.json" <<'PY'
 import json, sys
 payload = json.load(open(sys.argv[1], encoding='utf-8'))
@@ -124,4 +180,4 @@ if ! [[ "$field_count" =~ ^[0-9]+$ ]] || (( field_count <= 0 )); then
   fail "EspoCRM Lead schema returned no fields"
 fi
 
-printf 'smoke ok: url=%s auth=viewer/operator/owner+google_oidc espocrm_lead_fields=%s task=%s\n' "$BASE_URL" "$field_count" "$task_id"
+printf 'smoke ok: url=%s auth=viewer/operator/owner+google_oidc espocrm_lead_fields=%s task=%s crm_task=%s crm_answer=%s\n' "$BASE_URL" "$field_count" "$task_id" "$crm_task_id" "$crm_answer_status"

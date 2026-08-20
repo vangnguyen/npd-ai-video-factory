@@ -317,12 +317,21 @@ SPECIALIST_AGENTS: dict[AgentName, BaseAgent] = {
 
 
 ROUTING_KEYWORDS: dict[AgentName, tuple[str, ...]] = {
-    AgentName.MARKETING_LEADER: ("marketing", "quảng cáo", "ads", "seo", "lead", "campaign", "ngân sách", "kpi"),
+    AgentName.MARKETING_LEADER: ("marketing", "quảng cáo", "ads", "seo", "campaign", "ngân sách", "kpi"),
     AgentName.CONTENT_TREND: ("trend", "content", "ý tưởng", "chủ đề", "viral", "hook", "niche"),
     AgentName.VIDEO_PRODUCER: ("video", "script", "storyboard", "voice", "subtitle", "render"),
     AgentName.SOCIAL_MEDIA: ("tiktok", "youtube", "facebook", "reel", "instagram", "social", "đăng bài"),
     AgentName.SALES: ("sales", "sale", "khách", "lead", "tư vấn", "follow-up", "booking"),
-    AgentName.CRM_MANAGER: ("crm", "espo", "pipeline", "contact", "data", "khách hàng"),
+    AgentName.CRM_MANAGER: (
+        "crm",
+        "espo",
+        "pipeline",
+        "contact",
+        "data",
+        "khách hàng",
+        "chăm sóc",
+        "follow-up",
+    ),
 }
 
 

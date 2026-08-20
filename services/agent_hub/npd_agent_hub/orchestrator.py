@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .agents import SPECIALIST_AGENTS, select_agents
+from .answering import synthesize_business_answer
 from .models import (
     ActionStatus,
     AgentDescriptor,
@@ -19,7 +20,7 @@ from .models import (
     ToolExecutionResult,
 )
 from .store import HubStore, build_store
-from .tools import ToolExecutor
+from .tools import AUTO_READ_TOOLS, ToolExecutor
 
 
 @dataclass
@@ -223,6 +224,54 @@ class AgentHub:
             )
         )
         return result
+
+    async def analyze(self, task_id: str) -> CommandCenterReport:
+        """Run only allowlisted reads, then turn evidence into a business answer."""
+        task = self._get_task(task_id)
+        report = self.get(task_id)
+        if task is None or report is None:
+            raise KeyError(task_id)
+
+        for agent_report in report.reports:
+            for action in agent_report.actions:
+                if (
+                    action.tool in AUTO_READ_TOOLS
+                    and not action.requires_approval
+                    and action.status
+                    in {
+                        ActionStatus.PROPOSED,
+                        ActionStatus.EXECUTED,
+                        ActionStatus.EXECUTION_FAILED,
+                    }
+                ):
+                    if action.status == ActionStatus.EXECUTED:
+                        action.status = ActionStatus.PROPOSED
+                    await self.execute(task_id, action.action_id)
+
+        executions = self.list_executions(task_id, limit=1000)
+        report.answer = synthesize_business_answer(task, report, executions)
+        self.store.save_report(report)
+        self.store.append_audit(
+            AuditEvent(
+                task_id=task_id,
+                event_type=AuditEventType.ANSWER_GENERATED,
+                actor="commander",
+                detail="Business answer synthesized from allowlisted read-only evidence.",
+                metadata={
+                    "status": report.answer.status.value,
+                    "item_count": len(report.answer.items),
+                    "successful_read_tools": sorted(
+                        {
+                            item.tool
+                            for item in executions
+                            if item.tool in AUTO_READ_TOOLS
+                            and item.status == ExecutionStatus.SUCCEEDED
+                        }
+                    ),
+                },
+            )
+        )
+        return report
 
     def list_executions(self, task_id: str, limit: int = 100) -> list[ToolExecutionResult]:
         if self.get(task_id) is None:

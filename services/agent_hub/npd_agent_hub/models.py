@@ -36,12 +36,20 @@ class ExecutionStatus(str, Enum):
     FAILED = "failed"
 
 
+class AnswerStatus(str, Enum):
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    PLANNED = "planned"
+    FAILED = "failed"
+
+
 class AuditEventType(str, Enum):
     TASK_CREATED = "task_created"
     APPROVAL_DECIDED = "approval_decided"
     EXECUTION_STARTED = "execution_started"
     EXECUTION_SUCCEEDED = "execution_succeeded"
     EXECUTION_FAILED = "execution_failed"
+    ANSWER_GENERATED = "answer_generated"
 
 
 class AgentTask(BaseModel):
@@ -74,6 +82,27 @@ class AgentReport(BaseModel):
     handoffs: list[AgentName] = Field(default_factory=list)
 
 
+class BusinessAnswerItem(BaseModel):
+    entity_id: str | None = None
+    title: str
+    priority: str = "normal"
+    reason: str
+    details: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+    recommended_action: str
+
+
+class BusinessAnswer(BaseModel):
+    status: AnswerStatus
+    title: str
+    summary: str
+    metrics: dict[str, str | int | float | bool] = Field(default_factory=dict)
+    items: list[BusinessAnswerItem] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class CommandCenterReport(BaseModel):
     task_id: str
     objective: str
@@ -81,6 +110,7 @@ class CommandCenterReport(BaseModel):
     executive_summary: str
     reports: list[AgentReport]
     approvals_required: list[PlannedAction] = Field(default_factory=list)
+    answer: BusinessAnswer | None = None
 
 
 class ApprovalDecision(BaseModel):

@@ -8,6 +8,7 @@ Agent Hub là lớp điều phối phía trên NPD AI Video Factory. Nó nhận 
 - Phase 2: controlled tool execution cho Video API, EspoCRM read-only và n8n approved-action executor.
 - Phase 3: persistence, audit log, Command Center backend và EspoCRM schema discovery.
 - Phase 4: owner Command Center UI, bearer-token RBAC và EspoCRM field mapping recommendations.
+- Phase 5+: evidence-backed business answers: tự chạy allowlist read-only, tổng hợp kết luận và hiển thị kết quả/giới hạn ngay trong Command Center.
 
 Chi tiết triển khai Phase 4: `docs/PHASE_4_COMMAND_CENTER.md`.
 
@@ -30,6 +31,7 @@ Chi tiết triển khai Phase 4: `docs/PHASE_4_COMMAND_CENTER.md`.
 - `GET /api/v1/agents`
 - `POST /api/v1/agent-tasks`
 - `GET /api/v1/agent-tasks/{task_id}`
+- `POST /api/v1/agent-tasks/{task_id}/analyze`
 - `POST /api/v1/agent-tasks/{task_id}/actions/{action_id}/decision`
 - `POST /api/v1/agent-tasks/{task_id}/actions/{action_id}/execute`
 - `GET /api/v1/agent-tasks/{task_id}/executions`
@@ -71,7 +73,22 @@ UI tối giản nằm tại:
 /command-center
 ```
 
-Khi `AGENT_BROWSER_AUTH_MODE=google_oidc`, truy cập trang sẽ chuyển tới `/login` và xác minh danh tính bằng Google. Chỉ email nằm trong allowlist role mới nhận được signed session cookie `HttpOnly`, `Secure`, `SameSite=Lax`; production không lưu bearer token trong `sessionStorage`. Bearer token vẫn được giữ cho smoke test và automation không dùng trình duyệt. UI hỗ trợ xem snapshot, tạo task, xem approval queue, approve/reject và audit gần đây.
+Khi `AGENT_BROWSER_AUTH_MODE=google_oidc`, truy cập trang sẽ chuyển tới `/login` và xác minh danh tính bằng Google. Chỉ email nằm trong allowlist role mới nhận được signed session cookie `HttpOnly`, `Secure`, `SameSite=Lax`; production không lưu bearer token trong `sessionStorage`. Bearer token vẫn được giữ cho smoke test và automation không dùng trình duyệt. UI hỗ trợ xem snapshot, tạo task, xem câu trả lời có bằng chứng, phân tích lại dữ liệu, xem approval queue, approve/reject và audit gần đây.
+
+## Evidence-backed business answer
+
+`POST /api/v1/agent-tasks` không chỉ tạo kế hoạch. Commander tự thực thi đúng các tool trong `AUTO_READ_TOOLS`, sau đó trả về `answer` gồm trạng thái, tóm tắt, chỉ số, danh sách ưu tiên, đề xuất, bằng chứng và giới hạn dữ liệu. `POST /api/v1/agent-tasks/{task_id}/analyze` đọc lại dữ liệu hiện tại và làm mới câu trả lời.
+
+Luồng CRM hiện hỗ trợ:
+
+- đọc Lead thật từ EspoCRM bằng API user read-only;
+- lọc lead ở trạng thái đang hoạt động theo New, chưa phân công, quá thời gian liên hệ mong muốn hoặc không có cập nhật quá ngưỡng;
+- xếp ưu tiên theo mức độ quan tâm, tuổi dữ liệu, trạng thái, phân công và điểm lead;
+- không lưu email/số điện thoại thô trong execution/answer, chỉ lưu cờ có/không có kênh liên hệ;
+- nói rõ `streamUpdatedAt`/`modifiedAt` chỉ là proxy khi CRM chưa có `lastContactAt`;
+- phân biệt `completed`, `partial`, `planned`, `failed`, không biến kế hoạch thành kết luận giả khi adapter chưa có hoặc đọc dữ liệu thất bại.
+
+Auto-analysis không chạy write tool. `crm.records.update`, `ads.budget.update`, `sales.contact.send` và `social.publish` vẫn nằm sau owner approval và executor được cấu hình riêng.
 
 ## Phase 2 tool matrix
 
@@ -103,7 +120,7 @@ Store lưu `AgentTask`, `CommandCenterReport`, trạng thái action, execution h
 
 ## Audit lifecycle
 
-Audit lifecycle gồm `task_created`, `approval_decided`, `execution_started`, `execution_succeeded`, `execution_failed`. Audit không lưu secret hoặc toàn bộ CRM payload.
+Audit lifecycle gồm `task_created`, `approval_decided`, `execution_started`, `execution_succeeded`, `execution_failed`, `answer_generated`. Audit không lưu secret hoặc toàn bộ CRM payload.
 
 Nếu một write action đã approved nhưng execution thất bại, action trở thành `execution_failed`, được đưa trở lại `approvals_required`, và không được retry cho đến khi owner approve lại.
 

@@ -152,6 +152,9 @@ def test_http_rbac_enforces_viewer_operator_owner_boundaries():
         )
         assert created.status_code == 200
         report = created.json()
+        analyze_url = f"/api/v1/agent-tasks/{report['task_id']}/analyze"
+        assert client.post(analyze_url, headers=viewer_headers).status_code == 403
+        assert client.post(analyze_url, headers=operator_headers).status_code == 200
         pending = report["approvals_required"][0]
         decision_url = (
             f"/api/v1/agent-tasks/{report['task_id']}"

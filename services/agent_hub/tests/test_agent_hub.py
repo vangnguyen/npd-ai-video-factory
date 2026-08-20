@@ -43,6 +43,36 @@ class FailOnceExecutor:
         )
 
 
+class CrmReadExecutor:
+    def __init__(self):
+        self.calls = []
+
+    async def execute(self, *, task, action):
+        self.calls.append(action.tool)
+        return ToolExecutionResult(
+            task_id=task.task_id,
+            action_id=action.action_id,
+            tool=action.tool,
+            status=ExecutionStatus.SUCCEEDED,
+            data={
+                "total": 1,
+                "list": [
+                    {
+                        "id": "lead-1",
+                        "name": "Lead cần chăm sóc",
+                        "status": "New",
+                        "assignedUserId": "user-1",
+                        "assignedUserName": "Sale A",
+                        "modifiedAt": "2026-08-01 00:00:00",
+                        "cMucDoQuanTam": "Am",
+                        "hasPhone": True,
+                        "hasEmail": False,
+                    }
+                ],
+            },
+        )
+
+
 def test_broad_objective_routes_to_all_specialists():
     hub = AgentHub()
     report = hub.run(AgentTask(objective="Quản lý công việc toàn bộ hệ thống marketing và sales"))
@@ -66,6 +96,45 @@ def test_video_task_routes_to_video_and_social_domain():
     assert AgentName.VIDEO_PRODUCER in report.selected_agents
     assert AgentName.SOCIAL_MEDIA in report.selected_agents
     assert AgentName.CONTENT_TREND in report.selected_agents
+
+
+def test_crm_follow_up_question_routes_to_crm_and_sales_without_marketing():
+    hub = AgentHub()
+    report = hub.run(
+        AgentTask(objective="Kiểm tra CRM và tìm các lead chưa được chăm sóc")
+    )
+
+    assert report.selected_agents == [AgentName.CRM_MANAGER, AgentName.SALES]
+
+
+def test_analyze_auto_executes_only_crm_reads_and_returns_evidence_based_answer():
+    executor = CrmReadExecutor()
+    hub = AgentHub(executor=executor)
+    report = hub.run(
+        AgentTask(objective="Kiểm tra CRM và tìm các lead chưa được chăm sóc")
+    )
+
+    analyzed = asyncio.run(hub.analyze(report.task_id))
+
+    assert set(executor.calls) == {"crm.audit.read", "crm.leads.read"}
+    assert analyzed.answer is not None
+    assert analyzed.answer.status.value == "completed"
+    assert analyzed.answer.metrics["Cần chăm sóc"] == 1
+    assert analyzed.answer.items[0].entity_id == "lead-1"
+    writes = [
+        action
+        for agent_report in analyzed.reports
+        for action in agent_report.actions
+        if action.requires_approval
+    ]
+    assert writes
+    assert all(action.status.value == "proposed" for action in writes)
+    assert len(analyzed.approvals_required) == len(writes)
+    assert hub.list_audit(report.task_id)[0].event_type.value == "answer_generated"
+
+    refreshed = asyncio.run(hub.analyze(report.task_id))
+    assert len(executor.calls) == 4
+    assert refreshed.answer.metrics["Cần chăm sóc"] == 1
 
 
 def test_approval_changes_action_status():
@@ -173,7 +242,8 @@ def test_http_surface():
 
     audit = client.get(f"/api/v1/agent-tasks/{payload['task_id']}/audit")
     assert audit.status_code == 200
-    assert audit.json()[0]["event_type"] == "task_created"
+    assert any(item["event_type"] == "task_created" for item in audit.json())
+    assert audit.json()[0]["event_type"] == "answer_generated"
 
     command_center = client.get("/api/v1/command-center")
     assert command_center.status_code == 200

@@ -421,6 +421,10 @@ Recorded recovery artifacts:
 
 No social publish, Ads mutation, customer message, CRM write or Redis restore was executed. This acceptance makes the deployment live, but it does not authorize merging PR #9 or enabling the inactive production-write workflow.
 
+### Business-answer upgrade candidate (Agent Hub 0.7.0)
+
+The next guarded Agent Hub-only rollout adds read-only CRM auto-analysis and an evidence-backed answer panel. Task creation and explicit re-analysis may execute only `crm.leads.read` and `crm.audit.read`; all write actions remain approval-gated and the n8n executor remains inactive/unconfigured. The Lead adapter requests only the business fields needed for triage and removes raw email/phone values before persistence. Live cutover, smoke evidence, rollback artifacts and the final deployed commit must be recorded here only after the guarded VPS deployment actually succeeds.
+
 ## Phase 5 acceptance criteria
 
 Repository deployment-bundle readiness requires:

@@ -41,7 +41,7 @@ from .orchestrator import hub
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.6.0",
+    version="0.7.0",
     description="Multi-agent management control plane for marketing, content, video, social, sales and CRM.",
 )
 schema_reader = EspoSchemaReader()
@@ -148,11 +148,23 @@ def list_agents(_principal: Principal = Depends(require_viewer)) -> list[AgentDe
 
 
 @app.post("/api/v1/agent-tasks", response_model=CommandCenterReport)
-def create_agent_task(
+async def create_agent_task(
     task: AgentTask,
     _principal: Principal = Depends(require_operator),
 ) -> CommandCenterReport:
-    return hub.run(task)
+    report = hub.run(task)
+    return await hub.analyze(report.task_id)
+
+
+@app.post("/api/v1/agent-tasks/{task_id}/analyze", response_model=CommandCenterReport)
+async def analyze_agent_task(
+    task_id: str,
+    _principal: Principal = Depends(require_operator),
+) -> CommandCenterReport:
+    try:
+        return await hub.analyze(task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="agent task not found") from exc
 
 
 @app.get("/api/v1/agent-tasks/{task_id}", response_model=CommandCenterReport)

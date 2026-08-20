@@ -16,6 +16,32 @@ N8N_WRITE_TOOLS = {
     "crm.records.update",
 }
 
+AUTO_READ_TOOLS = {
+    "crm.leads.read",
+    "crm.audit.read",
+}
+
+CRM_LEAD_SAFE_FIELDS = (
+    "id",
+    "name",
+    "status",
+    "assignedUserId",
+    "assignedUserName",
+    "createdAt",
+    "modifiedAt",
+    "streamUpdatedAt",
+    "cMucDoQuanTam",
+    "cThoiGianLienHeMongMuon",
+    "cDiemLead",
+    "cDaDongYMarketing",
+    "source",
+    "emailAddress",
+    "phoneNumber",
+    "cDuAnQuanTam",
+)
+
+CRM_LEAD_PERSISTED_FIELDS = set(CRM_LEAD_SAFE_FIELDS) - {"emailAddress", "phoneNumber"}
+
 
 class ToolExecutionError(RuntimeError):
     pass
@@ -140,14 +166,34 @@ class ToolExecutor:
             max_size = max(1, min(int(requested_size), 200))
         except (TypeError, ValueError):
             max_size = 50
-        return await self._espo_get(
+        payload = await self._espo_get(
             "Lead",
             {
                 "maxSize": max_size,
                 "orderBy": "modifiedAt",
                 "order": "desc",
+                "select": ",".join(CRM_LEAD_SAFE_FIELDS),
             },
         )
+        records = payload.get("list")
+        if not isinstance(records, list):
+            records = []
+        sanitized_records = []
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            sanitized = {
+                field: record.get(field)
+                for field in CRM_LEAD_PERSISTED_FIELDS
+                if field in record
+            }
+            sanitized["hasEmail"] = bool(record.get("emailAddress"))
+            sanitized["hasPhone"] = bool(record.get("phoneNumber"))
+            sanitized_records.append(sanitized)
+        return {
+            "total": payload.get("total", len(sanitized_records)),
+            "list": sanitized_records,
+        }
 
     async def _audit_crm(self, task: AgentTask) -> dict[str, Any]:
         payload = await self._read_crm_leads(task)
@@ -168,7 +214,7 @@ class ToolExecutor:
         for record in records:
             if not isinstance(record, dict):
                 continue
-            if not record.get("emailAddress") and not record.get("phoneNumber"):
+            if not record.get("hasEmail") and not record.get("hasPhone"):
                 missing_contact += 1
             if not record.get("assignedUserId"):
                 unassigned += 1
