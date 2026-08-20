@@ -27,6 +27,13 @@ class HubSettings:
     owner_emails: tuple[str, ...] = ()
     operator_emails: tuple[str, ...] = ()
     viewer_emails: tuple[str, ...] = ()
+    meta_ads_account_id: str = ""
+    meta_ads_access_token: str = ""
+    meta_graph_version: str = ""
+    ga4_property_id: str = ""
+    ga4_service_account_file: str = ""
+    social_insights_url: str = ""
+    social_insights_token: str = ""
 
     @classmethod
     def from_env(cls) -> "HubSettings":
@@ -61,6 +68,13 @@ class HubSettings:
             owner_emails=email_list("AGENT_OWNER_EMAILS"),
             operator_emails=email_list("AGENT_OPERATOR_EMAILS"),
             viewer_emails=email_list("AGENT_VIEWER_EMAILS"),
+            meta_ads_account_id=os.getenv("META_ADS_ACCOUNT_ID", "").strip(),
+            meta_ads_access_token=os.getenv("META_ADS_ACCESS_TOKEN", "").strip(),
+            meta_graph_version=os.getenv("META_GRAPH_VERSION", "").strip(),
+            ga4_property_id=os.getenv("GA4_PROPERTY_ID", "").strip(),
+            ga4_service_account_file=os.getenv("GA4_SERVICE_ACCOUNT_FILE", "").strip(),
+            social_insights_url=os.getenv("SOCIAL_INSIGHTS_URL", "").strip(),
+            social_insights_token=os.getenv("SOCIAL_INSIGHTS_TOKEN", "").strip(),
         )
 
 

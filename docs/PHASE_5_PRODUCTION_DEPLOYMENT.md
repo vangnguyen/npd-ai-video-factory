@@ -455,6 +455,29 @@ The production audit found a Meta Page token only inside the existing lead-inges
 
 No Caddy cutover, second n8n/Caddy/Redis service, social publish, Ads mutation, customer message, CRM write or Redis restore occurred in this upgrade. The n8n executor remains disabled. PR #9 remains draft/unmerged.
 
+### Phase 5.1 + Phase 6 read-only candidate (Agent Hub 0.9.0)
+
+The next guarded Agent Hub-only candidate adds a deterministic 20-question business eval gate and read-only source coordination across CRM, Meta Ads, GA4 and a fixed aggregate social endpoint. `analytics.read` remains the only auto-executed marketing tool. Each source reports `available`, `not_configured` or `failed`; missing external data produces an honest `partial` answer instead of a false completion.
+
+Production source audit on 2026-08-20 found:
+
+- EspoCRM read-only is configured and remains the only live Agent Hub analytics source.
+- `BDS - 04 Daily Campaign Report` exists in n8n but is inactive; its Ads pull/send/archive nodes are placeholders and there is no Ads credential attached.
+- n8n currently has Google Drive, Google Sheets and header-auth credential types, not GA4 or Meta Ads credentials.
+- a Meta Page token exists only inside the lead-ingestion service. It is not copied or reused because its effective access is broader than this read-only analytics contract.
+- Agent Hub has no production `META_ADS_*`, `GA4_*` or `SOCIAL_INSIGHTS_*` credential configured.
+
+The candidate supports:
+
+- Meta Ads campaign Insights via GET with bearer token in the Authorization header and an explicitly pinned Graph version;
+- GA4 `runReport` with a service-account file mounted read-only and OAuth scope `analytics.readonly`;
+- a fixed HTTPS social aggregate endpoint whose output is reduced to an allowlist of numeric metrics;
+- source-level isolation so one unavailable adapter does not erase valid CRM evidence;
+- campaign metrics labelled as Meta-reported until an Ads–CRM attribution key exists;
+- no CAC/ROAS claim without joined attribution and reconciled revenue.
+
+This candidate is not production-accepted until local tests/evals, Agent Hub CI, Phase 5 bundle CI, Sprint 1 regression, guarded deployment, loopback/public smoke and owner browser QA pass. No external source credential should be added during deployment unless it has a separate least-privilege acceptance record. PR #9 remains draft/unmerged.
+
 ## Phase 5 acceptance criteria
 
 Repository deployment-bundle readiness requires:

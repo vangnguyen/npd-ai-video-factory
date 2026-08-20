@@ -12,7 +12,7 @@ Sprint 1 deliberately excludes scene intelligence, ComfyUI, and automatic social
 
 ## Current implementation checkpoint
 
-Tasks 1-9 are implemented on the Sprint 1 branch:
+Sprint 1 Tasks 1-13 are implemented and covered by Docker Compose E2E:
 
 - FastAPI health, readiness, create-job, status, and safe artifact endpoints
 - Redis-backed job records, idempotency, queue, monotonic stage/progress transitions, and artifact registration
@@ -20,9 +20,12 @@ Tasks 1-9 are implemented on the Sprint 1 branch:
 - deterministic development content provider
 - deterministic local asset resolver with minimum-asset validation
 - video-manifest builder and Draft 2020-12 JSON Schema validation
-- API tests executed by GitHub Actions
+- API, worker, renderer, QC and Docker Compose E2E tests executed by GitHub Actions
 
-Next implementation targets are **Task 10 Remotion renderer** and **Task 11 resumable worker pipeline**.
+The separate Agent Hub workstream has completed production Phase 5 and now includes
+Phase 5.1 deterministic business-answer evals plus Phase 6 read-only multi-source
+adapter contracts. External Ads/GA4/social sources remain unconfigured until dedicated
+least-privilege credentials are accepted.
 
 ## Handoff package
 

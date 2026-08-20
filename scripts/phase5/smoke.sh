@@ -188,8 +188,8 @@ import json, sys
 payload = json.load(open(sys.argv[1], encoding='utf-8'))
 answer = payload.get('answer') or {}
 status = answer.get('status', '')
-if status != 'completed':
-    raise SystemExit(f'analytics answer is not completed: {status}')
+if status not in {'completed', 'partial'}:
+    raise SystemExit(f'analytics answer is neither completed nor honest partial: {status}')
 if payload.get('selected_agents') != ['marketing_leader']:
     raise SystemExit(f'unexpected analytics routing: {payload.get("selected_agents")}')
 metrics = answer.get('metrics') or {}
@@ -198,6 +198,10 @@ for metric in ('Lead đã phân tích', 'Đã chuyển đổi', 'Tỷ lệ Conve
         raise SystemExit(f'analytics answer is missing metric: {metric}')
 if not any('analytics.read' in item for item in answer.get('evidence', [])):
     raise SystemExit('analytics answer has no read-only evidence')
+if 'Nguồn khả dụng' not in metrics or 'Nguồn dự kiến' not in metrics:
+    raise SystemExit('analytics answer has no Phase 6 source coverage metrics')
+if status == 'partial' and not any('chưa đủ nguồn' in item.casefold() for item in answer.get('caveats', [])):
+    raise SystemExit('partial analytics answer does not explain missing sources')
 raw = json.dumps(payload, ensure_ascii=False)
 for forbidden in ('emailAddress', 'phoneNumber', 'assignedUserName'):
     if forbidden in raw:

@@ -196,6 +196,41 @@ def test_analytics_read_returns_only_aggregated_crm_funnel_metrics():
     assert "0900000000" not in serialized
 
 
+def test_analytics_read_keeps_external_evidence_when_crm_is_unavailable():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "crm.local":
+            return httpx.Response(503, json={"error": "unavailable"})
+        if request.url.host == "insights.internal.test":
+            return httpx.Response(
+                200,
+                json={"metrics": {"reach": 1000, "views": 1500, "engagements": 100}},
+            )
+        raise AssertionError(f"unexpected request: {request.url}")
+
+    task = AgentTask(objective="Báo cáo hiệu quả marketing 7 ngày")
+    action = PlannedAction(
+        agent=AgentName.MARKETING_LEADER,
+        title="Đọc funnel",
+        description="test",
+        tool="analytics.read",
+    )
+    executor = ToolExecutor(
+        HubSettings(
+            espocrm_url="https://crm.local",
+            espocrm_api_key="read-only-key",
+            social_insights_url="https://insights.internal.test/read",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = run(executor.execute(task=task, action=action))
+
+    assert result.status.value == "succeeded"
+    assert result.data["source_status"]["crm"] == "failed"
+    assert result.data["source_status"]["social"] == "available"
+    assert result.data["external_sources"]["social"]["metrics"]["reach"] == 1000
+
+
 def test_n8n_write_requires_approved_action_and_uses_fixed_webhook():
     calls = []
 

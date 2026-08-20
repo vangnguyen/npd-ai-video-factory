@@ -3,11 +3,13 @@ from __future__ import annotations
 import re
 from collections import Counter
 from datetime import datetime, timezone
+from collections.abc import Callable
 from typing import Any
 
 import httpx
 
 from .config import HubSettings, settings as default_settings
+from .marketing_sources import MarketingSourceReader
 from .models import ActionStatus, AgentTask, ExecutionStatus, PlannedAction, ToolExecutionResult
 
 
@@ -71,9 +73,15 @@ class ToolExecutor:
         settings: HubSettings | None = None,
         *,
         transport: httpx.AsyncBaseTransport | None = None,
+        ga4_token_provider: Callable[[], str] | None = None,
     ) -> None:
         self.settings = settings or default_settings
         self.transport = transport
+        self.marketing_sources = MarketingSourceReader(
+            self.settings,
+            transport=transport,
+            ga4_token_provider=ga4_token_provider,
+        )
 
     async def execute(self, *, task: AgentTask, action: PlannedAction) -> ToolExecutionResult:
         try:
@@ -284,7 +292,12 @@ class ToolExecutor:
         ]
 
     async def _read_analytics(self, task: AgentTask) -> dict[str, Any]:
-        payload = await self._read_crm_leads(task)
+        crm_error = ""
+        try:
+            payload = await self._read_crm_leads(task)
+        except ToolExecutionError as exc:
+            payload = {"total": None, "list": []}
+            crm_error = str(exc)
         raw_records = payload.get("list")
         records = [record for record in raw_records or [] if isinstance(record, dict)]
         now = datetime.now(timezone.utc)
@@ -321,8 +334,18 @@ class ToolExecutor:
         except (TypeError, ValueError):
             coverage_complete = True
 
+        external = await self.marketing_sources.read_all(period_days=period_days)
+        if crm_error:
+            external["source_status"]["crm"] = "failed"
+            external["source_errors"]["crm"] = crm_error
+            external["available_sources"] = [
+                source for source in external["available_sources"] if source != "crm"
+            ]
+            external["missing_sources"] = list(
+                dict.fromkeys([*external["missing_sources"], "crm"])
+            )
         return {
-            "data_source": "EspoCRM Lead read-only",
+            "data_source": "EspoCRM Lead plus configured read-only marketing sources",
             "period_days": period_days,
             "records_analyzed": len(records),
             "reported_total": reported_total,
@@ -337,6 +360,13 @@ class ToolExecutor:
             "by_source": self._distribution(records, "source"),
             "by_project": self._distribution(records, "cDuAnQuanTam"),
             "by_interest": self._distribution(records, "cMucDoQuanTam"),
+            "period_start": external["period_start"],
+            "period_end": external["period_end"],
+            "source_status": external["source_status"],
+            "available_sources": external["available_sources"],
+            "missing_sources": external["missing_sources"],
+            "source_errors": external["source_errors"],
+            "external_sources": external["sources"],
             "generated_at": now.isoformat(),
         }
 

@@ -355,6 +355,25 @@ def _analytics_answer(
     contactable = _safe_int(data.get("contactable_leads")) or 0
     stale = _safe_int(data.get("stale_active_leads")) or 0
     period_days = _safe_int(data.get("period_days")) or 30
+    external_sources = (
+        data.get("external_sources") if isinstance(data.get("external_sources"), dict) else {}
+    )
+    source_status = (
+        data.get("source_status") if isinstance(data.get("source_status"), dict) else {}
+    )
+    if not source_status:
+        source_status = {
+            "crm": "available",
+            "meta_ads": "not_configured",
+            "ga4": "not_configured",
+            "social": "not_configured",
+        }
+    source_labels = {
+        "crm": "CRM",
+        "meta_ads": "Meta Ads",
+        "ga4": "GA4",
+        "social": "Social insights",
+    }
 
     objective = task.objective.casefold()
     if "dự án" in objective:
@@ -367,23 +386,92 @@ def _analytics_answer(
         distribution_key, distribution_label = "by_source", "Nguồn lead"
 
     items: list[BusinessAnswerItem] = []
-    for row in list(data.get(distribution_key) or [])[:5]:
-        if not isinstance(row, dict):
-            continue
-        source = str(row.get("name") or "Chưa xác định")
-        count = _safe_int(row.get("count")) or 0
-        share = float(row.get("share_pct") or 0)
-        items.append(
-            BusinessAnswerItem(
-                title=f"{distribution_label}: {source}",
-                priority="high" if items == [] and count else "normal",
-                reason=f"Đóng góp {count} lead, chiếm {share:g}% dữ liệu đang phân tích.",
-                details={"Số lead": count, "Tỷ trọng (%)": share},
-                recommended_action=(
-                    "Đối chiếu chất lượng và tỷ lệ chuyển đổi của nhóm này trước khi tăng nguồn lực."
-                ),
+    meta_ads = external_sources.get("meta_ads")
+    if (
+        isinstance(meta_ads, dict)
+        and ("chiến dịch" in objective or "campaign" in objective)
+    ):
+        for row in list(meta_ads.get("campaigns") or [])[:5]:
+            if not isinstance(row, dict):
+                continue
+            spend = float(row.get("spend") or 0)
+            clicks = float(row.get("clicks") or 0)
+            leads = float(row.get("reported_leads") or 0)
+            items.append(
+                BusinessAnswerItem(
+                    entity_id=str(row.get("campaign_id") or "") or None,
+                    title=f"Chiến dịch: {row.get('campaign_name') or 'Chưa xác định'}",
+                    priority="high" if items == [] and spend else "normal",
+                    reason=(
+                        f"Chi {spend:g}, tạo {int(clicks)} click và Meta ghi nhận {int(leads)} lead."
+                    ),
+                    details={
+                        "Chi phí": spend,
+                        "Impressions": _safe_int(row.get("impressions")) or 0,
+                        "Clicks": int(clicks),
+                        "Lead do Meta báo cáo": int(leads),
+                    },
+                    recommended_action=(
+                        "Đối chiếu campaign ID với nguồn/campaign trong CRM trước khi thay đổi ngân sách."
+                    ),
+                )
             )
+    else:
+        for row in list(data.get(distribution_key) or [])[:5]:
+            if not isinstance(row, dict):
+                continue
+            source = str(row.get("name") or "Chưa xác định")
+            count = _safe_int(row.get("count")) or 0
+            share = float(row.get("share_pct") or 0)
+            items.append(
+                BusinessAnswerItem(
+                    title=f"{distribution_label}: {source}",
+                    priority="high" if items == [] and count else "normal",
+                    reason=f"Đóng góp {count} lead, chiếm {share:g}% dữ liệu CRM đang phân tích.",
+                    details={"Số lead": count, "Tỷ trọng CRM (%)": share},
+                    recommended_action=(
+                        "Đối chiếu chất lượng và tỷ lệ chuyển đổi của nhóm này trước khi tăng nguồn lực."
+                    ),
+                )
+            )
+
+    metrics: dict[str, str | int | float | bool] = {
+        "Lead đã phân tích": analyzed,
+        f"Lead mới {period_days} ngày": recent,
+        "Đã chuyển đổi": converted,
+        "Tỷ lệ Converted (%)": float(data.get("conversion_rate_pct") or 0),
+        "Có kênh liên hệ": contactable,
+        "Active quá 24 giờ": stale,
+        "Nguồn khả dụng": sum(status == "available" for status in source_status.values()),
+        "Nguồn dự kiến": len(source_status),
+    }
+    if isinstance(meta_ads, dict):
+        ad_metrics = meta_ads.get("metrics") if isinstance(meta_ads.get("metrics"), dict) else {}
+        currency = str(ad_metrics.get("currency") or "")
+        metrics[f"Chi phí Ads{f' ({currency})' if currency else ''}"] = float(
+            ad_metrics.get("spend") or 0
         )
+        metrics["Ads impressions"] = _safe_int(ad_metrics.get("impressions")) or 0
+        metrics["Ads clicks"] = _safe_int(ad_metrics.get("clicks")) or 0
+        metrics["Ads CTR (%)"] = float(ad_metrics.get("ctr_pct") or 0)
+        metrics["Ads CPC"] = float(ad_metrics.get("cpc") or 0)
+        if float(ad_metrics.get("reported_leads") or 0) > 0:
+            metrics["CPL do Meta báo cáo"] = float(ad_metrics.get("reported_cpl") or 0)
+
+    ga4 = external_sources.get("ga4")
+    if isinstance(ga4, dict):
+        ga_metrics = ga4.get("metrics") if isinstance(ga4.get("metrics"), dict) else {}
+        metrics["Website sessions"] = _safe_int(ga_metrics.get("sessions")) or 0
+        metrics["Website users"] = _safe_int(ga_metrics.get("users")) or 0
+        metrics["GA4 key events"] = float(ga_metrics.get("key_events") or 0)
+
+    social = external_sources.get("social")
+    if isinstance(social, dict):
+        social_metrics = (
+            social.get("metrics") if isinstance(social.get("metrics"), dict) else {}
+        )
+        metrics["Social reach"] = _safe_int(social_metrics.get("reach")) or 0
+        metrics["Social engagements"] = _safe_int(social_metrics.get("engagements")) or 0
 
     recommendations = []
     if stale:
@@ -394,42 +482,80 @@ def _analytics_answer(
         )
     if items:
         recommendations.append(
-            f"So sánh {distribution_label.casefold()} lớn nhất với trạng thái Converted và mức độ quan tâm trước khi điều chỉnh nguồn lực."
+            "Đối chiếu nhóm lớn nhất với Converted, chi phí và cùng một khóa attribution trước khi điều chỉnh nguồn lực."
         )
-    recommendations.append(
-        "Chỉ phê duyệt thay đổi ngân sách sau khi bổ sung chi phí Ads, click và conversion từ nền tảng quảng cáo."
-    )
+    if source_status.get("meta_ads") != "available":
+        recommendations.append(
+            "Cấp credential Meta Ads chỉ-đọc riêng trước khi phê duyệt thay đổi ngân sách."
+        )
 
     caveats = [
-        "Báo cáo hiện dựa trên EspoCRM Lead read-only; chưa có Ads spend, impressions, clicks hoặc website sessions nên chưa kết luận được CPL, CAC hay ROAS.",
-        "Lead quá hạn dùng streamUpdatedAt/modifiedAt làm chỉ báo hoạt động gần nhất, không phải lịch sử liên hệ chuyên biệt.",
+        "Lead quá hạn dùng streamUpdatedAt/modifiedAt làm chỉ báo hoạt động gần nhất, không phải lịch sử liên hệ chuyên biệt."
     ]
+    unavailable = [
+        source_labels.get(name, name)
+        for name, status in source_status.items()
+        if status != "available"
+    ]
+    if unavailable:
+        caveats.append(
+            "Báo cáo chưa đủ nguồn: " + ", ".join(unavailable) + ". Các chỉ số liên quan không được suy diễn."
+        )
+    if source_status.get("meta_ads") != "available":
+        caveats.append("Chưa có Ads spend/impressions/clicks nên chưa kết luận CPL hoặc CPC.")
+    if source_status.get("ga4") != "available":
+        caveats.append("Chưa có website sessions/key events nên chưa đánh giá được hành vi sau click.")
+    caveats.append(
+        "Chưa có khóa attribution và doanh thu đã đối soát xuyên Ads–website–CRM nên chưa kết luận CAC hoặc ROAS."
+    )
     if not bool(data.get("coverage_complete", True)):
         caveats.append(
             f"Chỉ phân tích {analyzed} trên tổng số {data.get('reported_total')} lead do giới hạn trang đọc."
         )
+    for name, status in source_status.items():
+        source = external_sources.get(name)
+        if status == "available" and isinstance(source, dict) and not bool(
+            source.get("coverage_complete", True)
+        ):
+            caveats.append(f"Nguồn {source_labels.get(name, name)} còn trang dữ liệu chưa đọc hết.")
 
-    return BusinessAnswer(
-        status=AnswerStatus.COMPLETED,
-        title="Báo cáo hiệu quả nguồn lead từ CRM",
-        summary=(
-            f"Đã phân tích {analyzed} lead: {recent} lead tạo trong {period_days} ngày, "
-            f"{converted} lead Converted và {stale} lead active quá 24 giờ chưa cập nhật."
+    crm_status = source_status.get("crm", "failed")
+    evidence = [
+        (
+            f"analytics.read: CRM thành công, {analyzed} bản ghi"
+            if crm_status == "available"
+            else f"analytics.read: CRM {crm_status}"
         ),
-        metrics={
-            "Lead đã phân tích": analyzed,
-            f"Lead mới {period_days} ngày": recent,
-            "Đã chuyển đổi": converted,
-            "Tỷ lệ Converted (%)": float(data.get("conversion_rate_pct") or 0),
-            "Có kênh liên hệ": contactable,
-            "Active quá 24 giờ": stale,
-        },
+        *[
+            f"{source_labels.get(name, name)}: {status}"
+            for name, status in source_status.items()
+            if name != "crm"
+        ],
+    ]
+    available_count = sum(status == "available" for status in source_status.values())
+    return BusinessAnswer(
+        status=(
+            AnswerStatus.FAILED
+            if available_count == 0
+            else AnswerStatus.COMPLETED
+            if available_count == len(source_status)
+            else AnswerStatus.PARTIAL
+        ),
+        title=(
+            "Báo cáo marketing đa nguồn"
+            if available_count > 1 or crm_status != "available"
+            else "Báo cáo hiệu quả nguồn lead từ CRM"
+        ),
+        summary=(
+            f"Đã đọc {available_count}/{len(source_status)} nguồn và phân tích {analyzed} lead: "
+            f"{recent} lead tạo trong {period_days} ngày, {converted} Converted, "
+            f"{stale} lead active quá 24 giờ chưa cập nhật."
+        ),
+        metrics=metrics,
         items=items,
         recommendations=recommendations,
         caveats=caveats,
-        evidence=[
-            f"analytics.read: thành công từ {data.get('data_source', 'nguồn chỉ-đọc')}, {analyzed} bản ghi"
-        ],
+        evidence=evidence,
     )
 
 

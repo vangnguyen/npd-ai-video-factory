@@ -9,6 +9,8 @@ Agent Hub là lớp điều phối phía trên NPD AI Video Factory. Nó nhận 
 - Phase 3: persistence, audit log, Command Center backend và EspoCRM schema discovery.
 - Phase 4: owner Command Center UI, bearer-token RBAC và EspoCRM field mapping recommendations.
 - Phase 5+: evidence-backed business answers: tự chạy allowlist read-only, tổng hợp kết luận và hiển thị kết quả/giới hạn ngay trong Command Center.
+- Phase 5.1: bộ eval 20 câu hỏi nghiệp vụ kiểm tra routing, read execution, answer status và write guard.
+- Phase 6: điều phối nguồn CRM, Meta Ads, GA4 và social insights theo hợp đồng aggregate read-only; nguồn thiếu/lỗi tạo kết quả `partial` có giải thích.
 
 Chi tiết triển khai Phase 4: `docs/PHASE_4_COMMAND_CENTER.md`.
 
@@ -39,6 +41,7 @@ Chi tiết triển khai Phase 4: `docs/PHASE_4_COMMAND_CENTER.md`.
 - `GET /api/v1/command-center`
 - `GET /api/v1/integrations/espocrm/schema/{entity_type}`
 - `GET /api/v1/integrations/espocrm/mapping/{entity_type}`
+- `GET /api/v1/integrations/marketing/status`
 
 ## Phase 4 RBAC
 
@@ -90,7 +93,17 @@ Luồng CRM hiện hỗ trợ:
 
 Auto-analysis không chạy write tool. `crm.records.update`, `ads.budget.update`, `sales.contact.send` và `social.publish` vẫn nằm sau owner approval và executor được cấu hình riêng.
 
-Luồng analytics marketing hiện dùng dữ liệu Lead tổng hợp từ EspoCRM read-only để trả lời theo nguồn, trạng thái, dự án và mức độ quan tâm. Kết quả có số lead mới theo kỳ, tỷ lệ Converted, khả năng liên hệ và lead active quá 24 giờ. Payload chỉ chứa số liệu tổng hợp, không chứa tên lead, email, số điện thoại hoặc người phụ trách. Nếu chưa có Ads spend, impressions, clicks và website sessions, câu trả lời phải ghi rõ chưa thể kết luận CPL, CAC hoặc ROAS.
+Luồng analytics marketing luôn dùng dữ liệu Lead tổng hợp từ EspoCRM read-only và có thể bổ sung các nguồn Phase 6 đã cấu hình: Meta Ads Insights, Google Analytics Data API và một endpoint social aggregate cố định. Kết quả có source coverage (`available`, `not_configured`, `failed`), số lead mới theo kỳ, tỷ lệ Converted, khả năng liên hệ, lead active quá 24 giờ và các metric bên ngoài chỉ khi nguồn tương ứng đọc thành công. Payload aggregate không chứa tên lead, email, số điện thoại hoặc người phụ trách.
+
+Meta Ads dùng một ad-account/token riêng và Graph version pin tường minh; token chỉ gửi trong Authorization header. GA4 dùng service-account file mount read-only và scope `analytics.readonly`. Social adapter chỉ nhận URL HTTPS cố định và lọc allowlist metric. Không được tái sử dụng Meta Page token của dịch vụ nhận lead. Khi thiếu Ads/GA4/social, answer là `partial` và không suy diễn CPL/CPC/CAC/ROAS. `CPL do Meta báo cáo` chỉ được hiển thị khi Meta trả về cả spend và lead action; vẫn không được coi là CRM-attributed CPL nếu chưa join campaign ID.
+
+Phase 5.1 eval catalog nằm tại `services/agent_hub/npd_agent_hub/eval_cases/business_questions.json`. CI chạy:
+
+```bash
+python -m npd_agent_hub.evals --minimum-pass-rate 1.0
+```
+
+Gate hiện yêu cầu 20/20 case đạt: đúng agent bắt buộc, đúng allowlisted read tool, đúng answer status, không auto-execute write và mọi n8n write action đều yêu cầu approval.
 
 ## Phase 2 tool matrix
 
@@ -188,6 +201,13 @@ AGENT_SESSION_TTL_SECONDS=28800
 AGENT_OWNER_EMAILS=nguyenvanvangct@gmail.com
 AGENT_OPERATOR_EMAILS=
 AGENT_VIEWER_EMAILS=
+META_ADS_ACCOUNT_ID=
+META_ADS_ACCESS_TOKEN=
+META_GRAPH_VERSION=
+GA4_PROPERTY_ID=
+GA4_SERVICE_ACCOUNT_FILE=
+SOCIAL_INSIGHTS_URL=
+SOCIAL_INSIGHTS_TOKEN=
 ```
 
 Secret không commit vào repo.
@@ -205,11 +225,11 @@ Secret không commit vào repo.
 - Không commit secret.
 - n8n write executor mặc định inactive và dry-run.
 
-## Còn lại sau Phase 4
+## Còn lại sau Phase 6 foundation
 
-1. Cấp `ESPOCRM_URL` và API key read-only trên VPS để chạy schema/mapping thật của NPD.
-2. Review rồi pin mapping custom fields được chấp nhận.
-3. Đặt Agent Hub sau TLS reverse proxy/VPN trước khi public exposure.
+1. Review rồi pin mapping custom fields CRM được chấp nhận.
+2. Cấp credential Meta Ads, GA4 hoặc social riêng theo least privilege; không tái sử dụng Meta token có quyền rộng từ dịch vụ nhận lead.
+3. Thêm fixture/live contract test cho từng credential trước khi bật source trong production.
 4. Thêm email operator/viewer vào allowlist sau khi owner phê duyệt.
-5. Bổ sung website/Ads/social read adapters bằng credential chỉ-đọc riêng; không tái sử dụng Meta token có quyền rộng từ dịch vụ nhận lead.
+5. Xây attribution key campaign/source xuyên Ads–website–CRM trước khi tính CAC/ROAS.
 6. Chỉ sau acceptance test mới bật từng production n8n write mapping.

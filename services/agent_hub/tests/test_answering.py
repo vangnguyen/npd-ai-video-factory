@@ -161,8 +161,108 @@ def test_marketing_answer_uses_aggregated_crm_analytics_and_states_limits():
 
     answer = synthesize_business_answer(task, report, [execution])
 
-    assert answer.status.value == "completed"
+    assert answer.status.value == "partial"
     assert answer.metrics["Tỷ lệ Converted (%)"] == 20.0
     assert answer.items[0].title == "Nguồn lead: Facebook"
-    assert any("chưa có Ads spend" in caveat for caveat in answer.caveats)
+    assert any("Chưa có Ads spend" in caveat for caveat in answer.caveats)
     assert any("analytics.read" in evidence for evidence in answer.evidence)
+
+
+def test_marketing_answer_uses_available_multi_source_metrics_without_claiming_roas():
+    task = AgentTask(objective="Báo cáo campaign Ads và CPL 30 ngày")
+    report = _crm_report(task)
+    execution = ToolExecutionResult(
+        task_id=task.task_id,
+        action_id="act-analytics",
+        tool="analytics.read",
+        status=ExecutionStatus.SUCCEEDED,
+        data={
+            "period_days": 30,
+            "records_analyzed": 20,
+            "reported_total": 20,
+            "coverage_complete": True,
+            "recent_leads": 10,
+            "converted_leads": 2,
+            "conversion_rate_pct": 10.0,
+            "contactable_leads": 18,
+            "stale_active_leads": 3,
+            "source_status": {
+                "crm": "available",
+                "meta_ads": "available",
+                "ga4": "available",
+                "social": "available",
+            },
+            "external_sources": {
+                "meta_ads": {
+                    "metrics": {
+                        "spend": 1200000,
+                        "impressions": 10000,
+                        "clicks": 200,
+                        "reported_leads": 20,
+                        "ctr_pct": 2.0,
+                        "cpc": 6000,
+                        "reported_cpl": 60000,
+                        "currency": "VND",
+                    },
+                    "campaigns": [
+                        {
+                            "campaign_id": "cmp-1",
+                            "campaign_name": "Campaign A",
+                            "spend": 1200000,
+                            "impressions": 10000,
+                            "clicks": 200,
+                            "reported_leads": 20,
+                        }
+                    ],
+                },
+                "ga4": {"metrics": {"sessions": 150, "users": 120, "key_events": 15}},
+                "social": {"metrics": {"reach": 5000, "engagements": 450}},
+            },
+        },
+    )
+
+    answer = synthesize_business_answer(task, report, [execution])
+
+    assert answer.status.value == "completed"
+    assert answer.title == "Báo cáo marketing đa nguồn"
+    assert answer.metrics["Chi phí Ads (VND)"] == 1200000
+    assert answer.metrics["CPL do Meta báo cáo"] == 60000
+    assert answer.metrics["Website sessions"] == 150
+    assert answer.items[0].title == "Chiến dịch: Campaign A"
+    assert "ROAS" not in answer.metrics
+    assert any("chưa kết luận CAC hoặc ROAS" in caveat for caveat in answer.caveats)
+
+
+def test_marketing_answer_does_not_claim_crm_success_when_only_ads_is_available():
+    task = AgentTask(objective="Báo cáo marketing đa nguồn")
+    report = _crm_report(task)
+    execution = ToolExecutionResult(
+        task_id=task.task_id,
+        action_id="act-analytics",
+        tool="analytics.read",
+        status=ExecutionStatus.SUCCEEDED,
+        data={
+            "period_days": 30,
+            "records_analyzed": 0,
+            "reported_total": None,
+            "coverage_complete": True,
+            "source_status": {
+                "crm": "failed",
+                "meta_ads": "available",
+                "ga4": "not_configured",
+                "social": "not_configured",
+            },
+            "external_sources": {
+                "meta_ads": {
+                    "metrics": {"spend": 100, "impressions": 1000, "clicks": 10}
+                }
+            },
+        },
+    )
+
+    answer = synthesize_business_answer(task, report, [execution])
+
+    assert answer.status.value == "partial"
+    assert answer.title == "Báo cáo marketing đa nguồn"
+    assert "CRM failed" in answer.evidence[0]
+    assert "CRM thành công" not in " ".join(answer.evidence)

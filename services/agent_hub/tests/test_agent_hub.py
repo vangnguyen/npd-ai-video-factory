@@ -103,6 +103,15 @@ class AnalyticsReadExecutor:
         )
 
 
+def test_marketing_source_status_exposes_configuration_only():
+    with TestClient(app) as client:
+        response = client.get("/api/v1/integrations/marketing/status")
+
+    assert response.status_code == 200
+    assert set(response.json()) == {"crm", "meta_ads", "ga4", "social"}
+    assert set(response.json().values()) <= {"configured", "not_configured", "incomplete"}
+
+
 def test_broad_objective_routes_to_all_specialists():
     hub = AgentHub()
     report = hub.run(AgentTask(objective="Quản lý công việc toàn bộ hệ thống marketing và sales"))
@@ -157,7 +166,7 @@ def test_analyze_auto_executes_analytics_read_without_budget_write():
 
     assert executor.calls == ["analytics.read"]
     assert analyzed.answer is not None
-    assert analyzed.answer.status.value == "completed"
+    assert analyzed.answer.status.value == "partial"
     assert analyzed.answer.metrics["Tỷ lệ Converted (%)"] == 33.3
     budget_write = next(
         action

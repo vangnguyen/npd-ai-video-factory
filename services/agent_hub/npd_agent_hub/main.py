@@ -41,7 +41,7 @@ from .orchestrator import hub
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.8.0",
+    version="0.9.0",
     description="Multi-agent management control plane for marketing, content, video, social, sales and CRM.",
 )
 schema_reader = EspoSchemaReader()
@@ -145,6 +145,13 @@ def whoami(principal: Principal = Depends(require_viewer)) -> dict[str, str]:
 @app.get("/api/v1/agents", response_model=list[AgentDescriptor])
 def list_agents(_principal: Principal = Depends(require_viewer)) -> list[AgentDescriptor]:
     return hub.list_agents()
+
+
+@app.get("/api/v1/integrations/marketing/status", response_model=dict[str, str])
+def marketing_source_status(
+    _principal: Principal = Depends(require_viewer),
+) -> dict[str, str]:
+    return hub.executor.marketing_sources.configuration_status()
 
 
 @app.post("/api/v1/agent-tasks", response_model=CommandCenterReport)
