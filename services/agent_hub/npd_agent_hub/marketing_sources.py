@@ -203,7 +203,10 @@ class MarketingSourceReader:
 
         params = {
             "level": "campaign",
-            "fields": "campaign_id,campaign_name,spend,impressions,clicks,actions,account_currency",
+            "fields": (
+                "account_name,campaign_id,campaign_name,spend,impressions,clicks,"
+                "actions,account_currency"
+            ),
             "time_range": json.dumps({"since": since, "until": until}),
             "limit": "200",
         }
@@ -256,6 +259,7 @@ class MarketingSourceReader:
                 campaigns.append(
                     {
                         "account_id": account_id,
+                        "account_name": str(row.get("account_name") or f"act_{account_id}")[:200],
                         "campaign_id": str(row.get("campaign_id") or ""),
                         "campaign_name": str(row.get("campaign_name") or "Chưa xác định")[:200],
                         "spend": _number(row.get("spend")),

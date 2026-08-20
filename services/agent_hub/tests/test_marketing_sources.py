@@ -18,6 +18,7 @@ def test_multi_source_reader_normalizes_meta_ga4_and_social_without_secret_leaka
         seen.append((request.method, str(request.url), request.headers.get("Authorization")))
         if request.url.host == "graph.facebook.com":
             assert request.method == "GET"
+            assert "account_name" in request.url.params["fields"]
             return httpx.Response(
                 200,
                 json={
@@ -25,6 +26,7 @@ def test_multi_source_reader_normalizes_meta_ga4_and_social_without_secret_leaka
                         {
                             "campaign_id": "cmp-1",
                             "campaign_name": "Lead campaign",
+                            "account_name": "Bat Dong San 1",
                             "spend": "1200000",
                             "impressions": "10000",
                             "clicks": "200",
@@ -109,6 +111,7 @@ def test_multi_source_reader_normalizes_meta_ga4_and_social_without_secret_leaka
     assert ads["metrics"]["reported_cpl"] == 60000
     assert ads["metrics"]["ctr_pct"] == 2.0
     assert ads["metrics"]["currency"] == "VND"
+    assert ads["campaigns"][0]["account_name"] == "Bat Dong San 1"
     assert result["sources"]["ga4"]["metrics"]["sessions"] == 150
     assert result["sources"]["social"]["metrics"]["reach"] == 5000
     serialized = json.dumps(result)
@@ -151,6 +154,7 @@ def test_meta_ads_reader_aggregates_two_read_only_accounts():
                     {
                         "campaign_id": f"cmp-{account_id}",
                         "campaign_name": f"Campaign {account_id}",
+                        "account_name": f"Account {account_id}",
                         "spend": spend,
                         "impressions": "1000",
                         "clicks": "10",
@@ -177,6 +181,10 @@ def test_meta_ads_reader_aggregates_two_read_only_accounts():
     assert result["metrics"]["spend"] == 350
     assert result["metrics"]["reported_leads"] == 4
     assert {campaign["account_id"] for campaign in result["campaigns"]} == {"111", "222"}
+    assert {campaign["account_name"] for campaign in result["campaigns"]} == {
+        "Account 111",
+        "Account 222",
+    }
 
 
 def test_meta_page_social_reader_uses_separate_read_only_credential_and_aggregate_fields():

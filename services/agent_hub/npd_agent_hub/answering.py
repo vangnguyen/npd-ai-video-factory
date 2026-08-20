@@ -387,29 +387,57 @@ def _analytics_answer(
 
     items: list[BusinessAnswerItem] = []
     meta_ads = external_sources.get("meta_ads")
+    ad_metrics = (
+        meta_ads.get("metrics")
+        if isinstance(meta_ads, dict) and isinstance(meta_ads.get("metrics"), dict)
+        else {}
+    )
+    currency = str(ad_metrics.get("currency") or "")
     if (
         isinstance(meta_ads, dict)
-        and ("chiến dịch" in objective or "campaign" in objective)
+        and any(
+            keyword in objective
+            for keyword in ("chiến dịch", "campaign", "cpl", "cpc", "ctr")
+        )
     ):
-        for row in list(meta_ads.get("campaigns") or [])[:5]:
-            if not isinstance(row, dict):
-                continue
+        campaign_rows = sorted(
+            (row for row in meta_ads.get("campaigns") or [] if isinstance(row, dict)),
+            key=lambda row: float(row.get("spend") or 0),
+            reverse=True,
+        )[:10]
+        for row in campaign_rows:
             spend = float(row.get("spend") or 0)
+            impressions = _safe_int(row.get("impressions")) or 0
             clicks = float(row.get("clicks") or 0)
             leads = float(row.get("reported_leads") or 0)
+            ctr = round(clicks * 100 / impressions, 2) if impressions else 0
+            cpc = round(spend / clicks, 2) if clicks else 0
+            cpl = round(spend / leads, 2) if leads else None
+            spend_label = f"Số tiền đã chi{f' ({currency})' if currency else ''}"
+            cpc_label = f"CPC{f' ({currency})' if currency else ''}"
+            cpl_label = f"CPL Meta{f' ({currency})' if currency else ''}"
+            formatted_spend = f"{spend:,.0f}".replace(",", ".")
             items.append(
                 BusinessAnswerItem(
                     entity_id=str(row.get("campaign_id") or "") or None,
                     title=f"Chiến dịch: {row.get('campaign_name') or 'Chưa xác định'}",
                     priority="high" if items == [] and spend else "normal",
                     reason=(
-                        f"Chi {spend:g}, tạo {int(clicks)} click và Meta ghi nhận {int(leads)} lead."
+                        f"Đã chi {formatted_spend}{f' {currency}' if currency else ''}, "
+                        f"tạo {int(clicks)} click và Meta ghi nhận {int(leads)} lead."
                     ),
                     details={
-                        "Chi phí": spend,
-                        "Impressions": _safe_int(row.get("impressions")) or 0,
+                        "Tài khoản Ads": str(
+                            row.get("account_name") or row.get("account_id") or ""
+                        ),
+                        "Campaign ID": str(row.get("campaign_id") or ""),
+                        spend_label: spend,
+                        "Impressions": impressions,
                         "Clicks": int(clicks),
-                        "Lead do Meta báo cáo": int(leads),
+                        "CTR (%)": ctr,
+                        "Lead Meta": int(leads),
+                        cpc_label: cpc,
+                        cpl_label: cpl,
                     },
                     recommended_action=(
                         "Đối chiếu campaign ID với nguồn/campaign trong CRM trước khi thay đổi ngân sách."
@@ -446,17 +474,19 @@ def _analytics_answer(
         "Nguồn dự kiến": len(source_status),
     }
     if isinstance(meta_ads, dict):
-        ad_metrics = meta_ads.get("metrics") if isinstance(meta_ads.get("metrics"), dict) else {}
-        currency = str(ad_metrics.get("currency") or "")
-        metrics[f"Chi phí Ads{f' ({currency})' if currency else ''}"] = float(
+        metrics[f"Số tiền Ads đã chi{f' ({currency})' if currency else ''}"] = float(
             ad_metrics.get("spend") or 0
         )
         metrics["Ads impressions"] = _safe_int(ad_metrics.get("impressions")) or 0
         metrics["Ads clicks"] = _safe_int(ad_metrics.get("clicks")) or 0
         metrics["Ads CTR (%)"] = float(ad_metrics.get("ctr_pct") or 0)
-        metrics["Ads CPC"] = float(ad_metrics.get("cpc") or 0)
+        metrics[f"Ads CPC{f' ({currency})' if currency else ''}"] = float(
+            ad_metrics.get("cpc") or 0
+        )
         if float(ad_metrics.get("reported_leads") or 0) > 0:
-            metrics["CPL do Meta báo cáo"] = float(ad_metrics.get("reported_cpl") or 0)
+            metrics[f"CPL do Meta báo cáo{f' ({currency})' if currency else ''}"] = float(
+                ad_metrics.get("reported_cpl") or 0
+            )
 
     ga4 = external_sources.get("ga4")
     if isinstance(ga4, dict):

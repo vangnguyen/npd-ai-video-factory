@@ -169,7 +169,9 @@ def test_marketing_answer_uses_aggregated_crm_analytics_and_states_limits():
 
 
 def test_marketing_answer_uses_available_multi_source_metrics_without_claiming_roas():
-    task = AgentTask(objective="Báo cáo campaign Ads và CPL 30 ngày")
+    task = AgentTask(
+        objective="So sánh quảng cáo Bat Dong San 1 và Bat Dong San 4 theo CTR, CPC, CPL trong 30 ngày"
+    )
     report = _crm_report(task)
     execution = ToolExecutionResult(
         task_id=task.task_id,
@@ -208,6 +210,7 @@ def test_marketing_answer_uses_available_multi_source_metrics_without_claiming_r
                         {
                             "campaign_id": "cmp-1",
                             "campaign_name": "Campaign A",
+                            "account_name": "Bat Dong San 1",
                             "spend": 1200000,
                             "impressions": 10000,
                             "clicks": 200,
@@ -225,10 +228,16 @@ def test_marketing_answer_uses_available_multi_source_metrics_without_claiming_r
 
     assert answer.status.value == "completed"
     assert answer.title == "Báo cáo marketing đa nguồn"
-    assert answer.metrics["Chi phí Ads (VND)"] == 1200000
-    assert answer.metrics["CPL do Meta báo cáo"] == 60000
+    assert answer.metrics["Số tiền Ads đã chi (VND)"] == 1200000
+    assert answer.metrics["CPL do Meta báo cáo (VND)"] == 60000
     assert answer.metrics["Website sessions"] == 150
     assert answer.items[0].title == "Chiến dịch: Campaign A"
+    assert answer.items[0].details["Số tiền đã chi (VND)"] == 1200000
+    assert answer.items[0].details["Tài khoản Ads"] == "Bat Dong San 1"
+    assert answer.items[0].details["CTR (%)"] == 2.0
+    assert answer.items[0].details["CPC (VND)"] == 6000
+    assert answer.items[0].details["CPL Meta (VND)"] == 60000
+    assert "1.200.000 VND" in answer.items[0].reason
     assert "ROAS" not in answer.metrics
     assert any("chưa kết luận CAC hoặc ROAS" in caveat for caveat in answer.caveats)
 
