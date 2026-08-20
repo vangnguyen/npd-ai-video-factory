@@ -28,7 +28,7 @@ DASHBOARD_HTML = r'''<!doctype html>
   <div class="section-head"><h2>Giao việc cho AI Commander</h2><span class="section-note">Mô tả mục tiêu, khoảng thời gian và kết quả cần so sánh.</span></div>
   <div class="card composer">
     <div>
-      <textarea id="objective" placeholder="Ví dụ: So sánh các chiến dịch của Bat Dong San 1 và Bat Dong San 4 trong 30 ngày theo số tiền đã chi, CTR, CPC, CPL và lead Meta; đề xuất việc cần ưu tiên nhưng không tự thay đổi ngân sách."></textarea>
+      <textarea id="objective" placeholder="Ví dụ: So sánh các chiến dịch Meta Ads của Bat Dong San 1 và Bat Dong San 4 trong 30 ngày theo số tiền đã chi, CTR, CPC, CPL và lead Meta; đề xuất việc cần ưu tiên nhưng không tự thay đổi ngân sách."></textarea>
       <div class="row" style="margin-top:9px"><button class="primary" onclick="createTask()">Phân tích bằng AI Agents</button><button class="smallbtn secondary" onclick="clearObjective()">Xóa</button><span class="muted">Cần role operator hoặc owner.</span></div>
     </div>
     <div class="agent-guide"><strong>Cách giao việc để có câu trả lời sát nhất</strong><ul><li>Nêu rõ kỳ phân tích: 7, 30 hoặc 90 ngày.</li><li>Chỉ định tiêu chí: chi phí, CPL, lead, chuyển đổi hoặc SLA.</li><li>Yêu cầu so sánh và đề xuất hành động; mọi thao tác ghi vẫn cần owner duyệt.</li></ul><div id="sources" class="source-list" style="margin-top:10px"></div></div>
@@ -56,7 +56,7 @@ const BUSINESS_QUESTIONS=[
 {group:'CRM & Sales',agent:'CRM Manager',text:'Phân tích pipeline CRM theo trạng thái trong 30 ngày: số lead, tỷ trọng và điểm nghẽn cần xử lý.'},
 {group:'CRM & Sales',agent:'CRM Manager + Marketing',text:'So sánh các nguồn lead theo số lượng và tỷ lệ Converted; nguồn nào cần ưu tiên kiểm tra chất lượng?'},
 {group:'CRM & Sales',agent:'Sales',text:'Có bao nhiêu lead thiếu kênh liên hệ hoặc chưa được giao phụ trách? Đề xuất cách xử lý theo thứ tự ưu tiên.'},
-{group:'Marketing',agent:'Marketing Leader',text:'So sánh các chiến dịch của Bat Dong San 1 và Bat Dong San 4 trong 30 ngày theo số tiền đã chi, impressions, clicks, CTR, CPC, CPL và lead Meta.'},
+{group:'Marketing',agent:'Marketing Leader',text:'So sánh các chiến dịch Meta Ads của Bat Dong San 1 và Bat Dong San 4 trong 30 ngày theo số tiền đã chi, impressions, clicks, CTR, CPC, CPL và lead Meta.'},
 {group:'Marketing',agent:'Marketing Leader',text:'Chiến dịch Meta Ads nào chi nhiều nhưng chưa tạo lead trong 30 ngày? Lập bảng và nêu việc cần kiểm tra.'},
 {group:'Marketing',agent:'Marketing Leader',text:'Chiến dịch nào có CPL tốt nhất trong 30 ngày? Đề xuất ưu tiên ngân sách nhưng không tự thay đổi ngân sách.'},
 {group:'Marketing',agent:'Marketing Leader',text:'Báo cáo hiệu quả marketing đa nguồn 30 ngày từ Meta Ads, GA4, Social và CRM; chỉ rõ dữ liệu nào chưa đối soát.'},

@@ -155,6 +155,21 @@ def test_marketing_source_report_routes_only_to_marketing_leader():
     assert report.selected_agents == [AgentName.MARKETING_LEADER]
 
 
+def test_campaign_comparison_suggestion_routes_only_to_marketing_leader():
+    hub = AgentHub()
+    report = hub.run(
+        AgentTask(
+            objective=(
+                "So sánh các chiến dịch Meta Ads của Bat Dong San 1 và Bat Dong San 4 "
+                "trong 30 ngày theo số tiền đã chi, impressions, clicks, CTR, CPC, CPL "
+                "và lead Meta."
+            )
+        )
+    )
+
+    assert report.selected_agents == [AgentName.MARKETING_LEADER]
+
+
 def test_analyze_auto_executes_analytics_read_without_budget_write():
     executor = AnalyticsReadExecutor()
     hub = AgentHub(executor=executor)
