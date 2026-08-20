@@ -465,18 +465,20 @@ Production source audit on 2026-08-20 found:
 - `BDS - 04 Daily Campaign Report` exists in n8n but is inactive; its Ads pull/send/archive nodes are placeholders and there is no Ads credential attached.
 - n8n currently has Google Drive, Google Sheets and header-auth credential types, not GA4 or Meta Ads credentials.
 - a Meta Page token exists only inside the lead-ingestion service. It is not copied or reused because its effective access is broader than this read-only analytics contract.
-- Agent Hub has no production `META_ADS_*`, `GA4_*` or `SOCIAL_INSIGHTS_*` credential configured.
+- Agent Hub has no production `META_ADS_*`, `GA4_*`, `SOCIAL_META_*` or `SOCIAL_INSIGHTS_*` credential configured.
 
 The candidate supports:
 
 - Meta Ads campaign Insights via GET with bearer token in the Authorization header and an explicitly pinned Graph version;
 - GA4 `runReport` with a service-account file mounted read-only and OAuth scope `analytics.readonly`;
-- a fixed HTTPS social aggregate endpoint whose output is reduced to an allowlist of numeric metrics;
+- a dedicated Meta Page aggregate reader that requests no post text or messages, plus the fixed HTTPS aggregate endpoint as a legacy fallback;
 - source-level isolation so one unavailable adapter does not erase valid CRM evidence;
 - campaign metrics labelled as Meta-reported until an Ads–CRM attribution key exists;
 - no CAC/ROAS claim without joined attribution and reconciled revenue.
 
 This candidate is not production-accepted until local tests/evals, Agent Hub CI, Phase 5 bundle CI, Sprint 1 regression, guarded deployment, loopback/public smoke and owner browser QA pass. No external source credential should be added during deployment unless it has a separate least-privilege acceptance record. PR #9 remains draft/unmerged.
+
+The credential-specific acceptance checklist and the audited production targets are maintained in `docs/PHASE_6_READONLY_CREDENTIAL_ONBOARDING.md`. Creating a system user/token, enabling a Google API, creating a service-account key, or assigning GA4/Meta assets remains a separate action-time approval gate.
 
 ## Phase 5 acceptance criteria
 

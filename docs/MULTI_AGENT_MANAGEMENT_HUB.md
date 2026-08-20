@@ -93,9 +93,9 @@ Luồng CRM hiện hỗ trợ:
 
 Auto-analysis không chạy write tool. `crm.records.update`, `ads.budget.update`, `sales.contact.send` và `social.publish` vẫn nằm sau owner approval và executor được cấu hình riêng.
 
-Luồng analytics marketing luôn dùng dữ liệu Lead tổng hợp từ EspoCRM read-only và có thể bổ sung các nguồn Phase 6 đã cấu hình: Meta Ads Insights, Google Analytics Data API và một endpoint social aggregate cố định. Kết quả có source coverage (`available`, `not_configured`, `failed`), số lead mới theo kỳ, tỷ lệ Converted, khả năng liên hệ, lead active quá 24 giờ và các metric bên ngoài chỉ khi nguồn tương ứng đọc thành công. Payload aggregate không chứa tên lead, email, số điện thoại hoặc người phụ trách.
+Luồng analytics marketing luôn dùng dữ liệu Lead tổng hợp từ EspoCRM read-only và có thể bổ sung các nguồn Phase 6 đã cấu hình: Meta Ads Insights, Google Analytics Data API và Meta Page aggregate hoặc một endpoint social aggregate cố định. Kết quả có source coverage (`available`, `not_configured`, `failed`), số lead mới theo kỳ, tỷ lệ Converted, khả năng liên hệ, lead active quá 24 giờ và các metric bên ngoài chỉ khi nguồn tương ứng đọc thành công. Payload aggregate không chứa tên lead, email, số điện thoại, nội dung bài đăng hoặc người phụ trách.
 
-Meta Ads dùng một ad-account/token riêng và Graph version pin tường minh; token chỉ gửi trong Authorization header. GA4 dùng service-account file mount read-only và scope `analytics.readonly`. Social adapter chỉ nhận URL HTTPS cố định và lọc allowlist metric. Không được tái sử dụng Meta Page token của dịch vụ nhận lead. Khi thiếu Ads/GA4/social, answer là `partial` và không suy diễn CPL/CPC/CAC/ROAS. `CPL do Meta báo cáo` chỉ được hiển thị khi Meta trả về cả spend và lead action; vẫn không được coi là CRM-attributed CPL nếu chưa join campaign ID.
+Meta Ads dùng một ad-account/token riêng và Graph version pin tường minh; token chỉ gửi trong Authorization header. GA4 dùng service-account file mount read-only và scope `analytics.readonly`. Social dùng credential riêng để chỉ đọc Page identity/count fields và aggregate reaction/comment/share counts; adapter không yêu cầu hoặc lưu nội dung bài đăng. Endpoint HTTPS aggregate cũ vẫn được hỗ trợ như một fallback. Không được tái sử dụng Meta Page token của dịch vụ nhận lead. Khi thiếu Ads/GA4/social, answer là `partial` và không suy diễn CPL/CPC/CAC/ROAS. `CPL do Meta báo cáo` chỉ được hiển thị khi Meta trả về cả spend và lead action; vẫn không được coi là CRM-attributed CPL nếu chưa join campaign ID.
 
 Phase 5.1 eval catalog nằm tại `services/agent_hub/npd_agent_hub/eval_cases/business_questions.json`. CI chạy:
 
@@ -201,11 +201,16 @@ AGENT_SESSION_TTL_SECONDS=28800
 AGENT_OWNER_EMAILS=nguyenvanvangct@gmail.com
 AGENT_OPERATOR_EMAILS=
 AGENT_VIEWER_EMAILS=
+# One account ID or a comma-separated list of account IDs.
 META_ADS_ACCOUNT_ID=
 META_ADS_ACCESS_TOKEN=
 META_GRAPH_VERSION=
 GA4_PROPERTY_ID=
 GA4_SERVICE_ACCOUNT_FILE=
+SOCIAL_META_PAGE_ID=
+SOCIAL_META_ACCESS_TOKEN=
+SOCIAL_META_GRAPH_VERSION=
+# Legacy/custom aggregate endpoint; leave blank when SOCIAL_META_* is used.
 SOCIAL_INSIGHTS_URL=
 SOCIAL_INSIGHTS_TOKEN=
 ```
@@ -228,7 +233,7 @@ Secret không commit vào repo.
 ## Còn lại sau Phase 6 foundation
 
 1. Review rồi pin mapping custom fields CRM được chấp nhận.
-2. Cấp credential Meta Ads, GA4 hoặc social riêng theo least privilege; không tái sử dụng Meta token có quyền rộng từ dịch vụ nhận lead.
+2. Hoàn tất acceptance cho ba credential riêng: Meta Ads, GA4 và Meta Page social; không tái sử dụng Meta token có quyền rộng từ dịch vụ nhận lead.
 3. Thêm fixture/live contract test cho từng credential trước khi bật source trong production.
 4. Thêm email operator/viewer vào allowlist sau khi owner phê duyệt.
 5. Xây attribution key campaign/source xuyên Ads–website–CRM trước khi tính CAC/ROAS.

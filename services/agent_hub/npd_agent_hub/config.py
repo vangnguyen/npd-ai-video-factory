@@ -32,6 +32,9 @@ class HubSettings:
     meta_graph_version: str = ""
     ga4_property_id: str = ""
     ga4_service_account_file: str = ""
+    social_meta_page_id: str = ""
+    social_meta_access_token: str = ""
+    social_meta_graph_version: str = ""
     social_insights_url: str = ""
     social_insights_token: str = ""
 
@@ -73,6 +76,9 @@ class HubSettings:
             meta_graph_version=os.getenv("META_GRAPH_VERSION", "").strip(),
             ga4_property_id=os.getenv("GA4_PROPERTY_ID", "").strip(),
             ga4_service_account_file=os.getenv("GA4_SERVICE_ACCOUNT_FILE", "").strip(),
+            social_meta_page_id=os.getenv("SOCIAL_META_PAGE_ID", "").strip(),
+            social_meta_access_token=os.getenv("SOCIAL_META_ACCESS_TOKEN", "").strip(),
+            social_meta_graph_version=os.getenv("SOCIAL_META_GRAPH_VERSION", "").strip(),
             social_insights_url=os.getenv("SOCIAL_INSIGHTS_URL", "").strip(),
             social_insights_token=os.getenv("SOCIAL_INSIGHTS_TOKEN", "").strip(),
         )
