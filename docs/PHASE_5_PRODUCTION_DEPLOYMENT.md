@@ -363,16 +363,28 @@ using a viewer/owner bearer token.
 
 Conservative mapping deliberately leaves unknown custom fields as `missing`. Do not enable CRM write automation merely because a field name looks similar. Real NPD custom-field mapping should be reviewed and recorded before any write workflow is activated.
 
-## Current live status (read-only audit, 2026-08-20)
+## Current live status (accepted 2026-08-20)
 
-- `npd-ai-video-factory-api-1`, worker, renderer and Redis are running on `npd-ai-video-factory_default`.
-- `n8n-marketing-caddy-1` is running on `n8n-marketing_n8n_net`; current Caddy validation passed.
-- `https://n8n.ngocphuongdong.com/healthz` and `https://crm.ngocphuongdong.com` returned HTTP 200.
-- Host port 8010 is free.
-- `/etc/npd-ai/agent-hub.env` is missing.
-- `/opt/npd-ai-video-factory` is still on `codex/production-pilot` at `a92785dc1721ec4e991bf12655629d809e13c241`, not the reviewed PR #9 head. Its untracked `.runtime/` and `production-pilot-artifacts/` directories must be preserved.
+- The primary `/opt/npd-ai-video-factory` production-pilot checkout remains unchanged at `a92785dc1721ec4e991bf12655629d809e13c241`; its untracked `.runtime/` and `production-pilot-artifacts/` directories were preserved.
+- The reviewed Phase 5 commit was checked out separately at `/opt/npd-ai-video-factory-phase5` so deployment did not switch or overwrite the production-pilot worktree.
+- `/etc/npd-ai/agent-hub.env` exists with mode 600 and independent viewer/operator/owner tokens. The n8n executor webhook remains empty.
+- EspoCRM API user `agent-hub-readonly` has a dedicated `Agent Hub Read Only` role. `Lead` read is allowed; create, edit, delete and stream are denied. `App/user`, `Metadata` and a real Lead read all returned HTTP 200.
+- Agent Hub is the only service in Compose project `npd-agent-hub-prod`, is healthy, joins `npd-ai-video-factory_default` and `n8n-marketing_n8n_net`, and exposes only `127.0.0.1:8010` on the host.
+- Local smoke passed viewer/operator/owner RBAC and real EspoCRM schema/mapping discovery with 60 Lead fields. The smoke action was rejected and caused no external execution.
+- `mkt.ngocphuongdong.com` resolves to `157.10.201.169`. DNS propagation was accepted only after three consecutive 30-query samples returned the VPS address with no stale Cloudflare answers.
+- Caddy was backed up, validated and reloaded inside `n8n-marketing-caddy-1`. The live proxy target is `npd-agent-hub:8010`, and HTTPS `/readyz` returns HTTP 200 with a valid public certificate.
+- Public HTTPS smoke passed the complete RBAC and real EspoCRM schema/mapping suite.
+- Image rollback was exercised with `npd-agent-hub:accepted-1aa06dd` and passed loopback smoke. Caddy rollback was exercised from `/opt/n8n/Caddyfile.before-agent-hub-20260820T034702Z`, then the public route was re-applied and public smoke passed again.
 
-Therefore no Agent Hub deployment, Caddy change, TLS issuance, local/public Agent Hub smoke or real Agent Hub-to-EspoCRM smoke was executed during this audit.
+Recorded recovery artifacts:
+
+- EspoCRM RBAC backup: `/var/backups/npd-agent-hub/espocrm-rbac-20260820T031230Z.sql.gz`;
+- Agent Hub namespace backup: `/var/backups/npd-agent-hub/agent-hub-20260820T031438Z.json`;
+- first Caddy pre-cutover backup: `/opt/n8n/Caddyfile.before-agent-hub-20260820T034702Z`;
+- Caddy pre-rollback safety backup: `/opt/n8n/Caddyfile.before-agent-hub-rollback-20260820T035732Z`;
+- final Caddy pre-reapply backup: `/opt/n8n/Caddyfile.before-agent-hub-20260820T035733Z`.
+
+No social publish, Ads mutation, customer message, CRM write or Redis restore was executed. This acceptance makes the deployment live, but it does not authorize merging PR #9 or enabling the inactive production-write workflow.
 
 ## Phase 5 acceptance criteria
 
