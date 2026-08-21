@@ -13,5 +13,7 @@ storage/jobs/*
 *.mp4
 *.mp3
 *.wav
+*.egg-info/
+e2e-artifacts/
 coverage/
 .pytest_cache/

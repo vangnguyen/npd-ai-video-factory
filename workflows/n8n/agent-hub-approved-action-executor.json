@@ -1,0 +1,61 @@
+{
+  "id": "8d29fc5a-3477-4e52-9cc7-23dd54ecbdf7",
+  "name": "NPD Agent Hub - Approved Action Executor",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "npd-agent-executor",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "23b0743e-26e9-42c5-9cf2-1e2d6668df6a",
+      "name": "Agent Executor Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-500, 120],
+      "webhookId": "dfb14bc9-12e4-4218-b1d8-c8d2cc8de5de"
+    },
+    {
+      "parameters": {
+        "jsCode": "const envelope = $json.body ?? $json;\nconst allowed = ['ads.budget.update', 'social.publish', 'sales.contact.send', 'crm.records.update'];\nconst action = envelope.action;\nif (!action || action.status !== 'approved') {\n  throw new Error('Agent Hub action is not approved');\n}\nif (!allowed.includes(action.tool)) {\n  throw new Error(`Tool is not allowlisted: ${action.tool}`);\n}\nreturn [{\n  json: {\n    accepted: true,\n    execution_id: `phase2-dry-run-${Date.now()}`,\n    phase: 'dry-run',\n    task_id: envelope.task_id,\n    action_id: action.action_id,\n    tool: action.tool,\n    payload: action.payload ?? {},\n    note: 'Phase 2 executor validates approved writes but does not perform external writes until credentials and per-tool mappings are configured.'\n  }\n}];"
+      },
+      "id": "fc932d7d-7b92-458e-bbfa-36632f78bb98",
+      "name": "Validate Approved Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-240, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "e85ef3c1-e22e-4d3c-ad2f-aa013fa6d996",
+      "name": "Return Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [20, 120]
+    }
+  ],
+  "connections": {
+    "Agent Executor Webhook": {
+      "main": [[{"node": "Validate Approved Action", "type": "main", "index": 0}]]
+    },
+    "Validate Approved Action": {
+      "main": [[{"node": "Return Accepted", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

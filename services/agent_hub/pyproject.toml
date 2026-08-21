@@ -1,0 +1,33 @@
+[project]
+name = "npd-agent-hub"
+version = "0.9.0"
+description = "Multi-agent management control plane for NPD AI Video Factory"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30,<1",
+  "pydantic>=2.9,<3",
+  "httpx>=0.27,<1",
+  "PyJWT[crypto]>=2.9,<3",
+  "redis>=5,<7",
+  "google-auth[requests]>=2.35,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9",
+  "fakeredis>=2.26,<3",
+]
+
+[project.scripts]
+agent-hub-eval = "npd_agent_hub.evals:main"
+
+[tool.setuptools.package-data]
+npd_agent_hub = ["eval_cases/*.json"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"

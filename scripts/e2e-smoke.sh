@@ -4,10 +4,43 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+if [[ -n "${DOCKER_BIN:-}" ]]; then
+  docker_bin="$DOCKER_BIN"
+elif grep -qi microsoft /proc/version 2>/dev/null && command -v docker.exe >/dev/null 2>&1; then
+  docker_bin="docker.exe"
+elif command -v docker >/dev/null 2>&1; then
+  docker_bin="docker"
+elif command -v docker.exe >/dev/null 2>&1; then
+  docker_bin="docker.exe"
+else
+  echo "Docker CLI was not found" >&2
+  exit 1
+fi
+env_backup=""
+had_env=0
+if [[ -f .env ]]; then
+  env_backup="$(mktemp)"
+  cp .env "$env_backup"
+  had_env=1
+fi
+
+cleanup() {
+  "$docker_bin" compose logs --no-color > e2e-artifacts/compose.log 2>&1 || true
+  "$docker_bin" compose down -v >/dev/null 2>&1 || true
+  if [[ "$had_env" == "1" ]]; then
+    cp "$env_backup" .env
+  else
+    rm -f .env
+  fi
+  [[ -z "$env_backup" ]] || rm -f "$env_backup"
+}
+trap cleanup EXIT
+
 mkdir -p e2e-artifacts storage/assets/vinhomes-green-paradise storage/jobs
 cp .env.example .env
 
-python - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 import base64
 from pathlib import Path
 
@@ -22,14 +55,8 @@ for index in range(1, 6):
     (folder / f"fixture-{index:02d}.png").write_bytes(png)
 PY
 
-cleanup() {
-  docker compose logs --no-color > e2e-artifacts/compose.log 2>&1 || true
-  docker compose down -v >/dev/null 2>&1 || true
-}
-trap cleanup EXIT
-
 echo "[e2e] building and starting stack"
-docker compose up -d --build
+"$docker_bin" compose up -d --build
 
 echo "[e2e] waiting for API readiness"
 ready=0
@@ -59,7 +86,7 @@ create_response="$(
     --data-binary @examples/vinhomes-green-paradise.request.json
 )"
 printf '%s\n' "$create_response" > e2e-artifacts/create-response.json
-job_id="$(printf '%s' "$create_response" | python -c 'import json,sys; print(json.load(sys.stdin)["job_id"])')"
+job_id="$(printf '%s' "$create_response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["job_id"])' | tr -d '\r')"
 echo "[e2e] job_id=$job_id"
 
 terminal=0
@@ -67,7 +94,7 @@ for attempt in $(seq 1 120); do
   status_json="$(curl --fail --silent --show-error "http://localhost:8000/api/v1/video-jobs/$job_id")"
   printf '%s\n' "$status_json" > e2e-artifacts/job-status.json
   read -r job_status job_stage progress < <(
-    printf '%s' "$status_json" | python -c 'import json,sys; d=json.load(sys.stdin); print(d["status"], d["stage"], d["progress"])'
+    printf '%s' "$status_json" | "$PYTHON_BIN" -c 'import json,sys; d=json.load(sys.stdin); print(d["status"], d["stage"], d["progress"])' | tr -d '\r'
   )
   echo "[e2e] poll=$attempt status=$job_status stage=$job_stage progress=$progress"
   if [[ "$job_status" == "awaiting_review" ]]; then
@@ -99,7 +126,7 @@ cp "$job_dir/final.mp4" e2e-artifacts/final.mp4
 cp "$job_dir/qc.json" e2e-artifacts/qc.json
 cp "$job_dir/video-manifest.json" e2e-artifacts/video-manifest.json
 
-python - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 import json
 from pathlib import Path
 
