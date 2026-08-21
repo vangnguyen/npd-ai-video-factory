@@ -7,6 +7,7 @@ from .answering import synthesize_business_answer
 from .attribution import AttributionService
 from .campaigns import CampaignService
 from .espocrm_opportunities import EspoOpportunityReader
+from .experiments import ExperimentService
 from .models import (
     ActionStatus,
     AgentDescriptor,
@@ -36,6 +37,7 @@ class AgentHub:
     store: HubStore = field(default_factory=build_store)
     campaigns: CampaignService = field(init=False)
     attribution: AttributionService = field(init=False)
+    experiments: ExperimentService = field(init=False)
     opportunity_reader: EspoOpportunityReader = field(init=False)
 
     def __post_init__(self) -> None:
@@ -43,6 +45,14 @@ class AgentHub:
         # stays false even when the legacy n8n executor URL exists.
         self.campaigns = CampaignService(self.store, execution_enabled=False)
         self.attribution = AttributionService(self.store)
+        marketing_sources = getattr(self.executor, "marketing_sources", None)
+        self.experiments = ExperimentService(
+            self.store,
+            source_status_provider=getattr(
+                marketing_sources, "configuration_status", None
+            ),
+            source_reader=marketing_sources,
+        )
         self.opportunity_reader = EspoOpportunityReader(
             getattr(self.executor, "settings", None),
             transport=getattr(self.executor, "transport", None),

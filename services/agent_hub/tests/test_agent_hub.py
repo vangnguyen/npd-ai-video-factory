@@ -126,6 +126,7 @@ def test_broad_objective_routes_to_all_specialists():
         AgentName.ZALO_ZBS_MARKETING,
         AgentName.WEB_LANDING,
         AgentName.REVENUE_ATTRIBUTION,
+        AgentName.EXPERIMENT_OPTIMIZATION,
         AgentName.SALES,
         AgentName.CRM_MANAGER,
     ]
@@ -319,7 +320,7 @@ def test_http_surface():
 
     agents = client.get("/api/v1/agents")
     assert agents.status_code == 200
-    assert len(agents.json()) == 12
+    assert len(agents.json()) == 13
 
     created = client.post(
         "/api/v1/agent-tasks",

@@ -30,13 +30,17 @@ least-privilege credentials.
 Phase 6B adds an attribution-ready Campaign Operating System, merged through PR #11
 into `main`: unified campaign IDs, lifecycle/RBAC/approval boundaries, channel
 planning, specialist agents and a responsive Campaign Workspace. It is deliberately
-limited to research, plan, draft and preview; it is not deployed and production writes
-remain disabled.
+limited to research, plan, draft and preview; production writes remain disabled.
 
 Phase 7 builds on that draft with an immutable touchpoint ledger, read-only
 Opportunity/revenue reconciliation, an owner-controlled data-quality gate and
 first-touch/last-touch/linear shadow reports. It does not calculate or expose revenue
 until the reconciliation snapshot is accepted, and it enables no external writes.
+
+Phase 8 adds a controlled Experiment & Optimization OS. It requires an owner-accepted
+Phase 7 snapshot, accepts provenance-bound variant observations from read-only sources,
+and produces advisory `winner_candidate`/`continue`/`stop_and_review` recommendations.
+There is no live execution endpoint and no traffic, budget, CMS or CRM mutation.
 
 ## Handoff package
 
@@ -47,6 +51,7 @@ until the reconciliation snapshot is accepted, and it enables no external writes
 - [Acceptance tests](docs/acceptance-tests.md)
 - [Phase 6B Campaign Operating System](docs/PHASE_6B_CAMPAIGN_OPERATING_SYSTEM.md)
 - [Phase 7 Attribution & Revenue OS](docs/PHASE_7_ATTRIBUTION_REVENUE_OS.md)
+- [Phase 8 Experiment & Optimization OS](docs/PHASE_8_EXPERIMENT_OPTIMIZATION_OS.md)
 - [Video manifest JSON Schema](packages/contracts/video-manifest.schema.json)
 - [n8n smoke-test workflow](workflows/n8n/sprint-1-smoke-test.json)
 - [45-second sample request](examples/vinhomes-green-paradise.request.json)

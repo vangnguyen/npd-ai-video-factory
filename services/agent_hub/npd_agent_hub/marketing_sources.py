@@ -107,7 +107,8 @@ class MarketingSourceReader:
             ),
             "ga4": (
                 "configured"
-                if self.settings.ga4_property_id and self.settings.ga4_service_account_file
+                if self.settings.ga4_property_id
+                and (self.settings.ga4_service_account_file or self.ga4_token_provider)
                 else "incomplete"
                 if self.settings.ga4_property_id
                 else "not_configured"
@@ -385,6 +386,195 @@ class MarketingSourceReader:
             },
             "channels": channels,
             "coverage_complete": int(payload.get("rowCount") or 0) <= len(channels),
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    async def read_ga4_experiment(
+        self,
+        *,
+        campaign_key: str,
+        variant_ids: list[str],
+        since: str,
+        until: str,
+    ) -> dict[str, object]:
+        """Read aggregate GA4 variant evidence keyed by UTM campaign/content."""
+        if not re.fullmatch(r"\d+", self.settings.ga4_property_id):
+            raise MarketingSourceError("GA4_PROPERTY_ID must contain digits only")
+        token = await asyncio.to_thread(self._ga4_token)
+        url = (
+            "https://analyticsdata.googleapis.com/v1beta/properties/"
+            f"{self.settings.ga4_property_id}:runReport"
+        )
+        body = {
+            "dateRanges": [{"startDate": since, "endDate": until}],
+            "dimensions": [
+                {"name": "sessionManualCampaignName"},
+                {"name": "sessionManualAdContent"},
+            ],
+            "metrics": [{"name": "sessions"}, {"name": "keyEvents"}],
+            "dimensionFilter": {
+                "filter": {
+                    "fieldName": "sessionManualCampaignName",
+                    "stringFilter": {
+                        "matchType": "EXACT",
+                        "value": campaign_key,
+                        "caseSensitive": False,
+                    },
+                }
+            },
+            "limit": "10000",
+        }
+        async with self._client() as client:
+            try:
+                response = await client.post(
+                    url, json=body, headers={"Authorization": f"Bearer {token}"}
+                )
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise MarketingSourceError(f"GA4 experiment read failed: {exc}") from exc
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise MarketingSourceError("GA4 returned invalid experiment JSON") from exc
+        if not isinstance(payload, dict):
+            raise MarketingSourceError("GA4 returned a non-object experiment response")
+        allowed = set(variant_ids)
+        totals = {variant_id: {"sample_size": 0, "conversions": 0} for variant_id in variant_ids}
+        present: set[str] = set()
+        for row in payload.get("rows") or []:
+            if not isinstance(row, dict):
+                continue
+            dimensions = row.get("dimensionValues") or []
+            metrics = row.get("metricValues") or []
+            if len(dimensions) < 2 or len(metrics) < 2:
+                continue
+            variant_id = str(dimensions[1].get("value") or "").upper()
+            if variant_id not in allowed:
+                continue
+            present.add(variant_id)
+            totals[variant_id]["sample_size"] += int(_number(metrics[0].get("value")))
+            totals[variant_id]["conversions"] += int(_number(metrics[1].get("value")))
+        if any(
+            item["conversions"] > item["sample_size"] for item in totals.values()
+        ):
+            raise MarketingSourceError(
+                "GA4 keyEvents exceed sessions for a variant; the snapshot is not binomial-safe"
+            )
+        return {
+            "source_snapshot_id": (
+                f"ga4:{self.settings.ga4_property_id}:{campaign_key}:{since}:{until}"
+            ),
+            "variants": [
+                {"variant_id": variant_id, **totals[variant_id]}
+                for variant_id in variant_ids
+                if variant_id in present
+            ],
+            "present_variant_ids": sorted(present),
+            "coverage_complete": (
+                int(payload.get("rowCount") or 0) <= len(payload.get("rows") or [])
+            ),
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    async def read_meta_experiment(
+        self,
+        *,
+        source_campaign_id: str,
+        variant_ad_ids: dict[str, str],
+        since: str,
+        until: str,
+    ) -> dict[str, object]:
+        """Read aggregate Meta ad evidence using explicit, validated ad-id mappings."""
+        account_ids = tuple(
+            dict.fromkeys(
+                value.strip().removeprefix("act_")
+                for value in self.settings.meta_ads_account_id.split(",")
+                if value.strip()
+            )
+        )
+        version = self.settings.meta_graph_version
+        if not account_ids or any(not re.fullmatch(r"\d+", value) for value in account_ids):
+            raise MarketingSourceError("META_ADS_ACCOUNT_ID must contain numeric IDs")
+        if not re.fullmatch(r"v\d+\.\d+", version):
+            raise MarketingSourceError("META_GRAPH_VERSION must be explicitly pinned")
+        if not re.fullmatch(r"\d+", source_campaign_id):
+            raise MarketingSourceError("Meta source campaign ID must contain digits only")
+        reverse = {ad_id: variant_id for variant_id, ad_id in variant_ad_ids.items()}
+        params = {
+            "level": "ad",
+            "fields": "campaign_id,ad_id,spend,impressions,clicks,actions,account_currency",
+            "time_range": json.dumps({"since": since, "until": until}),
+            "filtering": json.dumps(
+                [{"field": "campaign.id", "operator": "EQUAL", "value": source_campaign_id}]
+            ),
+            "limit": "500",
+        }
+        headers = {"Authorization": f"Bearer {self.settings.meta_ads_access_token}"}
+        totals = {
+            variant_id: {"sample_size": 0, "conversions": 0, "spend": 0.0}
+            for variant_id in variant_ad_ids
+        }
+        present: set[str] = set()
+        coverage_complete = True
+        async with self._client() as client:
+            for account_id in account_ids:
+                url = f"https://graph.facebook.com/{version}/act_{account_id}/insights"
+                try:
+                    response = await client.get(url, params=params, headers=headers)
+                    response.raise_for_status()
+                except httpx.HTTPError as exc:
+                    raise MarketingSourceError(
+                        f"Meta experiment read failed for account {account_id}: {exc}"
+                    ) from exc
+                try:
+                    payload = response.json()
+                except ValueError as exc:
+                    raise MarketingSourceError("Meta returned invalid experiment JSON") from exc
+                if not isinstance(payload, dict):
+                    raise MarketingSourceError("Meta returned a non-object experiment response")
+                coverage_complete = coverage_complete and not bool(
+                    (payload.get("paging") or {}).get("next")
+                )
+                for row in payload.get("data") or []:
+                    if (
+                        not isinstance(row, dict)
+                        or str(row.get("campaign_id") or "") != source_campaign_id
+                    ):
+                        continue
+                    variant_id = reverse.get(str(row.get("ad_id") or ""))
+                    if not variant_id:
+                        continue
+                    present.add(variant_id)
+                    totals[variant_id]["sample_size"] += int(_number(row.get("impressions")))
+                    totals[variant_id]["conversions"] += int(_reported_leads(row.get("actions")))
+                    totals[variant_id]["spend"] += float(_number(row.get("spend")))
+        variants = []
+        for variant_id in variant_ad_ids:
+            if variant_id not in present:
+                continue
+            item = totals[variant_id]
+            leads = int(item["conversions"])
+            if leads > int(item["sample_size"]):
+                raise MarketingSourceError(
+                    "Meta reported leads exceed impressions for a variant; snapshot rejected"
+                )
+            variants.append(
+                {
+                    "variant_id": variant_id,
+                    "sample_size": int(item["sample_size"]),
+                    "conversions": leads,
+                    "guardrail_values": {
+                        "Cost per qualified lead": round(float(item["spend"]) / leads, 2)
+                        if leads
+                        else float(item["spend"]),
+                    },
+                }
+            )
+        return {
+            "source_snapshot_id": f"meta:{source_campaign_id}:{since}:{until}",
+            "variants": variants,
+            "present_variant_ids": sorted(present),
+            "coverage_complete": coverage_complete,
             "observed_at": datetime.now(timezone.utc).isoformat(),
         }
 
