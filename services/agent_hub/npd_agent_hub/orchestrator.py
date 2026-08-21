@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from .agents import SPECIALIST_AGENTS, select_agents
 from .answering import synthesize_business_answer
+from .attribution import AttributionService
 from .campaigns import CampaignService
 from .models import (
     ActionStatus,
@@ -33,11 +34,13 @@ class AgentHub:
     executor: ToolExecutor = field(default_factory=ToolExecutor)
     store: HubStore = field(default_factory=build_store)
     campaigns: CampaignService = field(init=False)
+    attribution: AttributionService = field(init=False)
 
     def __post_init__(self) -> None:
         # Phase 6B is planning/draft/preview only. This switch deliberately
         # stays false even when the legacy n8n executor URL exists.
         self.campaigns = CampaignService(self.store, execution_enabled=False)
+        self.attribution = AttributionService(self.store)
 
     def list_agents(self) -> list[AgentDescriptor]:
         commander = AgentDescriptor(

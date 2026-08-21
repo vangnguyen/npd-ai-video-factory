@@ -243,11 +243,22 @@ Secret không commit vào repo.
 - Không commit secret.
 - n8n write executor mặc định inactive và dry-run.
 
-## Còn lại sau Phase 6 foundation
+## Phase 7 Attribution & Revenue OS
 
-1. Review rồi pin mapping custom fields CRM được chấp nhận.
-2. Hoàn tất acceptance cho ba credential riêng: Meta Ads, GA4 và Meta Page social; không tái sử dụng Meta token có quyền rộng từ dịch vụ nhận lead.
-3. Thêm fixture/live contract test cho từng credential trước khi bật source trong production.
-4. Thêm email operator/viewer vào allowlist sau khi owner phê duyệt.
-5. Xây attribution key campaign/source xuyên Ads–website–CRM trước khi tính CAC/ROAS.
-6. Chỉ sau acceptance test mới bật từng production n8n write mapping.
+Phase 7 bổ sung Revenue Attribution Agent, immutable touchpoint ledger và read-only
+Opportunity/revenue reconciliation. Mọi con số pipeline/doanh thu bị khóa cho đến khi
+owner chấp thuận quality snapshot. First-touch, last-touch và linear chỉ là shadow
+report; CAC/ROAS không được suy diễn khi chưa có spend cùng Campaign/kỳ đã đối soát.
+
+Phase 7 không bật n8n write executor, Ads mutation, CRM write, publish, bulk send hoặc
+customer contact. Kiến trúc, RBAC, persistence, acceptance và Phase 8 handoff nằm trong
+`docs/PHASE_7_ATTRIBUTION_REVENUE_OS.md`.
+
+## Còn lại sau Phase 7 foundation
+
+1. Review và pin projection read-only cho EspoCRM Opportunity/amount/stage/closedAt.
+2. Dry-backfill dữ liệu thật, đối soát counts và xác nhận không có raw contact data.
+3. Owner chấp thuận quality snapshot trước khi hiển thị revenue shadow production.
+4. Join spend theo cùng Campaign/currency/period trước khi tính CAC hoặc ROAS.
+5. Chỉ sau acceptance mới thiết kế Phase 8 Experiment & Optimization OS ở plan/preview.
+6. Production write mappings vẫn cần một phase và approval riêng.

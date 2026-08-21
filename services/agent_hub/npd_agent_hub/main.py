@@ -13,6 +13,17 @@ from .auth import (
     require_owner,
     require_viewer,
 )
+from .attribution_models import (
+    AttributionAcceptanceRequest,
+    AttributionAuditEvent,
+    AttributionModel,
+    AttributionReconciliation,
+    AttributionReport,
+    AttributionStatus,
+    ReconciliationRequest,
+    TouchpointBackfillRequest,
+    TouchpointEvent,
+)
 from .campaign_models import (
     Campaign,
     CampaignApprovalDecision,
@@ -56,8 +67,8 @@ from .tool_registry import ToolCapability, list_tool_capabilities
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.10.0",
-    description="Multi-agent management control plane with Phase 6B Campaign Operating System planning workflows.",
+    version="0.11.0",
+    description="Multi-agent control plane with Campaign OS and Phase 7 read-only attribution shadow workflows.",
 )
 schema_reader = EspoSchemaReader()
 mapping_reader = EspoMappingReader(schema_reader)
@@ -446,6 +457,115 @@ def campaign_summary(
         return hub.campaigns.summary(campaign_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="campaign not found") from exc
+
+
+@app.get("/api/v1/attribution/status", response_model=AttributionStatus)
+def attribution_status(
+    _principal: Principal = Depends(require_viewer),
+) -> AttributionStatus:
+    return hub.attribution.status()
+
+
+@app.post("/api/v1/attribution/touchpoints/backfill")
+def backfill_attribution_touchpoints(
+    request: TouchpointBackfillRequest,
+    principal: Principal = Depends(require_operator),
+) -> dict[str, int | bool]:
+    try:
+        return hub.attribution.backfill(request, actor=principal.subject)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="campaign not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/attribution/touchpoints", response_model=list[TouchpointEvent])
+def list_attribution_touchpoints(
+    campaign_id: str | None = Query(default=None),
+    opportunity_id: str | None = Query(default=None),
+    lead_id: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=5000),
+    _principal: Principal = Depends(require_viewer),
+) -> list[TouchpointEvent]:
+    return hub.attribution.list_touchpoints(
+        campaign_id=campaign_id,
+        opportunity_id=opportunity_id,
+        lead_id=lead_id,
+        limit=limit,
+    )
+
+
+@app.post(
+    "/api/v1/attribution/reconciliations",
+    response_model=AttributionReconciliation,
+    status_code=201,
+)
+def create_attribution_reconciliation(
+    request: ReconciliationRequest,
+    principal: Principal = Depends(require_operator),
+) -> AttributionReconciliation:
+    try:
+        return hub.attribution.reconcile(request, actor=principal.subject)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get(
+    "/api/v1/attribution/reconciliations/{reconciliation_id}",
+    response_model=AttributionReconciliation,
+)
+def get_attribution_reconciliation(
+    reconciliation_id: str,
+    _principal: Principal = Depends(require_viewer),
+) -> AttributionReconciliation:
+    try:
+        return hub.attribution.get_reconciliation(reconciliation_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="reconciliation not found") from exc
+
+
+@app.post(
+    "/api/v1/attribution/reconciliations/{reconciliation_id}/acceptance",
+    response_model=AttributionReconciliation,
+)
+def decide_attribution_quality_acceptance(
+    reconciliation_id: str,
+    request: AttributionAcceptanceRequest,
+    principal: Principal = Depends(require_owner),
+) -> AttributionReconciliation:
+    try:
+        return hub.attribution.accept_quality(
+            reconciliation_id, request, actor=principal.subject
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="reconciliation not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get(
+    "/api/v1/attribution/reconciliations/{reconciliation_id}/report",
+    response_model=AttributionReport,
+)
+def attribution_report(
+    reconciliation_id: str,
+    model: AttributionModel = Query(default=AttributionModel.LAST_TOUCH),
+    _principal: Principal = Depends(require_viewer),
+) -> AttributionReport:
+    try:
+        return hub.attribution.report(reconciliation_id, model=model)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="reconciliation not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/attribution/audit", response_model=list[AttributionAuditEvent])
+def attribution_audit(
+    limit: int = Query(default=100, ge=1, le=1000),
+    _principal: Principal = Depends(require_viewer),
+) -> list[AttributionAuditEvent]:
+    return hub.attribution.audit(limit=limit)
 
 
 @app.get(
