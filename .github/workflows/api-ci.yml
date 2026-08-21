@@ -7,8 +7,6 @@ on:
   pull_request:
     branches:
       - main
-      # Phase 6B is intentionally a stacked PR while PR #9 remains draft.
-      - agent/multi-agent-management-hub
 
 jobs:
   test-api:

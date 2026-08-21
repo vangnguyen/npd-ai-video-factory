@@ -6,6 +6,11 @@ from typing import Protocol
 
 from redis import Redis
 
+from .attribution_models import (
+    AttributionAuditEvent,
+    AttributionReconciliation,
+    TouchpointEvent,
+)
 from .campaign_models import Campaign, CampaignAuditEvent, CampaignStatus
 from .config import HubSettings, settings as default_settings
 from .models import AgentTask, AuditEvent, CommandCenterReport, ToolExecutionResult
@@ -50,6 +55,37 @@ class HubStore(Protocol):
         self, campaign_id: str, limit: int = 100
     ) -> list[CampaignAuditEvent]: ...
 
+    def append_touchpoint(self, event: TouchpointEvent) -> None: ...
+
+    def get_touchpoint(self, event_id: str) -> TouchpointEvent | None: ...
+
+    def list_touchpoints(
+        self,
+        *,
+        campaign_id: str | None = None,
+        opportunity_id: str | None = None,
+        lead_id: str | None = None,
+        limit: int = 200,
+    ) -> list[TouchpointEvent]: ...
+
+    def save_attribution_reconciliation(
+        self, reconciliation: AttributionReconciliation
+    ) -> None: ...
+
+    def get_attribution_reconciliation(
+        self, reconciliation_id: str
+    ) -> AttributionReconciliation | None: ...
+
+    def list_attribution_reconciliations(
+        self, limit: int = 50
+    ) -> list[AttributionReconciliation]: ...
+
+    def count_attribution_reconciliations(self) -> int: ...
+
+    def append_attribution_audit(self, event: AttributionAuditEvent) -> None: ...
+
+    def list_attribution_audit(self, limit: int = 100) -> list[AttributionAuditEvent]: ...
+
 
 @dataclass
 class MemoryHubStore:
@@ -63,6 +99,11 @@ class MemoryHubStore:
     campaigns: dict[str, Campaign] = field(default_factory=dict)
     campaign_updated_at: dict[str, datetime] = field(default_factory=dict)
     campaign_audit: dict[str, list[CampaignAuditEvent]] = field(default_factory=dict)
+    touchpoints: dict[str, TouchpointEvent] = field(default_factory=dict)
+    attribution_reconciliations: dict[str, AttributionReconciliation] = field(
+        default_factory=dict
+    )
+    attribution_audit: list[AttributionAuditEvent] = field(default_factory=list)
 
     def _touch(self, task_id: str) -> None:
         self.updated_at[task_id] = datetime.now(timezone.utc)
@@ -152,6 +193,69 @@ class MemoryHubStore:
             event.model_copy(deep=True)
             for event in self.campaign_audit.get(campaign_id, [])[-limit:]
         ][::-1]
+
+    def append_touchpoint(self, event: TouchpointEvent) -> None:
+        if event.event_id in self.touchpoints:
+            raise ValueError("touchpoint event_id already exists")
+        self.touchpoints[event.event_id] = event.model_copy(deep=True)
+
+    def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
+        event = self.touchpoints.get(event_id)
+        return event.model_copy(deep=True) if event is not None else None
+
+    def list_touchpoints(
+        self,
+        *,
+        campaign_id: str | None = None,
+        opportunity_id: str | None = None,
+        lead_id: str | None = None,
+        limit: int = 200,
+    ) -> list[TouchpointEvent]:
+        limit = max(1, min(limit, 5000))
+        rows = list(self.touchpoints.values())
+        if campaign_id is not None:
+            rows = [item for item in rows if item.campaign_id == campaign_id]
+        if opportunity_id is not None:
+            rows = [item for item in rows if item.opportunity_id == opportunity_id]
+        if lead_id is not None:
+            rows = [item for item in rows if item.lead_id == lead_id]
+        rows.sort(key=lambda item: (item.occurred_at, item.event_id), reverse=True)
+        return [item.model_copy(deep=True) for item in rows[:limit]]
+
+    def save_attribution_reconciliation(
+        self, reconciliation: AttributionReconciliation
+    ) -> None:
+        self.attribution_reconciliations[reconciliation.reconciliation_id] = (
+            reconciliation.model_copy(deep=True)
+        )
+
+    def get_attribution_reconciliation(
+        self, reconciliation_id: str
+    ) -> AttributionReconciliation | None:
+        row = self.attribution_reconciliations.get(reconciliation_id)
+        return row.model_copy(deep=True) if row is not None else None
+
+    def list_attribution_reconciliations(
+        self, limit: int = 50
+    ) -> list[AttributionReconciliation]:
+        limit = max(1, min(limit, 1000))
+        rows = sorted(
+            self.attribution_reconciliations.values(),
+            key=lambda item: item.created_at,
+            reverse=True,
+        )
+        return [item.model_copy(deep=True) for item in rows[:limit]]
+
+    def count_attribution_reconciliations(self) -> int:
+        return len(self.attribution_reconciliations)
+
+    def append_attribution_audit(self, event: AttributionAuditEvent) -> None:
+        self.attribution_audit.append(event.model_copy(deep=True))
+        del self.attribution_audit[:-5000]
+
+    def list_attribution_audit(self, limit: int = 100) -> list[AttributionAuditEvent]:
+        limit = max(1, min(limit, 1000))
+        return [item.model_copy(deep=True) for item in self.attribution_audit[-limit:]][::-1]
 
 
 class RedisHubStore:
@@ -291,6 +395,118 @@ class RedisHubStore:
             self._key("campaign-os", "audit", campaign_id), -limit, -1
         )
         return [CampaignAuditEvent.model_validate_json(raw) for raw in reversed(rows)]
+
+    def append_touchpoint(self, event: TouchpointEvent) -> None:
+        event_key = self._key("attribution-os", "touchpoint", event.event_id)
+        if not self.redis.set(event_key, event.model_dump_json(), nx=True):
+            raise ValueError("touchpoint event_id already exists")
+        score = event.occurred_at.timestamp()
+        pipe = self.redis.pipeline()
+        pipe.zadd(self._key("attribution-os", "touchpoints"), {event.event_id: score})
+        pipe.zadd(
+            self._key("attribution-os", "campaign", event.campaign_id, "touchpoints"),
+            {event.event_id: score},
+        )
+        if event.opportunity_id:
+            pipe.zadd(
+                self._key(
+                    "attribution-os", "opportunity", event.opportunity_id, "touchpoints"
+                ),
+                {event.event_id: score},
+            )
+        if event.lead_id:
+            pipe.zadd(
+                self._key("attribution-os", "lead", event.lead_id, "touchpoints"),
+                {event.event_id: score},
+            )
+        pipe.execute()
+
+    def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
+        raw = self.redis.get(self._key("attribution-os", "touchpoint", event_id))
+        return TouchpointEvent.model_validate_json(raw) if raw else None
+
+    def list_touchpoints(
+        self,
+        *,
+        campaign_id: str | None = None,
+        opportunity_id: str | None = None,
+        lead_id: str | None = None,
+        limit: int = 200,
+    ) -> list[TouchpointEvent]:
+        limit = max(1, min(limit, 5000))
+        if opportunity_id is not None:
+            key = self._key(
+                "attribution-os", "opportunity", opportunity_id, "touchpoints"
+            )
+        elif lead_id is not None:
+            key = self._key("attribution-os", "lead", lead_id, "touchpoints")
+        elif campaign_id is not None:
+            key = self._key(
+                "attribution-os", "campaign", campaign_id, "touchpoints"
+            )
+        else:
+            key = self._key("attribution-os", "touchpoints")
+        event_ids = self.redis.zrevrange(key, 0, limit - 1)
+        rows = [self.get_touchpoint(str(event_id)) for event_id in event_ids]
+        filtered = [item for item in rows if item is not None]
+        if campaign_id is not None:
+            filtered = [item for item in filtered if item.campaign_id == campaign_id]
+        if opportunity_id is not None:
+            filtered = [item for item in filtered if item.opportunity_id == opportunity_id]
+        if lead_id is not None:
+            filtered = [item for item in filtered if item.lead_id == lead_id]
+        return filtered[:limit]
+
+    def save_attribution_reconciliation(
+        self, reconciliation: AttributionReconciliation
+    ) -> None:
+        pipe = self.redis.pipeline()
+        pipe.set(
+            self._key(
+                "attribution-os", "reconciliation", reconciliation.reconciliation_id
+            ),
+            reconciliation.model_dump_json(),
+        )
+        pipe.zadd(
+            self._key("attribution-os", "reconciliations"),
+            {reconciliation.reconciliation_id: reconciliation.created_at.timestamp()},
+        )
+        pipe.execute()
+
+    def get_attribution_reconciliation(
+        self, reconciliation_id: str
+    ) -> AttributionReconciliation | None:
+        raw = self.redis.get(
+            self._key("attribution-os", "reconciliation", reconciliation_id)
+        )
+        return AttributionReconciliation.model_validate_json(raw) if raw else None
+
+    def list_attribution_reconciliations(
+        self, limit: int = 50
+    ) -> list[AttributionReconciliation]:
+        limit = max(1, min(limit, 1000))
+        ids = self.redis.zrevrange(
+            self._key("attribution-os", "reconciliations"), 0, limit - 1
+        )
+        rows = [self.get_attribution_reconciliation(str(item)) for item in ids]
+        return [item for item in rows if item is not None]
+
+    def count_attribution_reconciliations(self) -> int:
+        return int(self.redis.zcard(self._key("attribution-os", "reconciliations")))
+
+    def append_attribution_audit(self, event: AttributionAuditEvent) -> None:
+        key = self._key("attribution-os", "audit")
+        pipe = self.redis.pipeline()
+        pipe.rpush(key, event.model_dump_json())
+        pipe.ltrim(key, -5000, -1)
+        pipe.execute()
+
+    def list_attribution_audit(self, limit: int = 100) -> list[AttributionAuditEvent]:
+        limit = max(1, min(limit, 1000))
+        rows = self.redis.lrange(
+            self._key("attribution-os", "audit"), -limit, -1
+        )
+        return [AttributionAuditEvent.model_validate_json(raw) for raw in reversed(rows)]
 
 
 def build_store(settings: HubSettings | None = None) -> HubStore:

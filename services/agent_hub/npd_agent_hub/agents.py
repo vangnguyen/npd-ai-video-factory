@@ -381,6 +381,60 @@ class SalesAgent(BaseAgent):
         )
 
 
+class RevenueAttributionAgent(BaseAgent):
+    name = AgentName.REVENUE_ATTRIBUTION
+    role = "Đối soát touchpoint, Opportunity, pipeline và doanh thu ở chế độ shadow chỉ-đọc."
+    capabilities = (
+        "immutable touchpoint audit",
+        "campaign identity reconciliation",
+        "attribution data-quality review",
+        "first/last/linear attribution preview",
+        "pipeline and closed-revenue shadow reporting",
+    )
+
+    def plan(self, task: AgentTask) -> AgentReport:
+        return AgentReport(
+            agent=self.name,
+            summary=f"Đối soát attribution và doanh thu cho '{task.objective}' mà không ghi hệ thống nguồn.",
+            priorities=[
+                "Kiểm tra campaign_id, lead_id và opportunity_id xuyên suốt touchpoint ledger.",
+                "Chặn mọi kết luận doanh thu cho đến khi quality gate được owner chấp thuận.",
+                "Tách số liệu pipeline/doanh thu đã đối soát khỏi chỉ số do kênh tự báo cáo.",
+            ],
+            actions=[
+                action(
+                    agent=self.name,
+                    title="Đọc touchpoint ledger",
+                    description="Đọc các sự kiện attribution đã bất biến hóa theo Campaign/Lead/Opportunity.",
+                    tool="attribution.ledger.read",
+                    payload={"objective": task.objective, "mode": "shadow"},
+                ),
+                action(
+                    agent=self.name,
+                    title="Tạo reconciliation preview",
+                    description="Đối chiếu Opportunity và closed revenue, sau đó đánh giá quality gate.",
+                    tool="attribution.reconcile.preview",
+                    payload={"objective": task.objective, "external_writes": False},
+                ),
+                action(
+                    agent=self.name,
+                    title="Đọc báo cáo revenue shadow",
+                    description="Chỉ hiển thị pipeline/doanh thu khi snapshot quality đã được owner chấp thuận.",
+                    tool="revenue.report.read",
+                    payload={"objective": task.objective},
+                ),
+            ],
+            metrics_to_watch=[
+                "campaign match rate",
+                "identity conflict rate",
+                "closed-revenue coverage",
+                "attributed pipeline",
+                "attributed revenue",
+            ],
+            handoffs=[AgentName.MARKETING_LEADER, AgentName.CRM_MANAGER, AgentName.SALES],
+        )
+
+
 class CRMManagerAgent(BaseAgent):
     name = AgentName.CRM_MANAGER
     role = "Kiểm soát chất lượng dữ liệu CRM, pipeline và kỷ luật follow-up."
@@ -433,6 +487,7 @@ SPECIALIST_AGENTS: dict[AgentName, BaseAgent] = {
     AgentName.EMAIL_MARKETING: EmailMarketingAgent(),
     AgentName.ZALO_ZBS_MARKETING: ZaloZBSMarketingAgent(),
     AgentName.WEB_LANDING: WebLandingAgent(),
+    AgentName.REVENUE_ATTRIBUTION: RevenueAttributionAgent(),
     AgentName.SALES: SalesAgent(),
     AgentName.CRM_MANAGER: CRMManagerAgent(),
 }
@@ -447,6 +502,15 @@ ROUTING_KEYWORDS: dict[AgentName, tuple[str, ...]] = {
     AgentName.EMAIL_MARKETING: ("email", "nurture", "re-engagement", "newsletter"),
     AgentName.ZALO_ZBS_MARKETING: ("zalo", "zbs", "zalo oa", "zns"),
     AgentName.WEB_LANDING: ("landing page", "website", "wordpress", "cta", "form", "cro"),
+    AgentName.REVENUE_ATTRIBUTION: (
+        "attribution",
+        "doanh thu",
+        "revenue",
+        "roas",
+        "cac",
+        "closed won",
+        "touchpoint",
+    ),
     AgentName.SALES: ("sales", "sale", "khách", "tư vấn", "chăm sóc", "follow-up", "booking"),
     AgentName.CRM_MANAGER: (
         "crm",

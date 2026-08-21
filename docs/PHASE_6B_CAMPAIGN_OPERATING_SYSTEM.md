@@ -21,10 +21,10 @@ disabled/inactive for Campaign OS acceptance.
 ## Base-branch and rollout strategy
 
 PR #9 was owner-accepted and merged to `main` at `8396eb8`; the production baseline
-is tagged `agent-hub-v0.9.0`. Phase 6B is implemented on
-`agent/phase-6b-campaign-os` in draft PR #11, rebased onto `main`. PR #11 remains
-unmerged and Phase 6B has not been deployed to production. Phase 7 work must use PR
-#11 as its stacked base until Phase 6B receives separate owner approval and merges.
+is tagged `agent-hub-v0.9.0`. Phase 6B was merged through PR #11 into `main` at
+`aa1e21e`. Phase 6B has not been deployed to production. Phase 7 PR #12 is therefore
+based directly on `main` and remains subject to its own review, acceptance and rollout
+approval.
 
 No deployment bundle topology changes are required. A later rollout continues to use
 the existing `n8n-marketing` stack, Caddy container and Redis service. Campaign data
