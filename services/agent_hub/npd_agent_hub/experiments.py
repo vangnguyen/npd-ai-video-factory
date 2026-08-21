@@ -257,4 +257,3 @@ class ExperimentService:
             approved_plans=sum(item.status == ExperimentStatus.APPROVED for item in rows),
             previewed=sum(item.last_preview is not None for item in rows),
         )
-

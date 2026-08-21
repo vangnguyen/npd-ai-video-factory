@@ -156,4 +156,3 @@ autonomous optimization loop. The next Phase 8 increment is a read-only observat
 adapter that attaches measured variant results to an approved plan, followed by an
 owner-reviewed recommendation. Live execution belongs to a separate later phase and
 approval design.
-
