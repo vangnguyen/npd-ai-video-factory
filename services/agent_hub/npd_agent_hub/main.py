@@ -33,6 +33,10 @@ from .experiment_models import (
     ExperimentAuditEvent,
     ExperimentCreate,
     ExperimentDraftUpdate,
+    ExperimentEvaluation,
+    ExperimentEvaluationRequest,
+    ExperimentObservation,
+    ExperimentObservationCreate,
     ExperimentOSStatus,
     ExperimentPreview,
     ExperimentStatus,
@@ -80,8 +84,8 @@ from .tool_registry import ToolCapability, list_tool_capabilities
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.12.0",
-    description="Multi-agent control plane with Campaign, Attribution and Phase 8 Experiment plan/preview workflows.",
+    version="0.12.1",
+    description="Multi-agent control plane with Campaign, Attribution and Phase 8 Experiment plan/preview/read-only observation workflows.",
 )
 schema_reader = EspoSchemaReader()
 mapping_reader = EspoMappingReader(schema_reader)
@@ -601,6 +605,60 @@ def experiment_audit(
         return hub.experiments.history(experiment_id, limit=limit)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="experiment not found") from exc
+
+
+@app.post(
+    "/api/v1/experiments/{experiment_id}/observations",
+    response_model=ExperimentObservation,
+    status_code=201,
+)
+def add_experiment_observation(
+    experiment_id: str,
+    request: ExperimentObservationCreate,
+    principal: Principal = Depends(require_operator),
+) -> ExperimentObservation:
+    try:
+        return hub.experiments.add_observation(
+            experiment_id, request, actor=principal.subject
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="experiment not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get(
+    "/api/v1/experiments/{experiment_id}/observations",
+    response_model=list[ExperimentObservation],
+)
+def list_experiment_observations(
+    experiment_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    _principal: Principal = Depends(require_viewer),
+) -> list[ExperimentObservation]:
+    try:
+        return hub.experiments.observations(experiment_id, limit=limit)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="experiment not found") from exc
+
+
+@app.post(
+    "/api/v1/experiments/{experiment_id}/evaluations",
+    response_model=ExperimentEvaluation,
+)
+def evaluate_experiment(
+    experiment_id: str,
+    request: ExperimentEvaluationRequest,
+    principal: Principal = Depends(require_operator),
+) -> ExperimentEvaluation:
+    try:
+        return hub.experiments.evaluate(
+            experiment_id, request, actor=principal.subject
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="experiment not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/attribution/touchpoints/backfill")

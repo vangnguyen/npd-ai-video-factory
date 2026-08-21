@@ -38,9 +38,9 @@ first-touch/last-touch/linear shadow reports. It does not calculate or expose re
 until the reconciliation snapshot is accepted, and it enables no external writes.
 
 Phase 8 adds a controlled Experiment & Optimization OS. It requires an owner-accepted
-Phase 7 snapshot and produces hypothesis/variant/KPI/guardrail/stop-condition plans and
-previews only. There is no live execution endpoint and no traffic, budget, CMS or CRM
-mutation.
+Phase 7 snapshot, accepts provenance-bound variant observations from read-only sources,
+and produces advisory `winner_candidate`/`continue`/`stop_and_review` recommendations.
+There is no live execution endpoint and no traffic, budget, CMS or CRM mutation.
 
 ## Handoff package
 

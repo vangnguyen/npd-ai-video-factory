@@ -3,8 +3,9 @@
 ## Goal and safety boundary
 
 Phase 8 turns owner-accepted Phase 7 attribution evidence into controlled experiment
-plans. It records hypotheses, variants, primary metrics, guardrails, stop conditions and
-preview packages. The entire phase defaults to `plan_preview`.
+plans. It records hypotheses, variants, primary metrics, guardrails, stop conditions,
+preview packages and provenance-bound read-only observations. The current mode is
+`plan_preview_observe`.
 
 Phase 8 does not allocate live traffic, change Ads budgets, publish landing pages,
 contact customers, write CRM records or start n8n production executors. Approving an
@@ -32,7 +33,13 @@ Experiment plan -- hypothesis / variants / KPI
 guardrails + stop conditions + deterministic preview
                  |
                  v
-owner plan approval (no execution)
+read-only observations -- provenance / freshness / sample size
+                 |
+                 v
+advisory recommendation -- winner candidate / continue / stop and review
+                 |
+                 v
+owner review (no execution)
 ```
 
 `ExperimentService` uses the existing `HubStore` abstraction. An experiment can be
@@ -54,9 +61,16 @@ Each experiment contains:
 - non-automatic stop conditions;
 - evaluation window and owner;
 - audit timestamps, approval decision and the latest preview;
+- up to 100 normalized observations with source system, snapshot ID, window,
+  collection timestamp, source quality, sample size and conversion counts;
+- latest evaluation with freshness, sample sufficiency, two-proportion p-value,
+  target-lift comparison and guardrail breaches;
 - immutable safety flags showing execution and external writes are disabled.
 
-Secrets are forbidden in Experiment objects and audit metadata.
+Secrets are forbidden in Experiment objects and audit metadata. Observation payloads
+also reject raw PII, external-write flags, unknown/duplicate variants and impossible
+time windows. A `verified_read_only` snapshot must cover every planned variant; a
+`partial` snapshot can be retained for diagnosis but cannot produce a winner candidate.
 
 ## Lifecycle
 
@@ -84,8 +98,25 @@ runtime design.
 | Request owner review | `POST /api/v1/experiments/{id}/approvals/request` | operator |
 | Approve/reject plan | `POST /api/v1/experiments/{id}/approvals/decision` | owner |
 | Audit history | `GET /api/v1/experiments/{id}/audit` | viewer |
+| Attach normalized read-only observation | `POST /api/v1/experiments/{id}/observations` | operator |
+| List observations | `GET /api/v1/experiments/{id}/observations` | viewer |
+| Generate advisory evaluation | `POST /api/v1/experiments/{id}/evaluations` | operator |
 
 There is no `/execute` endpoint.
+
+## Read-only evaluation policy
+
+The first planned variant is the control. For conversion observations the service
+calculates each variant's conversion rate and a two-sided two-proportion z-test against
+the best challenger. Default checks require every variant to have at least 100 samples,
+source collection no more than 72 hours old, `verified_read_only` evidence, target lift,
+the selected confidence threshold and no guardrail breach.
+
+Passing all checks yields `winner_candidate`, not an automatic winner. Missing samples
+yields `insufficient_data`; partial or stale evidence yields `manual_review`; a breached
+guardrail or significantly worse challenger yields `stop_and_review`; otherwise the
+advisory result is `continue`. Every evaluation is audited and leaves experiment status,
+traffic, spend and external systems unchanged.
 
 ## Persistence
 
@@ -100,7 +131,9 @@ subnamespace in the existing Agent Hub DB:
 ```
 
 Video jobs remain in DB 0 and `npd:video-jobs:*` is untouched. Recovery tests use
-fakeredis and verify preview/audit state after service restart.
+fakeredis and verify preview, observations, evaluation and audit state after service
+restart. Observations and the latest evaluation are embedded in the Experiment document,
+so existing Agent Hub namespace backup and rollback procedures cover them.
 
 ## Experiment Optimization Agent and tool policy
 
@@ -111,14 +144,17 @@ Central tool capabilities are:
 
 - `experiment.plan.create`: planning-only;
 - `experiment.preview.generate`: planning-only;
+- `experiment.observation.read`: read-only;
+- `experiment.recommendation.evaluate`: planning-only advisory analysis;
 - `experiment.execution.start`: write, requires approval, disabled.
 
 ## Command Center workspace
 
 The responsive workspace shows Experiment OS status, accepted-source requirement,
-Campaign selection, hypothesis, baseline, target lift, plan cards and preview details.
-Owner approval buttons explicitly state that approval does not allocate traffic or
-change production.
+Campaign selection, hypothesis, baseline, target lift, plan cards, preview details,
+observation counts and the latest advisory recommendation. Its evidence panel lists
+source state, period and per-variant sample sizes without raw PII. Owner approval buttons
+explicitly state that approval does not allocate traffic or change production.
 
 ## Initial acceptance example
 
@@ -137,8 +173,10 @@ For Vịnh Tiên, the workspace can propose a 50/50 creative-hook test:
 ## Tests and rollout gates
 
 Tests cover accepted-attribution gating, Campaign coverage, model validation, preview
-math, plan approval RBAC, no execute endpoint, Memory/Redis recovery, audit order,
-agent routing, centralized tool policy and responsive dashboard surfaces.
+math, plan approval RBAC, no execute endpoint, observation RBAC, PII/write rejection,
+sample sufficiency, partial-source behavior, two-proportion significance, guardrail
+breaches, Memory/Redis recovery, audit order, agent routing, centralized tool policy and
+responsive dashboard surfaces.
 
 Before a production rollout:
 
@@ -175,11 +213,20 @@ Acceptance evidence confirmed:
   (`HTTP 200`);
 - no traffic, Ads, CMS, CRM, n8n or customer-contact action was executed.
 
-## Intentional limits and Phase 8 next increment
+## Phase 8.1 read-only observation increment
 
-This foundation does not implement sample-size statistics, live experiment ingestion,
-significance calculation, winner declaration, budget reallocation, CMS changes or an
-autonomous optimization loop. The next Phase 8 increment is a read-only observation
-adapter that attaches measured variant results to an approved plan, followed by an
-owner-reviewed recommendation. Live execution belongs to a separate later phase and
-approval design.
+Version `0.12.1` adds the normalized observation contract, Redis persistence, source
+provenance and freshness gates, sample sufficiency, two-proportion significance,
+guardrail evaluation and advisory recommendations. Configured GA4 and Meta Ads aggregate
+readers are reported as `partial` for variant analysis until their tracking dimensions
+can produce a verified per-variant snapshot. Verified imports remain read-only and must
+carry an opaque snapshot reference; they may not contain credentials or customer PII.
+
+## Intentional limits and next increment
+
+There is still no traffic allocation, live experiment start, winner application, budget
+reallocation, CMS change or autonomous optimization loop. The service does not pretend
+that current aggregate GA4/Meta reports contain variant-level evidence. The next safe
+increment is provider-specific read-only extraction keyed by canonical `campaign_id` and
+`utm_content`/variant ID, with tracking validation and owner acceptance of the source
+snapshot. Live execution belongs to a separate later phase and approval design.

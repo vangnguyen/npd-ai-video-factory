@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import fakeredis
+import pytest
 from fastapi.testclient import TestClient
 
 from npd_agent_hub.attribution import AttributionService
@@ -20,12 +21,18 @@ from npd_agent_hub.dashboard import DASHBOARD_HTML
 from npd_agent_hub.experiment_models import (
     ExperimentApprovalDecision,
     ExperimentCreate,
+    ExperimentEvaluationRequest,
     ExperimentGuardrail,
     ExperimentMetric,
+    ExperimentObservationCreate,
     ExperimentStatus,
     ExperimentStopCondition,
     ExperimentType,
     ExperimentVariant,
+    ObservationSource,
+    ObservationState,
+    RecommendationAction,
+    VariantObservation,
 )
 from npd_agent_hub.experiments import ExperimentService
 from npd_agent_hub.main import app
@@ -123,6 +130,39 @@ def experiment_request(campaign_id: str, reconciliation_id: str) -> ExperimentCr
         ],
         evaluation_window_days=14,
         owner="owner@example.com",
+    )
+
+
+def observation_request(
+    *,
+    state: ObservationState = ObservationState.VERIFIED_READ_ONLY,
+    control_conversions: int = 25,
+    challenger_conversions: int = 45,
+    sample_size: int = 1000,
+) -> ExperimentObservationCreate:
+    collected_at = datetime.now(UTC)
+    return ExperimentObservationCreate(
+        source_system=ObservationSource.GA4,
+        source_state=state,
+        source_snapshot_id="ga4:campaign:vinh-tien:20260901-20260914",
+        window_start=collected_at - timedelta(days=14),
+        window_end=collected_at - timedelta(minutes=5),
+        collected_at=collected_at,
+        variants=[
+            VariantObservation(
+                variant_id="VAR-CONTROL",
+                sample_size=sample_size,
+                conversions=control_conversions,
+                guardrail_values={"Cost per qualified lead": 1_200_000},
+            ),
+            VariantObservation(
+                variant_id="VAR-HOOKA",
+                sample_size=sample_size,
+                conversions=challenger_conversions,
+                guardrail_values={"Cost per qualified lead": 1_300_000},
+            ),
+        ],
+        note="Verified read-only fixture; no traffic or source-system mutation.",
     )
 
 
@@ -227,6 +267,141 @@ def test_redis_recovery_uses_experiment_subnamespace():
     assert not any("npd:video-jobs" in item for item in keys)
 
 
+def test_read_only_observation_generates_advisory_winner_candidate():
+    store = MemoryHubStore()
+    campaign, reconciliation = accepted_fixture(store)
+    service = ExperimentService(store)
+    experiment = service.create(
+        experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
+        actor="operator",
+    )
+    observation = service.add_observation(
+        experiment.experiment_id, observation_request(), actor="operator"
+    )
+    evaluation = service.evaluate(
+        experiment.experiment_id,
+        ExperimentEvaluationRequest(min_sample_per_variant=100),
+        actor="operator",
+    )
+
+    assert observation.contains_raw_pii is False
+    assert observation.external_writes_enabled is False
+    assert evaluation.recommendation == RecommendationAction.WINNER_CANDIDATE
+    assert evaluation.winner_candidate_variant_id == "VAR-HOOKA"
+    assert evaluation.sample_sufficient is True
+    assert evaluation.source_fresh is True
+    assert evaluation.observed_lift_percent == 80
+    assert evaluation.p_value is not None and evaluation.p_value < 0.05
+    assert evaluation.external_writes_enabled is False
+    assert evaluation.automatic_decision_enabled is False
+    assert service.get(experiment.experiment_id).status == ExperimentStatus.PLANNED
+    assert [item.event_type for item in service.history(experiment.experiment_id)[:2]] == [
+        "experiment_evaluated",
+        "experiment_observation_ingested",
+    ]
+
+
+def test_partial_or_insufficient_observation_cannot_produce_winner():
+    store = MemoryHubStore()
+    campaign, reconciliation = accepted_fixture(store)
+    service = ExperimentService(store)
+    experiment = service.create(
+        experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
+        actor="operator",
+    )
+    partial = service.add_observation(
+        experiment.experiment_id,
+        observation_request(state=ObservationState.PARTIAL),
+        actor="operator",
+    )
+    partial_result = service.evaluate(
+        experiment.experiment_id,
+        ExperimentEvaluationRequest(observation_id=partial.observation_id),
+        actor="operator",
+    )
+    assert partial_result.recommendation == RecommendationAction.MANUAL_REVIEW
+    assert partial_result.winner_candidate_variant_id is None
+
+    insufficient = service.add_observation(
+        experiment.experiment_id,
+        observation_request(sample_size=50, control_conversions=2, challenger_conversions=4),
+        actor="operator",
+    )
+    insufficient_result = service.evaluate(
+        experiment.experiment_id,
+        ExperimentEvaluationRequest(
+            observation_id=insufficient.observation_id,
+            min_sample_per_variant=100,
+        ),
+        actor="operator",
+    )
+    assert insufficient_result.recommendation == RecommendationAction.INSUFFICIENT_DATA
+    assert insufficient_result.sample_sufficient is False
+
+
+def test_observation_contract_rejects_pii_write_flags_and_unknown_variants():
+    base = observation_request().model_dump()
+    with pytest.raises(ValueError, match="raw PII"):
+        ExperimentObservationCreate.model_validate({**base, "contains_raw_pii": True})
+    with pytest.raises(ValueError, match="read-only"):
+        ExperimentObservationCreate.model_validate(
+            {**base, "external_writes_enabled": True}
+        )
+
+    store = MemoryHubStore()
+    campaign, reconciliation = accepted_fixture(store)
+    service = ExperimentService(store)
+    experiment = service.create(
+        experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
+        actor="operator",
+    )
+    unknown = observation_request()
+    unknown.variants[1].variant_id = "VAR-UNKNOWN"
+    with pytest.raises(ValueError, match="outside the experiment plan"):
+        service.add_observation(experiment.experiment_id, unknown, actor="operator")
+
+
+def test_guardrail_breach_stops_for_manual_review_without_execution():
+    store = MemoryHubStore()
+    campaign, reconciliation = accepted_fixture(store)
+    service = ExperimentService(store)
+    experiment = service.create(
+        experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
+        actor="operator",
+    )
+    request = observation_request()
+    request.variants[1].guardrail_values["Cost per qualified lead"] = 1_700_000
+    service.add_observation(experiment.experiment_id, request, actor="operator")
+    evaluation = service.evaluate(
+        experiment.experiment_id, ExperimentEvaluationRequest(), actor="operator"
+    )
+    assert evaluation.recommendation == RecommendationAction.STOP_AND_REVIEW
+    assert evaluation.guardrail_breaches
+    assert service.get(experiment.experiment_id).execution_enabled is False
+
+
+def test_observation_and_evaluation_recover_from_redis():
+    client = fakeredis.FakeRedis(decode_responses=True)
+    store = RedisHubStore(client=client, namespace="test:agent-hub")
+    campaign, reconciliation = accepted_fixture(store)
+    service = ExperimentService(store)
+    experiment = service.create(
+        experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
+        actor="operator",
+    )
+    service.add_observation(experiment.experiment_id, observation_request(), actor="operator")
+    service.evaluate(
+        experiment.experiment_id, ExperimentEvaluationRequest(), actor="operator"
+    )
+
+    restored = ExperimentService(
+        RedisHubStore(client=client, namespace="test:agent-hub")
+    ).get(experiment.experiment_id)
+    assert len(restored.observations) == 1
+    assert restored.last_evaluation is not None
+    assert restored.last_evaluation.recommendation == RecommendationAction.WINNER_CANDIDATE
+
+
 def test_experiment_http_rbac_and_no_execution_endpoint():
     previous_settings = authorizer.settings
     previous_store = hub.store
@@ -278,6 +453,33 @@ def test_experiment_http_rbac_and_no_execution_endpoint():
         assert approved.status_code == 200
         assert approved.json()["execution_enabled"] is False
         assert client.post(
+            f"/api/v1/experiments/{experiment_id}/observations",
+            headers=viewer,
+            json=observation_request().model_dump(mode="json"),
+        ).status_code == 403
+        observed = client.post(
+            f"/api/v1/experiments/{experiment_id}/observations",
+            headers=operator,
+            json=observation_request().model_dump(mode="json"),
+        )
+        assert observed.status_code == 201
+        assert client.get(
+            f"/api/v1/experiments/{experiment_id}/observations", headers=viewer
+        ).status_code == 200
+        assert client.post(
+            f"/api/v1/experiments/{experiment_id}/evaluations",
+            headers=viewer,
+            json={},
+        ).status_code == 403
+        evaluated = client.post(
+            f"/api/v1/experiments/{experiment_id}/evaluations",
+            headers=operator,
+            json={},
+        )
+        assert evaluated.status_code == 200
+        assert evaluated.json()["recommendation"] == "winner_candidate"
+        assert evaluated.json()["automatic_decision_enabled"] is False
+        assert client.post(
             f"/api/v1/experiments/{experiment_id}/execute", headers=owner
         ).status_code == 404
         assert client.get("/api/v1/experiments/status", headers=viewer).status_code == 200
@@ -307,6 +509,11 @@ def test_experiment_agent_and_tools_remain_plan_preview_only():
         for item in agent_report.actions
     )
     assert TOOL_REGISTRY["experiment.execution.start"].execution_state.value == "disabled"
+    assert TOOL_REGISTRY["experiment.observation.read"].mode.value == "read"
+    assert (
+        TOOL_REGISTRY["experiment.recommendation.evaluate"].execution_state.value
+        == "planning_only"
+    )
     assert local_hub.list_executions(report.task_id) == []
 
 
@@ -316,3 +523,6 @@ def test_dashboard_exposes_responsive_experiment_workspace():
     assert "/api/v1/experiments/" in DASHBOARD_HTML
     assert "Production execution" in DASHBOARD_HTML
     assert "Traffic allocation: chưa thực thi" in DASHBOARD_HTML
+    assert "Đánh giá bằng dữ liệu chỉ-đọc" in DASHBOARD_HTML
+    assert "/observations" in DASHBOARD_HTML
+    assert "/evaluations" in DASHBOARD_HTML

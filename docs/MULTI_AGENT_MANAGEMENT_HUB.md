@@ -265,9 +265,11 @@ customer contact. Kiến trúc, RBAC, persistence, acceptance và Phase 8 handof
 
 ## Phase 8 Experiment & Optimization OS
 
-Phase 8 bổ sung Experiment Optimization Agent và workspace plan/preview có experiment
-ID, hypothesis, variants, KPI, guardrails và stop conditions. Experiment chỉ được tạo
-từ attribution snapshot đã được owner chấp thuận và phải được snapshot đó bao phủ đúng
-Campaign. Approval chỉ duyệt kế hoạch; không có execute API, không phân bổ traffic,
-không đổi Ads/CMS/CRM và không bật n8n write executor. Kiến trúc, persistence, RBAC,
-acceptance và giới hạn nằm trong `docs/PHASE_8_EXPERIMENT_OPTIMIZATION_OS.md`.
+Phase 8 bổ sung Experiment Optimization Agent và workspace plan/preview/observe có
+experiment ID, hypothesis, variants, KPI, guardrails và stop conditions. Experiment chỉ
+được tạo từ attribution snapshot đã được owner chấp thuận và phải được snapshot đó bao
+phủ đúng Campaign. Phase 8.1 nhận observation variant có provenance qua contract chỉ-đọc,
+kiểm tra freshness/sample/significance/guardrail và tạo khuyến nghị advisory. Approval
+chỉ duyệt kế hoạch; không có execute API, không phân bổ traffic, không đổi Ads/CMS/CRM và
+không bật n8n write executor. Kiến trúc, persistence, RBAC, acceptance và giới hạn nằm
+trong `docs/PHASE_8_EXPERIMENT_OPTIMIZATION_OS.md`.

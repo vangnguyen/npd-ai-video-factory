@@ -38,6 +38,25 @@ class MetricDirection(str, Enum):
     DECREASE = "decrease"
 
 
+class ObservationSource(str, Enum):
+    GA4 = "ga4"
+    META_ADS = "meta_ads"
+    VERIFIED_IMPORT = "verified_import"
+
+
+class ObservationState(str, Enum):
+    VERIFIED_READ_ONLY = "verified_read_only"
+    PARTIAL = "partial"
+
+
+class RecommendationAction(str, Enum):
+    INSUFFICIENT_DATA = "insufficient_data"
+    CONTINUE = "continue"
+    WINNER_CANDIDATE = "winner_candidate"
+    STOP_AND_REVIEW = "stop_and_review"
+    MANUAL_REVIEW = "manual_review"
+
+
 class ExperimentMetric(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     unit: str = Field(min_length=1, max_length=40)
@@ -146,6 +165,90 @@ class ExperimentPreview(BaseModel):
     previewed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class VariantObservation(BaseModel):
+    variant_id: str = Field(pattern=r"^VAR-[A-Z0-9]{1,12}$")
+    sample_size: int = Field(ge=0)
+    conversions: int | None = Field(default=None, ge=0)
+    metric_value: float | None = Field(default=None, ge=0)
+    guardrail_values: dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_measurement(self) -> "VariantObservation":
+        if self.conversions is not None and self.conversions > self.sample_size:
+            raise ValueError("conversions cannot exceed sample_size")
+        if self.conversions is None and self.metric_value is None:
+            raise ValueError("conversions or metric_value is required")
+        assert_no_secrets(self.model_dump(mode="python"), path="variant_observation")
+        return self
+
+
+class ExperimentObservationCreate(BaseModel):
+    source_system: ObservationSource
+    source_state: ObservationState
+    source_snapshot_id: str = Field(min_length=3, max_length=200)
+    window_start: datetime
+    window_end: datetime
+    collected_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    variants: list[VariantObservation] = Field(min_length=1, max_length=10)
+    note: str | None = Field(default=None, max_length=1000)
+    contains_raw_pii: bool = False
+    external_writes_enabled: bool = False
+
+    @model_validator(mode="after")
+    def validate_observation(self) -> "ExperimentObservationCreate":
+        if self.window_end <= self.window_start:
+            raise ValueError("window_end must be after window_start")
+        if self.collected_at < self.window_end:
+            raise ValueError("collected_at cannot be before window_end")
+        if len({item.variant_id for item in self.variants}) != len(self.variants):
+            raise ValueError("observed variant_id values must be unique")
+        if self.contains_raw_pii:
+            raise ValueError("experiment observations cannot contain raw PII")
+        if self.external_writes_enabled:
+            raise ValueError("experiment observations must remain read-only")
+        assert_no_secrets(self.model_dump(mode="python"), path="experiment_observation")
+        return self
+
+
+class ExperimentObservation(ExperimentObservationCreate):
+    observation_id: str = Field(default_factory=lambda: f"eobs_{uuid4().hex[:20]}")
+    experiment_id: str = Field(pattern=EXPERIMENT_ID_PATTERN.pattern)
+    ingested_by: str
+    ingested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ExperimentEvaluationRequest(BaseModel):
+    observation_id: str | None = Field(default=None, pattern=r"^eobs_[0-9a-f]{20}$")
+    min_sample_per_variant: int = Field(default=100, ge=20, le=1_000_000)
+    max_source_age_hours: int = Field(default=72, ge=1, le=24 * 90)
+    confidence_level: float = Field(default=0.95, ge=0.8, le=0.99)
+
+
+class ExperimentEvaluation(BaseModel):
+    evaluation_id: str = Field(default_factory=lambda: f"eeval_{uuid4().hex[:20]}")
+    experiment_id: str = Field(pattern=EXPERIMENT_ID_PATTERN.pattern)
+    observation_id: str = Field(pattern=r"^eobs_[0-9a-f]{20}$")
+    recommendation: RecommendationAction
+    sample_sufficient: bool
+    source_fresh: bool
+    source_state: ObservationState
+    control_variant_id: str
+    compared_variant_id: str | None = None
+    winner_candidate_variant_id: str | None = None
+    control_value: float | None = None
+    compared_value: float | None = None
+    observed_lift_percent: float | None = None
+    p_value: float | None = Field(default=None, ge=0, le=1)
+    confidence_level: float
+    guardrail_breaches: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+    evaluated_by: str
+    evaluated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    external_writes_enabled: bool = False
+    automatic_decision_enabled: bool = False
+
+
 class Experiment(BaseModel):
     experiment_id: str = Field(pattern=EXPERIMENT_ID_PATTERN.pattern)
     campaign_id: str = Field(pattern=CAMPAIGN_ID_PATTERN.pattern)
@@ -166,6 +269,8 @@ class Experiment(BaseModel):
     approved_by: str | None = None
     approved_at: datetime | None = None
     last_preview: ExperimentPreview | None = None
+    observations: list[ExperimentObservation] = Field(default_factory=list, max_length=100)
+    last_evaluation: ExperimentEvaluation | None = None
     execution_enabled: bool = False
     external_writes_enabled: bool = False
     created_by: str
@@ -197,10 +302,15 @@ class ExperimentAuditEvent(BaseModel):
 
 
 class ExperimentOSStatus(BaseModel):
-    mode: str = "plan_preview"
+    mode: str = "plan_preview_observe"
     experiment_count: int
     awaiting_approval: int
     approved_plans: int
     previewed: int
+    observation_count: int = 0
+    evaluated: int = 0
+    awaiting_observation: int = 0
+    observation_sources: dict[str, str] = Field(default_factory=dict)
     source_quality_required: bool = True
     production_execution_enabled: bool = False
+    automatic_decision_enabled: bool = False

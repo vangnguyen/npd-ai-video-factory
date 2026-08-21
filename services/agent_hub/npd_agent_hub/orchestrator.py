@@ -45,7 +45,13 @@ class AgentHub:
         # stays false even when the legacy n8n executor URL exists.
         self.campaigns = CampaignService(self.store, execution_enabled=False)
         self.attribution = AttributionService(self.store)
-        self.experiments = ExperimentService(self.store)
+        marketing_sources = getattr(self.executor, "marketing_sources", None)
+        self.experiments = ExperimentService(
+            self.store,
+            source_status_provider=getattr(
+                marketing_sources, "configuration_status", None
+            ),
+        )
         self.opportunity_reader = EspoOpportunityReader(
             getattr(self.executor, "settings", None),
             transport=getattr(self.executor, "transport", None),
