@@ -148,6 +148,33 @@ Before a production rollout:
 - guarded Agent Hub backup/deploy/smoke must pass;
 - production should initially contain no automatically started experiment.
 
+## Initial production acceptance — 2026-08-21
+
+Commit `5ad7688` was deployed from the dedicated worktree
+`/opt/npd-ai-video-factory-phase8`. Guarded deployment created Redis namespace backup
+`/var/backups/npd-agent-hub/agent-hub-20260821T122553Z.json`, rollback image
+`npd-agent-hub:rollback-20260821T122553Z` and receipt
+`/var/lib/npd-ai/agent-hub-deployments/deploy-20260821T122553Z.json`. The normal Agent
+Hub smoke passed; n8n, Caddy and Redis topology were unchanged.
+
+Production then created and previewed acceptance plan `EXP-VGP-202609-001` for Campaign
+`CMP-VGP-VINHTIEN-202609-01` using owner-accepted reconciliation
+`rec_1218e8a9db744c3a9720`. The `2.5 percent` baseline is explicitly recorded as a
+planning assumption that must be replaced by accepted GA4 evidence before any future
+execution design. The preview calculated a `3.0 percent` target for a 20 percent lift,
+two 50/50 proposed variants, a 14-day evaluation window, CPL guardrail and manual
+stop-and-review condition.
+
+Acceptance evidence confirmed:
+
+- experiment status `previewed` in `plan_preview` mode;
+- experiment and preview external writes disabled;
+- production execution disabled;
+- no `/execute` endpoint (`HTTP 404`);
+- unauthenticated Command Center redirects to login (`HTTP 303`) and login is healthy
+  (`HTTP 200`);
+- no traffic, Ads, CMS, CRM, n8n or customer-contact action was executed.
+
 ## Intentional limits and Phase 8 next increment
 
 This foundation does not implement sample-size statistics, live experiment ingestion,
