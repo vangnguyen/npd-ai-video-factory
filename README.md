@@ -22,10 +22,16 @@ Sprint 1 Tasks 1-13 are implemented and covered by Docker Compose E2E:
 - video-manifest builder and Draft 2020-12 JSON Schema validation
 - API, worker, renderer, QC and Docker Compose E2E tests executed by GitHub Actions
 
-The separate Agent Hub workstream has completed production Phase 5 and now includes
-Phase 5.1 deterministic business-answer evals plus Phase 6 read-only multi-source
-adapter contracts. External Ads/GA4/social sources remain unconfigured until dedicated
-least-privilege credentials are accepted.
+The separate Agent Hub workstream has completed the accepted production baseline
+`agent-hub-v0.9.0`, including Phase 5.1 deterministic business-answer evals and
+Phase 6 read-only CRM, Meta Ads, GA4 and Social integrations with dedicated
+least-privilege credentials.
+
+Phase 6B adds an attribution-ready Campaign Operating System in draft PR #11, based
+on `main`: unified campaign IDs, lifecycle/RBAC/approval boundaries, channel planning,
+specialist agents and a responsive Campaign Workspace. It is deliberately limited to
+research, plan, draft and preview; it is not deployed and production writes remain
+disabled.
 
 ## Handoff package
 
@@ -34,6 +40,7 @@ least-privilege credentials are accepted.
 - [13-task implementation plan](docs/implementation-plan.md)
 - [API contract and error model](docs/api-contract.md)
 - [Acceptance tests](docs/acceptance-tests.md)
+- [Phase 6B Campaign Operating System](docs/PHASE_6B_CAMPAIGN_OPERATING_SYSTEM.md)
 - [Video manifest JSON Schema](packages/contracts/video-manifest.schema.json)
 - [n8n smoke-test workflow](workflows/n8n/sprint-1-smoke-test.json)
 - [45-second sample request](examples/vinhomes-green-paradise.request.json)

@@ -11,20 +11,7 @@ import httpx
 from .config import HubSettings, settings as default_settings
 from .marketing_sources import MarketingSourceReader
 from .models import ActionStatus, AgentTask, ExecutionStatus, PlannedAction, ToolExecutionResult
-
-
-N8N_WRITE_TOOLS = {
-    "ads.budget.update",
-    "social.publish",
-    "sales.contact.send",
-    "crm.records.update",
-}
-
-AUTO_READ_TOOLS = {
-    "analytics.read",
-    "crm.leads.read",
-    "crm.audit.read",
-}
+from .tool_registry import AUTO_READ_TOOLS, N8N_WRITE_TOOLS
 
 CRM_LEAD_SAFE_FIELDS = (
     "id",

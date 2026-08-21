@@ -11,10 +11,11 @@ Agent Hub là lớp điều phối phía trên NPD AI Video Factory. Nó nhận 
 - Phase 5+: evidence-backed business answers: tự chạy allowlist read-only, tổng hợp kết luận và hiển thị kết quả/giới hạn ngay trong Command Center.
 - Phase 5.1: bộ eval 20 câu hỏi nghiệp vụ kiểm tra routing, read execution, answer status và write guard.
 - Phase 6: điều phối nguồn CRM, Meta Ads, GA4 và social insights theo hợp đồng aggregate read-only; nguồn thiếu/lỗi tạo kết quả `partial` có giải thích.
+- Phase 6B: Campaign Operating System thống nhất campaign ID, KPI, channel plans, tracking, approval và audit; chỉ `research -> plan -> draft -> preview`.
 
 Chi tiết triển khai Phase 4: `docs/PHASE_4_COMMAND_CENTER.md`.
 
-## 7 agent
+## 11 agent
 
 1. `commander` — định tuyến công việc, tổng hợp ưu tiên, approval, persistence và tool execution.
 2. `marketing_leader` — kế hoạch marketing, funnel, KPI, đề xuất ngân sách.
@@ -23,6 +24,10 @@ Chi tiết triển khai Phase 4: `docs/PHASE_4_COMMAND_CENTER.md`.
 5. `social_media` — đóng gói nội dung đa nền tảng, lịch và publishing preparation.
 6. `sales` — lead scoring, sales brief, follow-up và next-best-action.
 7. `crm_manager` — data hygiene, duplicate/stale lead detection và pipeline audit.
+8. `performance_ads` — Meta/Google Ads structure, audience/keyword, budget, tracking và creative-test plan; không launch/mutate.
+9. `email_marketing` — segmentation, nurture/re-engagement và A/B sequence draft; không bulk-send.
+10. `zalo_zbs_marketing` — OA/ZBS plan, consent/frequency guardrail và CRM handoff; không gửi live.
+11. `web_landing` — landing brief, CTA/form, SEO/CRO, tracking và WordPress staging metadata; không publish production.
 
 ## API chính
 
@@ -42,6 +47,14 @@ Chi tiết triển khai Phase 4: `docs/PHASE_4_COMMAND_CENTER.md`.
 - `GET /api/v1/integrations/espocrm/schema/{entity_type}`
 - `GET /api/v1/integrations/espocrm/mapping/{entity_type}`
 - `GET /api/v1/integrations/marketing/status`
+- `POST /api/v1/campaigns/from-brief`
+- `GET /api/v1/campaigns` và `GET /api/v1/campaigns/{campaign_id}`
+- `PATCH /api/v1/campaigns/{campaign_id}`
+- `POST /api/v1/campaigns/{campaign_id}/channel-plans/refresh`
+- `POST /api/v1/campaigns/{campaign_id}/approvals/request`
+- `POST /api/v1/campaigns/{campaign_id}/approvals/{scope}/decision`
+- `POST /api/v1/campaigns/{campaign_id}/transitions`
+- `GET /api/v1/campaigns/{campaign_id}/audit` và `/summary`
 
 ## Phase 4 RBAC
 
