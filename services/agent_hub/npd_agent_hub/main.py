@@ -35,6 +35,7 @@ from .experiment_models import (
     ExperimentDraftUpdate,
     ExperimentEvaluation,
     ExperimentEvaluationRequest,
+    ExperimentMetaTrackingMappingUpdate,
     ExperimentObservation,
     ExperimentObservationCreate,
     ExperimentObservationQualityDecision,
@@ -89,8 +90,8 @@ from .tool_registry import ToolCapability, list_tool_capabilities
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.12.2",
-    description="Multi-agent control plane with Phase 8.2 direct read-only experiment observation and owner quality gates.",
+    version="0.12.3",
+    description="Multi-agent control plane with Phase 8.3 tracking activation and read-only experiment quality gates.",
 )
 schema_reader = EspoSchemaReader()
 mapping_reader = EspoMappingReader(schema_reader)
@@ -660,6 +661,25 @@ def validate_experiment_tracking(
         return hub.experiments.validate_tracking(experiment_id, source_system)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"{exc.args[0]} not found") from exc
+
+
+@app.post(
+    "/api/v1/experiments/{experiment_id}/tracking-mapping",
+    response_model=ExperimentTrackingValidation,
+)
+def apply_experiment_meta_tracking_mapping(
+    experiment_id: str,
+    request: ExperimentMetaTrackingMappingUpdate,
+    principal: Principal = Depends(require_owner),
+) -> ExperimentTrackingValidation:
+    try:
+        return hub.experiments.apply_meta_tracking_mapping(
+            experiment_id, request, actor=principal.subject
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"{exc.args[0]} not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post(

@@ -314,6 +314,35 @@ earlier start times. No traffic, Ads, CRM/CMS, n8n or customer-contact mutation 
 performed. Public login health was verified; interactive authenticated visual QA stopped
 at the Google account chooser without selecting or transmitting an account identity.
 
+## Phase 8.3 tracking activation workflow
+
+Version `0.12.3` closes the operational gap between a planned experiment and a truthful
+source mapping without enabling production execution:
+
+- tracking validation generates a deterministic relative landing-page URL for each
+  planned variant with canonical `campaign_id`, `utm_campaign` and
+  `utm_content=VAR-*` parameters;
+- the Command Center displays GA4/Meta readiness, the exact UTM preview and the reason a
+  source is partial;
+- only an owner may submit a numeric Meta campaign ID plus one distinct numeric ad ID
+  for every planned variant;
+- the coordinated mapping updates only Campaign/Experiment records in the Agent Hub
+  Redis namespace, records Campaign and Experiment audit events, invalidates the old
+  preview and leaves Ads untouched;
+- mapping is rejected if any variant is missing/extra, IDs are duplicated/non-numeric,
+  Campaign/Experiment is outside draft/planned/previewed state, or an observation already
+  exists. After evidence exists, mapping is immutable and a new experiment is required;
+- source reads and the owner observation-quality gate remain unchanged. A tracking
+  mapping does not start traffic, publish a URL or create an observation.
+
+### Production discovery gate
+
+A read-only Meta discovery query inspected 130 campaigns across the configured Ads
+accounts and found no campaign matching Vịnh Tiên. Therefore no production mapping was
+applied and no ID was inferred from a similar campaign name. Phase 8.3 must remain
+`partial` for Meta until the real campaign and its two ads exist and their IDs are
+verified in Ads Manager/API.
+
 ## Intentional limits and next increment
 
 There is still no traffic allocation, live experiment start, winner application, budget

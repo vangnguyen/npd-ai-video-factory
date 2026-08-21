@@ -258,7 +258,35 @@ class ExperimentTrackingValidation(BaseModel):
     issues: list[str] = Field(default_factory=list)
     campaign_key: str | None = None
     variant_keys: dict[str, str] = Field(default_factory=dict)
+    tracked_urls: dict[str, str] = Field(default_factory=dict)
     read_only: bool = True
+
+
+class ExperimentMetaTrackingMappingUpdate(BaseModel):
+    meta_ads_campaign_id: str = Field(pattern=r"^\d+$", max_length=40)
+    variant_meta_ad_ids: dict[str, str] = Field(min_length=2, max_length=10)
+    note: str = Field(min_length=5, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_mapping(self) -> "ExperimentMetaTrackingMappingUpdate":
+        if any(
+            not re.fullmatch(r"VAR-[A-Z0-9]{1,12}", key)
+            for key in self.variant_meta_ad_ids
+        ):
+            raise ValueError("variant mapping keys must be canonical VAR-* IDs")
+        if any(
+            not re.fullmatch(r"\d+", value)
+            for value in self.variant_meta_ad_ids.values()
+        ):
+            raise ValueError("Meta ad IDs must contain digits only")
+        if len(set(self.variant_meta_ad_ids.values())) != len(
+            self.variant_meta_ad_ids
+        ):
+            raise ValueError("each experiment variant must map to a distinct Meta ad ID")
+        assert_no_secrets(
+            self.model_dump(mode="python"), path="experiment_tracking_mapping"
+        )
+        return self
 
 
 class ExperimentSourceReadResult(BaseModel):
@@ -364,6 +392,8 @@ class ExperimentOSStatus(BaseModel):
     observation_count: int = 0
     observations_pending_owner: int = 0
     observations_quality_accepted: int = 0
+    ga4_tracking_ready: int = 0
+    meta_tracking_ready: int = 0
     evaluated: int = 0
     awaiting_observation: int = 0
     observation_sources: dict[str, str] = Field(default_factory=dict)

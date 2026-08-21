@@ -3,7 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, time, timezone
 from math import erfc, sqrt
+from urllib.parse import urlencode
 
+from .campaign_models import Campaign, CampaignAuditEvent, CampaignStatus
 from .experiment_models import (
     Experiment,
     ExperimentApprovalDecision,
@@ -12,6 +14,7 @@ from .experiment_models import (
     ExperimentDraftUpdate,
     ExperimentEvaluation,
     ExperimentEvaluationRequest,
+    ExperimentMetaTrackingMappingUpdate,
     ExperimentObservation,
     ExperimentObservationCreate,
     ExperimentObservationQualityDecision,
@@ -404,6 +407,26 @@ class ExperimentService:
         issues: list[str] = []
         variant_keys: dict[str, str] = {}
         campaign_key: str | None = None
+        landing_path = (
+            campaign.landing_pages[0].target_path
+            if campaign.landing_pages
+            else f"/campaigns/{campaign.campaign_id.casefold()}"
+        )
+        tracked_urls: dict[str, str] = {}
+        if landing_path and "{{" not in landing_path:
+            separator = "&" if "?" in landing_path else "?"
+            tracked_urls = {
+                item.variant_id: landing_path
+                + separator
+                + urlencode(
+                    {
+                        "campaign_id": campaign.campaign_id,
+                        "utm_campaign": campaign.tracking.utm_campaign,
+                        "utm_content": item.variant_id,
+                    }
+                )
+                for item in experiment.variants
+            }
         if source_system == ObservationSource.GA4:
             if configured.get("ga4") != "configured":
                 state = "not_configured"
@@ -415,24 +438,25 @@ class ExperimentService:
                 variant_keys = {item.variant_id: item.variant_id for item in experiment.variants}
                 state = "ready" if not issues else "partial"
         elif source_system == ObservationSource.META_ADS:
-            if configured.get("meta_ads") != "configured":
-                state = "not_configured"
+            provider_configured = configured.get("meta_ads") == "configured"
+            if not provider_configured:
                 issues.append("Meta Ads read-only credential/account is not configured.")
-            else:
-                campaign_key = campaign.attribution_refs.get("meta_ads_campaign_id")
-                if not campaign_key or not campaign_key.isdigit():
+            campaign_key = campaign.attribution_refs.get("meta_ads_campaign_id")
+            if not campaign_key or not campaign_key.isdigit():
+                issues.append(
+                    "Campaign attribution_refs.meta_ads_campaign_id must be a numeric Meta campaign ID."
+                )
+            for item in experiment.variants:
+                asset_ref = item.asset_ref or ""
+                if asset_ref.startswith("meta_ad:") and asset_ref[8:].isdigit():
+                    variant_keys[item.variant_id] = asset_ref[8:]
+                else:
                     issues.append(
-                        "Campaign attribution_refs.meta_ads_campaign_id must be a numeric Meta campaign ID."
+                        f"{item.variant_id} needs asset_ref=meta_ad:<numeric_ad_id>."
                     )
-                for item in experiment.variants:
-                    asset_ref = item.asset_ref or ""
-                    if asset_ref.startswith("meta_ad:") and asset_ref[8:].isdigit():
-                        variant_keys[item.variant_id] = asset_ref[8:]
-                    else:
-                        issues.append(
-                            f"{item.variant_id} needs asset_ref=meta_ad:<numeric_ad_id>."
-                        )
-                state = "ready" if not issues else "partial"
+            state = "ready" if provider_configured and not issues else (
+                "not_configured" if not provider_configured else "partial"
+            )
         else:
             state = "partial"
             issues.append("verified_import is manually ingested and has no live adapter.")
@@ -444,7 +468,96 @@ class ExperimentService:
             issues=issues,
             campaign_key=campaign_key,
             variant_keys=variant_keys,
+            tracked_urls=tracked_urls,
         )
+
+    def apply_meta_tracking_mapping(
+        self,
+        experiment_id: str,
+        request: ExperimentMetaTrackingMappingUpdate,
+        *,
+        actor: str,
+    ) -> ExperimentTrackingValidation:
+        experiment = self.get(experiment_id)
+        campaign = self.store.get_campaign(experiment.campaign_id)
+        if campaign is None:
+            raise KeyError("campaign")
+        if campaign.status not in {CampaignStatus.DRAFT, CampaignStatus.PLANNED}:
+            raise ValueError("Meta tracking can only be mapped while Campaign is draft/planned")
+        if experiment.status not in {ExperimentStatus.PLANNED, ExperimentStatus.PREVIEWED}:
+            raise ValueError("Meta tracking can only be mapped while experiment is planned/previewed")
+        if experiment.observations:
+            raise ValueError(
+                "tracking mapping is immutable after observations exist; create a new experiment"
+            )
+        expected = {item.variant_id for item in experiment.variants}
+        supplied = set(request.variant_meta_ad_ids)
+        if supplied != expected:
+            missing = sorted(expected - supplied)
+            extra = sorted(supplied - expected)
+            raise ValueError(
+                f"Meta mapping must cover every planned variant; missing={missing}, extra={extra}"
+            )
+
+        now = datetime.now(timezone.utc)
+        updated_campaign = campaign.model_copy(deep=True)
+        updated_campaign.attribution_refs = {
+            **updated_campaign.attribution_refs,
+            "meta_ads_campaign_id": request.meta_ads_campaign_id,
+        }
+        updated_campaign.audit_metadata.updated_by = actor
+        updated_campaign.audit_metadata.version += 1
+        updated_campaign.updated_at = now
+        updated_campaign = Campaign.model_validate(updated_campaign.model_dump())
+
+        updated_variants = [
+            item.model_copy(
+                update={
+                    "asset_ref": f"meta_ad:{request.variant_meta_ad_ids[item.variant_id]}"
+                }
+            )
+            for item in experiment.variants
+        ]
+        updated_experiment = experiment.model_copy(
+            update={
+                "variants": updated_variants,
+                "last_preview": None,
+                "last_evaluation": None,
+                "status": ExperimentStatus.PLANNED,
+                "updated_by": actor,
+                "updated_at": now,
+            },
+            deep=True,
+        )
+        self.store.save_campaign(updated_campaign)
+        self.store.save_experiment(updated_experiment)
+        self.store.append_campaign_audit(
+            CampaignAuditEvent(
+                campaign_id=campaign.campaign_id,
+                event_type="campaign_meta_tracking_mapped",
+                actor=actor,
+                scope="meta_ads",
+                detail=request.note,
+                metadata={
+                    "experiment_id": experiment_id,
+                    "variant_count": len(updated_variants),
+                    "external_side_effect": False,
+                },
+            )
+        )
+        self._audit(
+            updated_experiment,
+            event_type="experiment_meta_tracking_mapped",
+            actor=actor,
+            detail="Owner mapped Meta campaign/ad IDs inside Agent Hub; no Ads were changed.",
+            metadata={
+                "campaign_id": campaign.campaign_id,
+                "variant_count": len(updated_variants),
+                "preview_invalidated": True,
+                "external_side_effect": False,
+            },
+        )
+        return self.validate_tracking(experiment_id, ObservationSource.META_ADS)
 
     async def read_source_observation(
         self,
@@ -747,6 +860,16 @@ class ExperimentService:
 
     def status(self) -> ExperimentOSStatus:
         rows = self.store.list_experiments(limit=1000)
+        ga4_ready = sum(
+            self.validate_tracking(item.experiment_id, ObservationSource.GA4).state
+            == "ready"
+            for item in rows
+        )
+        meta_ready = sum(
+            self.validate_tracking(item.experiment_id, ObservationSource.META_ADS).state
+            == "ready"
+            for item in rows
+        )
         return ExperimentOSStatus(
             experiment_count=len(rows),
             awaiting_approval=sum(item.status == ExperimentStatus.AWAITING_APPROVAL for item in rows),
@@ -763,6 +886,8 @@ class ExperimentService:
                 for item in rows
                 for observation in item.observations
             ),
+            ga4_tracking_ready=ga4_ready,
+            meta_tracking_ready=meta_ready,
             evaluated=sum(item.last_evaluation is not None for item in rows),
             awaiting_observation=sum(not item.observations for item in rows),
             observation_sources=self._observation_sources(),

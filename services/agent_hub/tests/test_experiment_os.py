@@ -26,6 +26,7 @@ from npd_agent_hub.experiment_models import (
     ExperimentCreate,
     ExperimentEvaluationRequest,
     ExperimentGuardrail,
+    ExperimentMetaTrackingMappingUpdate,
     ExperimentMetric,
     ExperimentObservationCreate,
     ExperimentObservationQualityDecision,
@@ -502,6 +503,116 @@ def test_meta_tracking_requires_explicit_campaign_and_ad_id_mappings():
     assert sum("asset_ref" in issue for issue in validation.issues) == 2
 
 
+def test_owner_maps_meta_tracking_and_generates_canonical_utm_urls():
+    store = MemoryHubStore()
+    campaign, reconciliation = accepted_fixture(store)
+    reader = MarketingSourceReader(
+        HubSettings(
+            meta_ads_account_id="123456",
+            meta_ads_access_token="read-only-token",
+            meta_graph_version="v23.0",
+        )
+    )
+    service = ExperimentService(
+        store,
+        source_status_provider=reader.configuration_status,
+        source_reader=reader,
+    )
+    experiment = service.create(
+        experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
+        actor="operator",
+    )
+    service.preview(experiment.experiment_id, actor="operator")
+    mapped = service.apply_meta_tracking_mapping(
+        experiment.experiment_id,
+        ExperimentMetaTrackingMappingUpdate(
+            meta_ads_campaign_id="998877",
+            variant_meta_ad_ids={"VAR-CONTROL": "101", "VAR-HOOKA": "202"},
+            note="Owner verified IDs against Meta Ads Manager.",
+        ),
+        actor="owner",
+    )
+    assert mapped.state == "ready"
+    assert mapped.campaign_key == "998877"
+    assert mapped.variant_keys == {"VAR-CONTROL": "101", "VAR-HOOKA": "202"}
+    assert all("campaign_id=CMP-VGP-VINHTIEN-202609-01" in url for url in mapped.tracked_urls.values())
+    assert "utm_content=VAR-CONTROL" in mapped.tracked_urls["VAR-CONTROL"]
+    restored_campaign = store.get_campaign(campaign.campaign_id)
+    assert restored_campaign is not None
+    assert restored_campaign.attribution_refs["meta_ads_campaign_id"] == "998877"
+    restored_experiment = service.get(experiment.experiment_id)
+    assert restored_experiment.status == ExperimentStatus.PLANNED
+    assert restored_experiment.last_preview is None
+    assert [item.asset_ref for item in restored_experiment.variants] == [
+        "meta_ad:101",
+        "meta_ad:202",
+    ]
+    assert service.history(experiment.experiment_id)[0].event_type == "experiment_meta_tracking_mapped"
+    assert store.list_campaign_audit(campaign.campaign_id)[0].event_type == "campaign_meta_tracking_mapped"
+
+
+def test_meta_mapping_requires_exact_variants_and_is_immutable_after_observation():
+    store = MemoryHubStore()
+    campaign, reconciliation = accepted_fixture(store)
+    service = ExperimentService(store)
+    experiment = service.create(
+        experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
+        actor="operator",
+    )
+    with pytest.raises(ValueError, match="cover every planned variant"):
+        service.apply_meta_tracking_mapping(
+            experiment.experiment_id,
+            ExperimentMetaTrackingMappingUpdate(
+                meta_ads_campaign_id="998877",
+                variant_meta_ad_ids={"VAR-CONTROL": "101", "VAR-OTHER": "202"},
+                note="Owner verified IDs.",
+            ),
+            actor="owner",
+        )
+    service.add_observation(
+        experiment.experiment_id, observation_request(), actor="operator"
+    )
+    with pytest.raises(ValueError, match="immutable after observations"):
+        service.apply_meta_tracking_mapping(
+            experiment.experiment_id,
+            ExperimentMetaTrackingMappingUpdate(
+                meta_ads_campaign_id="998877",
+                variant_meta_ad_ids={"VAR-CONTROL": "101", "VAR-HOOKA": "202"},
+                note="Owner verified IDs.",
+            ),
+            actor="owner",
+        )
+
+
+def test_meta_tracking_mapping_recovers_from_redis_subnamespace():
+    client = fakeredis.FakeRedis(decode_responses=True)
+    store = RedisHubStore(client=client, namespace="test:agent-hub")
+    campaign, reconciliation = accepted_fixture(store)
+    service = ExperimentService(store)
+    experiment = service.create(
+        experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
+        actor="operator",
+    )
+    service.apply_meta_tracking_mapping(
+        experiment.experiment_id,
+        ExperimentMetaTrackingMappingUpdate(
+            meta_ads_campaign_id="998877",
+            variant_meta_ad_ids={"VAR-CONTROL": "101", "VAR-HOOKA": "202"},
+            note="Owner verified IDs for Redis recovery test.",
+        ),
+        actor="owner",
+    )
+    restarted_store = RedisHubStore(client=client, namespace="test:agent-hub")
+    restored = ExperimentService(restarted_store).get(experiment.experiment_id)
+    restored_campaign = restarted_store.get_campaign(campaign.campaign_id)
+    assert restored_campaign is not None
+    assert restored_campaign.attribution_refs["meta_ads_campaign_id"] == "998877"
+    assert [item.asset_ref for item in restored.variants] == ["meta_ad:101", "meta_ad:202"]
+    assert restarted_store.list_campaign_audit(campaign.campaign_id)[0].event_type == (
+        "campaign_meta_tracking_mapped"
+    )
+
+
 def test_guardrail_breach_stops_for_manual_review_without_execution():
     store = MemoryHubStore()
     campaign, reconciliation = accepted_fixture(store)
@@ -602,6 +713,26 @@ def test_experiment_http_rbac_and_no_execution_endpoint():
         assert no_source.status_code == 200
         assert no_source.json()["state"] == "not_configured"
         assert no_source.json()["observation"] is None
+        mapping_payload = {
+            "meta_ads_campaign_id": "998877",
+            "variant_meta_ad_ids": {"VAR-CONTROL": "101", "VAR-HOOKA": "202"},
+            "note": "Owner verified IDs against Meta Ads Manager.",
+        }
+        assert client.post(
+            f"/api/v1/experiments/{experiment_id}/tracking-mapping",
+            headers=operator,
+            json=mapping_payload,
+        ).status_code == 403
+        mapped = client.post(
+            f"/api/v1/experiments/{experiment_id}/tracking-mapping",
+            headers=owner,
+            json=mapping_payload,
+        )
+        assert mapped.status_code == 200
+        assert mapped.json()["variant_keys"] == {
+            "VAR-CONTROL": "101",
+            "VAR-HOOKA": "202",
+        }
         assert client.post(
             f"/api/v1/experiments/{experiment_id}/preview", headers=operator
         ).status_code == 200
@@ -712,3 +843,6 @@ def test_dashboard_exposes_responsive_experiment_workspace():
     assert "/source-read" in DASHBOARD_HTML
     assert "/quality-decision" in DASHBOARD_HTML
     assert "Owner chấp nhận dữ liệu" in DASHBOARD_HTML
+    assert "/tracking-mapping" in DASHBOARD_HTML
+    assert "Owner khai báo Meta IDs" in DASHBOARD_HTML
+    assert "utm_content" in DASHBOARD_HTML
