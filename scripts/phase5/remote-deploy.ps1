@@ -79,8 +79,8 @@ $common = Expand-RemoteTemplate -Template $commonTemplate -Values @{ REPO_PATH =
 if ($Action -eq 'Audit') {
     $audit = @'
 printf 'host=%s utc=%s\n' "$(hostname)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-printf 'repo='; test -d "$REPO_PATH/.git" && echo present || echo missing
-if test -d "$REPO_PATH/.git"; then
+printf 'repo='; git -C "$REPO_PATH" rev-parse --is-inside-work-tree >/dev/null 2>&1 && echo present || echo missing
+if git -C "$REPO_PATH" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git -C "$REPO_PATH" status --short --branch
   git -C "$REPO_PATH" log -1 --format='commit=%H subject=%s'
 fi

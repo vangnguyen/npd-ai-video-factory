@@ -92,8 +92,11 @@ printf '%s\n' "$video_network_containers" | grep -Eiq '(^|[-_])api([-_]|$)' || f
 if [[ "${PHASE5_REQUIRE_CADDY:-1}" == "1" ]]; then
   [[ -f "$N8N_COMPOSE_FILE" ]] || fail "n8n production Compose file not found: $N8N_COMPOSE_FILE"
   [[ -f "$CADDYFILE" ]] || fail "host Caddyfile not found: $CADDYFILE"
-  docker compose -p "$N8N_COMPOSE_PROJECT" -f "$N8N_COMPOSE_FILE" config --services \
-    | grep -qx caddy || fail "caddy service not found in $N8N_COMPOSE_FILE"
+  n8n_compose_services="$(
+    docker compose -p "$N8N_COMPOSE_PROJECT" -f "$N8N_COMPOSE_FILE" config --services
+  )"
+  grep -Fxq 'caddy' <<<"$n8n_compose_services" \
+    || fail "caddy service not found in $N8N_COMPOSE_FILE"
   caddy_container_id="$(docker compose -p "$N8N_COMPOSE_PROJECT" -f "$N8N_COMPOSE_FILE" ps -q caddy)"
   [[ -n "$caddy_container_id" ]] || fail "running Caddy container was not discovered from project $N8N_COMPOSE_PROJECT"
   if [[ -z "$CADDY_CONTAINER" ]]; then
