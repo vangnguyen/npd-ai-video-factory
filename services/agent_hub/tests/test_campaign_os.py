@@ -62,6 +62,39 @@ def test_campaign_id_generation_and_validation():
         assert "cannot store secrets" in str(exc)
 
 
+def test_zero_budget_existing_customer_source_is_valid_without_execution():
+    request = campaign_request().model_copy(
+        update={
+            "name": "Khách hàng cũ",
+            "project": "Vinhomes Sài Gòn Park",
+            "project_code": "VSGP",
+            "objective": "Ghi nhận doanh thu từ nguồn khách hàng cũ đã được owner xác nhận",
+            "audience": ["Khách hàng cũ"],
+            "budget": CampaignBudget(amount=0, currency="VND"),
+            "kpi_targets": [
+                KPITarget(
+                    name="Giao dịch đã chốt",
+                    target=1,
+                    unit="opportunity",
+                    funnel_stage="closed_won",
+                )
+            ],
+            "crm_source_refs": {
+                "source_type": "existing_customer",
+                "classification": "owner_confirmed",
+            },
+        }
+    )
+    campaign = CampaignService(MemoryHubStore()).create(request, actor="owner")
+
+    assert campaign.campaign_id == "CMP-VSGP-KHACHHANGCU-202609-01"
+    assert campaign.budget.amount == 0
+    assert campaign.status == CampaignStatus.DRAFT
+    assert campaign.channel_plans == []
+    assert campaign.approval_package
+    assert all(not item.execution_enabled for item in campaign.approval_package)
+
+
 def test_sample_vinh_tien_acceptance_creates_full_planning_package_without_side_effects():
     service = CampaignService(MemoryHubStore())
     campaign = service.create_from_brief(

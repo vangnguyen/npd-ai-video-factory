@@ -263,6 +263,16 @@ Opportunity with covered revenue. No owner quality acceptance was recorded, and 
 acceptance record must not be converted to fake won revenue to bypass this gate. The
 next acceptance input must come from the normal Sales process.
 
+### Existing-customer source classification
+
+Campaign OS permits a zero-budget source Campaign when the owner explicitly classifies
+revenue as non-paid demand such as an existing customer, referral or organic source.
+This prevents the attribution ledger from inventing media spend merely to satisfy the
+Campaign contract. A source Campaign remains draft/planning-only, has no channel plans
+or execution permission, and its `crm_source_refs` records the owner-confirmed source
+type without customer PII. The resulting revenue remains a shadow calculation and must
+not be reported as Ads ROAS.
+
 ## Acceptance example
 
 The deterministic Vịnh Tiên sample records two Campaign touches for one won
