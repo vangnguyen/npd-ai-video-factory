@@ -222,6 +222,35 @@ readers are reported as `partial` for variant analysis until their tracking dime
 can produce a verified per-variant snapshot. Verified imports remain read-only and must
 carry an opaque snapshot reference; they may not contain credentials or customer PII.
 
+### Production acceptance — 2026-08-21
+
+CI-green commit `0b44eef` was deployed from the existing detached worktree
+`/opt/npd-ai-video-factory-phase8`. The deployment guard was corrected to discover the
+real Compose `caddy` service without a `pipefail`/early-`grep` false negative and to
+recognize linked Git worktrees whose `.git` entry is a file. Preflight then passed against
+project `n8n-marketing`, container `n8n-marketing-caddy-1` and the existing networks.
+
+The Agent Hub-only deployment created:
+
+- Redis namespace backup
+  `/var/backups/npd-agent-hub/agent-hub-20260821T134609Z.json` with 400 keys;
+- rollback image `npd-agent-hub:rollback-20260821T134609Z`;
+- deployment receipt
+  `/var/lib/npd-ai/agent-hub-deployments/deploy-20260821T134609Z.json`.
+
+Local and HTTPS smoke both passed with Google login, viewer/operator/owner RBAC, 61
+EspoCRM Lead fields and completed CRM/marketing read-only answers. Acceptance reported
+version `0.12.1`, mode `plan_preview_observe`, all four marketing integrations configured,
+and variant evidence states `ga4=partial`, `meta_ads=partial`,
+`verified_import=read_only`. The existing acceptance experiment remains `previewed` with
+zero observations and zero evaluations; requesting evaluation without evidence returns
+HTTP 409, while `/execute` remains absent with HTTP 404.
+
+Only the Agent Hub container restarted. n8n, Caddy and the existing video Redis retained
+their earlier start times, confirming that the production topology was not recreated.
+No synthetic observation, traffic allocation, budget mutation, CRM/CMS write, n8n write
+or customer-contact action was performed.
+
 ## Intentional limits and next increment
 
 There is still no traffic allocation, live experiment start, winner application, budget
