@@ -273,3 +273,10 @@ kiểm tra freshness/sample/significance/guardrail và tạo khuyến nghị adv
 chỉ duyệt kế hoạch; không có execute API, không phân bổ traffic, không đổi Ads/CMS/CRM và
 không bật n8n write executor. Kiến trúc, persistence, RBAC, acceptance và giới hạn nằm
 trong `docs/PHASE_8_EXPERIMENT_OPTIMIZATION_OS.md`.
+
+## Phase 8.4 Campaign Identity & Attribution Data Quality
+
+Phase 8.4 bổ sung registry external ID đã được owner xác minh và ingestion touchpoint
+pseudonymous chỉ-đọc. Unknown/conflict không được ghi vào ledger; Command Center hiển
+thị coverage, freshness và mismatch mà không suy đoán dự án từ tên Ads. Chi tiết nằm
+trong `docs/PHASE_8_4_CAMPAIGN_IDENTITY_DATA_QUALITY.md`.

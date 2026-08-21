@@ -8,7 +8,10 @@ from redis import Redis
 
 from .attribution_models import (
     AttributionAuditEvent,
+    AttributionDataQualitySnapshot,
     AttributionReconciliation,
+    CampaignIdentityMapping,
+    IdentitySource,
     TouchpointEvent,
 )
 from .campaign_models import Campaign, CampaignAuditEvent, CampaignStatus
@@ -57,6 +60,28 @@ class HubStore(Protocol):
     ) -> list[CampaignAuditEvent]: ...
 
     def append_touchpoint(self, event: TouchpointEvent) -> None: ...
+
+    def save_identity_mapping(self, mapping: CampaignIdentityMapping) -> None: ...
+
+    def get_identity_mapping(
+        self, mapping_id: str
+    ) -> CampaignIdentityMapping | None: ...
+
+    def list_identity_mappings(
+        self,
+        *,
+        source_system: IdentitySource | None = None,
+        campaign_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[CampaignIdentityMapping]: ...
+
+    def save_attribution_quality_snapshot(
+        self, snapshot: AttributionDataQualitySnapshot
+    ) -> None: ...
+
+    def list_attribution_quality_snapshots(
+        self, limit: int = 50
+    ) -> list[AttributionDataQualitySnapshot]: ...
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None: ...
 
@@ -118,6 +143,10 @@ class MemoryHubStore:
     campaign_updated_at: dict[str, datetime] = field(default_factory=dict)
     campaign_audit: dict[str, list[CampaignAuditEvent]] = field(default_factory=dict)
     touchpoints: dict[str, TouchpointEvent] = field(default_factory=dict)
+    identity_mappings: dict[str, CampaignIdentityMapping] = field(default_factory=dict)
+    attribution_quality_snapshots: dict[str, AttributionDataQualitySnapshot] = field(
+        default_factory=dict
+    )
     attribution_reconciliations: dict[str, AttributionReconciliation] = field(
         default_factory=dict
     )
@@ -219,6 +248,52 @@ class MemoryHubStore:
         if event.event_id in self.touchpoints:
             raise ValueError("touchpoint event_id already exists")
         self.touchpoints[event.event_id] = event.model_copy(deep=True)
+
+    def save_identity_mapping(self, mapping: CampaignIdentityMapping) -> None:
+        if mapping.mapping_id in self.identity_mappings:
+            raise ValueError("identity mapping_id already exists")
+        self.identity_mappings[mapping.mapping_id] = mapping.model_copy(deep=True)
+
+    def get_identity_mapping(
+        self, mapping_id: str
+    ) -> CampaignIdentityMapping | None:
+        row = self.identity_mappings.get(mapping_id)
+        return row.model_copy(deep=True) if row is not None else None
+
+    def list_identity_mappings(
+        self,
+        *,
+        source_system: IdentitySource | None = None,
+        campaign_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[CampaignIdentityMapping]:
+        limit = max(1, min(limit, 5000))
+        rows = sorted(
+            self.identity_mappings.values(), key=lambda item: item.created_at, reverse=True
+        )
+        if source_system is not None:
+            rows = [item for item in rows if item.source_system == source_system]
+        if campaign_id is not None:
+            rows = [item for item in rows if item.campaign_id == campaign_id]
+        return [item.model_copy(deep=True) for item in rows[:limit]]
+
+    def save_attribution_quality_snapshot(
+        self, snapshot: AttributionDataQualitySnapshot
+    ) -> None:
+        self.attribution_quality_snapshots[snapshot.snapshot_id] = snapshot.model_copy(
+            deep=True
+        )
+
+    def list_attribution_quality_snapshots(
+        self, limit: int = 50
+    ) -> list[AttributionDataQualitySnapshot]:
+        limit = max(1, min(limit, 1000))
+        rows = sorted(
+            self.attribution_quality_snapshots.values(),
+            key=lambda item: item.created_at,
+            reverse=True,
+        )
+        return [item.model_copy(deep=True) for item in rows[:limit]]
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
         event = self.touchpoints.get(event_id)
@@ -482,6 +557,74 @@ class RedisHubStore:
                 {event.event_id: score},
             )
         pipe.execute()
+
+    def save_identity_mapping(self, mapping: CampaignIdentityMapping) -> None:
+        mapping_key = self._key(
+            "attribution-os", "identity-mapping", mapping.mapping_id
+        )
+        if not self.redis.set(mapping_key, mapping.model_dump_json(), nx=True):
+            raise ValueError("identity mapping_id already exists")
+        self.redis.zadd(
+            self._key("attribution-os", "identity-mappings"),
+            {mapping.mapping_id: mapping.created_at.timestamp()},
+        )
+
+    def get_identity_mapping(
+        self, mapping_id: str
+    ) -> CampaignIdentityMapping | None:
+        raw = self.redis.get(
+            self._key("attribution-os", "identity-mapping", mapping_id)
+        )
+        return CampaignIdentityMapping.model_validate_json(raw) if raw else None
+
+    def list_identity_mappings(
+        self,
+        *,
+        source_system: IdentitySource | None = None,
+        campaign_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[CampaignIdentityMapping]:
+        limit = max(1, min(limit, 5000))
+        ids = self.redis.zrevrange(
+            self._key("attribution-os", "identity-mappings"), 0, 4999
+        )
+        rows = [self.get_identity_mapping(str(item)) for item in ids]
+        filtered = [item for item in rows if item is not None]
+        if source_system is not None:
+            filtered = [item for item in filtered if item.source_system == source_system]
+        if campaign_id is not None:
+            filtered = [item for item in filtered if item.campaign_id == campaign_id]
+        return filtered[:limit]
+
+    def save_attribution_quality_snapshot(
+        self, snapshot: AttributionDataQualitySnapshot
+    ) -> None:
+        pipe = self.redis.pipeline()
+        pipe.set(
+            self._key("attribution-os", "data-quality", snapshot.snapshot_id),
+            snapshot.model_dump_json(),
+        )
+        pipe.zadd(
+            self._key("attribution-os", "data-quality-snapshots"),
+            {snapshot.snapshot_id: snapshot.created_at.timestamp()},
+        )
+        pipe.execute()
+
+    def list_attribution_quality_snapshots(
+        self, limit: int = 50
+    ) -> list[AttributionDataQualitySnapshot]:
+        limit = max(1, min(limit, 1000))
+        ids = self.redis.zrevrange(
+            self._key("attribution-os", "data-quality-snapshots"), 0, limit - 1
+        )
+        rows: list[AttributionDataQualitySnapshot] = []
+        for snapshot_id in ids:
+            raw = self.redis.get(
+                self._key("attribution-os", "data-quality", str(snapshot_id))
+            )
+            if raw:
+                rows.append(AttributionDataQualitySnapshot.model_validate_json(raw))
+        return rows
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
         raw = self.redis.get(self._key("attribution-os", "touchpoint", event_id))

@@ -477,3 +477,7 @@ reallocation, CMS change or autonomous optimization loop. Meta extraction requir
 explicit live campaign/ad IDs; GA4 requires the canonical UTM contract to have reached
 live sessions. A winner candidate remains an advisory result even after owner quality
 acceptance. Live execution belongs to a separate later phase and approval design.
+
+The accepted next increment is Phase 8.4 Campaign Identity & Attribution Data
+Quality. Its architecture and rollout gates are specified in
+`docs/PHASE_8_4_CAMPAIGN_IDENTITY_DATA_QUALITY.md`; Ads creation remains deferred.
