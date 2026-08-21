@@ -16,12 +16,18 @@ from .auth import (
 from .attribution_models import (
     AttributionAcceptanceRequest,
     AttributionAuditEvent,
+    AttributionDataQualitySnapshot,
+    AttributionIdentityStatus,
     AttributionModel,
     AttributionReconciliation,
     AttributionReport,
     AttributionStatus,
+    CampaignIdentityMapping,
+    CampaignIdentityMappingCreate,
+    IdentitySource,
     OpportunitySourceSnapshot,
     ReconciliationRequest,
+    SourceTouchpointIngestRequest,
     TouchpointBackfillRequest,
     TouchpointEvent,
 )
@@ -90,8 +96,8 @@ from .tool_registry import ToolCapability, list_tool_capabilities
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.12.3",
-    description="Multi-agent control plane with Phase 8.3 tracking activation and read-only experiment quality gates.",
+    version="0.12.4",
+    description="Multi-agent control plane with verified Campaign identity and read-only attribution data-quality gates.",
 )
 schema_reader = EspoSchemaReader()
 mapping_reader = EspoMappingReader(schema_reader)
@@ -489,6 +495,50 @@ def attribution_status(
     return hub.attribution.status()
 
 
+@app.get(
+    "/api/v1/attribution/identity/status",
+    response_model=AttributionIdentityStatus,
+)
+def attribution_identity_status(
+    _principal: Principal = Depends(require_viewer),
+) -> AttributionIdentityStatus:
+    return hub.attribution.identity_status()
+
+
+@app.get(
+    "/api/v1/attribution/identity-mappings",
+    response_model=list[CampaignIdentityMapping],
+)
+def list_attribution_identity_mappings(
+    source_system: IdentitySource | None = Query(default=None),
+    campaign_id: str | None = Query(default=None),
+    limit: int = Query(default=1000, ge=1, le=5000),
+    _principal: Principal = Depends(require_viewer),
+) -> list[CampaignIdentityMapping]:
+    return hub.attribution.list_identity_mappings(
+        source_system=source_system, campaign_id=campaign_id, limit=limit
+    )
+
+
+@app.post(
+    "/api/v1/attribution/identity-mappings",
+    response_model=CampaignIdentityMapping,
+    status_code=201,
+)
+def register_attribution_identity_mapping(
+    request: CampaignIdentityMappingCreate,
+    principal: Principal = Depends(require_owner),
+) -> CampaignIdentityMapping:
+    try:
+        return hub.attribution.register_identity_mapping(
+            request, actor=principal.subject
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="campaign not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @app.get("/api/v1/experiments/status", response_model=ExperimentOSStatus)
 def experiment_os_status(
     _principal: Principal = Depends(require_viewer),
@@ -750,6 +800,30 @@ def backfill_attribution_touchpoints(
         raise HTTPException(status_code=404, detail="campaign not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/attribution/touchpoints/ingest",
+    response_model=AttributionDataQualitySnapshot,
+)
+def ingest_attribution_source_touchpoints(
+    request: SourceTouchpointIngestRequest,
+    principal: Principal = Depends(require_operator),
+) -> AttributionDataQualitySnapshot:
+    return hub.attribution.ingest_source_touchpoints(
+        request, actor=principal.subject
+    )
+
+
+@app.get(
+    "/api/v1/attribution/data-quality",
+    response_model=list[AttributionDataQualitySnapshot],
+)
+def list_attribution_data_quality(
+    limit: int = Query(default=50, ge=1, le=1000),
+    _principal: Principal = Depends(require_viewer),
+) -> list[AttributionDataQualitySnapshot]:
+    return hub.attribution.list_data_quality_snapshots(limit=limit)
 
 
 @app.get("/api/v1/attribution/touchpoints", response_model=list[TouchpointEvent])

@@ -42,6 +42,11 @@ Phase 7 snapshot, accepts provenance-bound variant observations from read-only s
 and produces advisory `winner_candidate`/`continue`/`stop_and_review` recommendations.
 There is no live execution endpoint and no traffic, budget, CMS or CRM mutation.
 
+Phase 8.4 adds an owner-verified Campaign identity registry and a pseudonymous,
+read-only touchpoint-ingestion quality gate. It reports mapping coverage, freshness,
+unknown identities and conflicts; it never infers projects from Ads names or enables
+external writes.
+
 ## Handoff package
 
 - [Technical handoff](docs/technical-handoff.md)
@@ -52,6 +57,7 @@ There is no live execution endpoint and no traffic, budget, CMS or CRM mutation.
 - [Phase 6B Campaign Operating System](docs/PHASE_6B_CAMPAIGN_OPERATING_SYSTEM.md)
 - [Phase 7 Attribution & Revenue OS](docs/PHASE_7_ATTRIBUTION_REVENUE_OS.md)
 - [Phase 8 Experiment & Optimization OS](docs/PHASE_8_EXPERIMENT_OPTIMIZATION_OS.md)
+- [Phase 8.4 Campaign Identity & Attribution Data Quality](docs/PHASE_8_4_CAMPAIGN_IDENTITY_DATA_QUALITY.md)
 - [Video manifest JSON Schema](packages/contracts/video-manifest.schema.json)
 - [n8n smoke-test workflow](workflows/n8n/sprint-1-smoke-test.json)
 - [45-second sample request](examples/vinhomes-green-paradise.request.json)

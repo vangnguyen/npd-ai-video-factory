@@ -15,6 +15,9 @@ PII_KEY_PATTERN = re.compile(
     r"(^|_)(email|phone|mobile|address|full_?name|first_?name|last_?name)(_|$)",
     re.IGNORECASE,
 )
+WRITE_FLAG_PATTERN = re.compile(
+    r"(write|publish|send|execute|execution|mutate|mutation)", re.IGNORECASE
+)
 
 
 def assert_no_raw_pii(value: Any, *, path: str = "attribution") -> None:
@@ -37,6 +40,17 @@ def assert_pseudonymous_reference(value: str | None) -> str | None:
     return value
 
 
+def assert_no_enabled_write_flags(value: Any, *, path: str) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if WRITE_FLAG_PATTERN.search(str(key)) and item not in (False, None, "disabled"):
+                raise ValueError(f"Attribution source cannot enable writes: {path}.{key}")
+            assert_no_enabled_write_flags(item, path=f"{path}.{key}")
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            assert_no_enabled_write_flags(item, path=f"{path}[{index}]")
+
+
 class TouchpointType(str, Enum):
     AD_CLICK = "ad_click"
     LANDING_VIEW = "landing_view"
@@ -57,6 +71,173 @@ class AttributionModel(str, Enum):
     FIRST_TOUCH = "first_touch"
     LAST_TOUCH = "last_touch"
     LINEAR = "linear"
+
+
+class IdentitySource(str, Enum):
+    META_ADS = "meta_ads"
+    GA4 = "ga4"
+    ESPOCRM = "espocrm"
+    UTM = "utm"
+
+
+class IdentityResolutionState(str, Enum):
+    RESOLVED = "resolved"
+    UNKNOWN = "unknown"
+    CONFLICT = "conflict"
+    DUPLICATE = "duplicate"
+
+
+class FreshnessState(str, Enum):
+    FRESH = "fresh"
+    STALE = "stale"
+    NO_DATA = "no_data"
+
+
+class CampaignIdentityMappingCreate(BaseModel):
+    source_system: IdentitySource
+    source_account_id: str | None = Field(default=None, max_length=200)
+    source_campaign_id: str | None = Field(default=None, max_length=200)
+    source_adset_id: str | None = Field(default=None, max_length=200)
+    source_ad_group_id: str | None = Field(default=None, max_length=200)
+    source_ad_id: str | None = Field(default=None, max_length=200)
+    utm_campaign: str | None = Field(default=None, max_length=200)
+    campaign_id: str = Field(pattern=CAMPAIGN_ID_PATTERN.pattern)
+    note: str = Field(min_length=5, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_external_identity(self) -> "CampaignIdentityMappingCreate":
+        if not any(
+            (
+                self.source_campaign_id,
+                self.source_adset_id,
+                self.source_ad_group_id,
+                self.source_ad_id,
+                self.utm_campaign,
+            )
+        ):
+            raise ValueError("identity mapping requires an external ID or utm_campaign")
+        if self.source_system == IdentitySource.META_ADS and not self.source_campaign_id:
+            raise ValueError("Meta Ads identity mapping requires source_campaign_id")
+        assert_no_raw_pii(self.model_dump(mode="python"), path="identity_mapping")
+        return self
+
+
+class CampaignIdentityMapping(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    mapping_id: str = Field(
+        default_factory=lambda: f"cim_{uuid4().hex[:20]}",
+        pattern=r"^cim_[0-9a-f]{20}$",
+    )
+    source_system: IdentitySource
+    source_account_id: str | None = None
+    source_campaign_id: str | None = None
+    source_adset_id: str | None = None
+    source_ad_group_id: str | None = None
+    source_ad_id: str | None = None
+    utm_campaign: str | None = None
+    campaign_id: str = Field(pattern=CAMPAIGN_ID_PATTERN.pattern)
+    project: str = Field(min_length=2, max_length=200)
+    verification: str = "owner_verified"
+    verified_by: str
+    note: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    external_writes_enabled: bool = False
+
+    @model_validator(mode="after")
+    def validate_safe_mapping(self) -> "CampaignIdentityMapping":
+        assert_no_raw_pii(self.model_dump(mode="python"), path="identity_mapping")
+        if self.external_writes_enabled:
+            raise ValueError("identity registry cannot enable external writes")
+        return self
+
+
+class SourceTouchpointEvent(BaseModel):
+    source_event_id: str = Field(min_length=2, max_length=200)
+    source_system: IdentitySource
+    event_type: TouchpointType
+    occurred_at: datetime
+    channel: str = Field(min_length=2, max_length=80)
+    canonical_campaign_id: str | None = Field(
+        default=None, pattern=CAMPAIGN_ID_PATTERN.pattern
+    )
+    source_account_id: str | None = Field(default=None, max_length=200)
+    source_campaign_id: str | None = Field(default=None, max_length=200)
+    source_adset_id: str | None = Field(default=None, max_length=200)
+    source_ad_group_id: str | None = Field(default=None, max_length=200)
+    source_ad_id: str | None = Field(default=None, max_length=200)
+    lead_id: str | None = Field(default=None, min_length=1, max_length=100)
+    opportunity_id: str | None = Field(default=None, min_length=1, max_length=100)
+    utm_source: str | None = Field(default=None, max_length=200)
+    utm_medium: str | None = Field(default=None, max_length=200)
+    utm_campaign: str | None = Field(default=None, max_length=200)
+    utm_content: str | None = Field(default=None, max_length=200)
+    landing_page: str | None = Field(default=None, max_length=1000)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    _pseudonymous_ids = field_validator(
+        "source_event_id", "lead_id", "opportunity_id"
+    )(assert_pseudonymous_reference)
+
+    @model_validator(mode="after")
+    def validate_source_event(self) -> "SourceTouchpointEvent":
+        if not self.lead_id and not self.opportunity_id:
+            raise ValueError("source touchpoint requires lead_id or opportunity_id")
+        if not any(
+            (
+                self.canonical_campaign_id,
+                self.source_campaign_id,
+                self.source_ad_id,
+                self.utm_campaign,
+            )
+        ):
+            raise ValueError("source touchpoint requires a canonical or external campaign identity")
+        assert_no_raw_pii(self.metadata, path="source_touchpoint.metadata")
+        assert_no_enabled_write_flags(self.metadata, path="source_touchpoint.metadata")
+        return self
+
+
+class SourceTouchpointIngestRequest(BaseModel):
+    events: list[SourceTouchpointEvent] = Field(min_length=1, max_length=500)
+    stale_after_hours: int = Field(default=72, ge=1, le=24 * 365)
+
+
+class TouchpointIngestIssue(BaseModel):
+    source_event_id: str
+    state: IdentityResolutionState
+    detail: str
+    candidate_campaign_ids: list[str] = Field(default_factory=list)
+
+
+class AttributionDataQualitySnapshot(BaseModel):
+    snapshot_id: str = Field(
+        default_factory=lambda: f"adq_{uuid4().hex[:20]}",
+        pattern=r"^adq_[0-9a-f]{20}$",
+    )
+    received: int
+    resolved: int
+    inserted: int
+    duplicates: int
+    unknown: int
+    conflicts: int
+    coverage_rate: float
+    mismatch_rate: float
+    freshness_state: FreshnessState
+    latest_occurred_at: datetime | None = None
+    freshness_age_hours: float | None = None
+    issues: list[TouchpointIngestIssue] = Field(default_factory=list)
+    created_by: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    shadow_mode: bool = True
+    external_writes_enabled: bool = False
+
+
+class AttributionIdentityStatus(BaseModel):
+    mode: str = "verified_identity_read_only"
+    mapping_count: int
+    touchpoint_count: int
+    latest_snapshot: AttributionDataQualitySnapshot | None = None
+    production_write_enabled: bool = False
 
 
 class TouchpointEvent(BaseModel):

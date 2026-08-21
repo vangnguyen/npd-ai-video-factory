@@ -7,16 +7,26 @@ from datetime import datetime, timezone
 from .attribution_models import (
     AttributionAcceptanceRequest,
     AttributionAuditEvent,
+    AttributionDataQualitySnapshot,
+    AttributionIdentityStatus,
     AttributionModel,
     AttributionQuality,
     AttributionReconciliation,
     AttributionReport,
     AttributionStatus,
     CampaignAttributionRow,
+    CampaignIdentityMapping,
+    CampaignIdentityMappingCreate,
+    FreshnessState,
+    IdentityResolutionState,
+    IdentitySource,
     OpportunityMatch,
     OpportunityObservation,
     OpportunityStatus,
     ReconciliationRequest,
+    SourceTouchpointEvent,
+    SourceTouchpointIngestRequest,
+    TouchpointIngestIssue,
     TouchpointBackfillRequest,
     TouchpointEvent,
 )
@@ -28,6 +38,297 @@ class AttributionService:
 
     def __init__(self, store: HubStore) -> None:
         self.store = store
+
+    @staticmethod
+    def _mapping_identity(mapping: CampaignIdentityMapping) -> tuple[object, ...]:
+        return (
+            mapping.source_system,
+            mapping.source_account_id,
+            mapping.source_campaign_id,
+            mapping.source_adset_id,
+            mapping.source_ad_group_id,
+            mapping.source_ad_id,
+            mapping.utm_campaign,
+        )
+
+    @staticmethod
+    def _mappings_overlap(
+        left: CampaignIdentityMapping, right: CampaignIdentityMapping
+    ) -> bool:
+        if left.source_system != right.source_system:
+            return False
+        fields = (
+            "source_account_id",
+            "source_campaign_id",
+            "source_adset_id",
+            "source_ad_group_id",
+            "source_ad_id",
+            "utm_campaign",
+        )
+        for field in fields:
+            left_value = getattr(left, field)
+            right_value = getattr(right, field)
+            if left_value is not None and right_value is not None and left_value != right_value:
+                return False
+        return True
+
+    @staticmethod
+    def _mapping_matches_event(
+        mapping: CampaignIdentityMapping, event: SourceTouchpointEvent
+    ) -> bool:
+        if mapping.source_system != event.source_system:
+            return False
+        fields = (
+            "source_account_id",
+            "source_campaign_id",
+            "source_adset_id",
+            "source_ad_group_id",
+            "source_ad_id",
+            "utm_campaign",
+        )
+        return all(
+            getattr(mapping, field) is None
+            or getattr(mapping, field) == getattr(event, field)
+            for field in fields
+        )
+
+    def register_identity_mapping(
+        self, request: CampaignIdentityMappingCreate, *, actor: str
+    ) -> CampaignIdentityMapping:
+        campaign = self.store.get_campaign(request.campaign_id)
+        if campaign is None:
+            raise KeyError(request.campaign_id)
+        candidate = CampaignIdentityMapping(
+            **request.model_dump(exclude={"note"}),
+            project=campaign.project,
+            verified_by=actor,
+            note=request.note,
+        )
+        existing_mappings = self.store.list_identity_mappings(limit=5000)
+        for existing in existing_mappings:
+            if self._mapping_identity(existing) == self._mapping_identity(candidate):
+                if existing.campaign_id == candidate.campaign_id:
+                    return existing
+                raise ValueError(
+                    "external identity is already mapped to a different Campaign"
+                )
+            if (
+                existing.campaign_id != candidate.campaign_id
+                and self._mappings_overlap(existing, candidate)
+            ):
+                raise ValueError(
+                    "identity mapping overlaps a different Campaign; use non-overlapping verified IDs"
+                )
+        self.store.save_identity_mapping(candidate)
+        self._audit(
+            event_type="campaign_identity_registered",
+            actor=actor,
+            detail="Owner registered a verified external identity without source-system mutation.",
+            metadata={
+                "mapping_id": candidate.mapping_id,
+                "campaign_id": candidate.campaign_id,
+                "project": candidate.project,
+                "source_system": candidate.source_system.value,
+                "external_side_effect": False,
+            },
+        )
+        return candidate
+
+    def list_identity_mappings(
+        self,
+        *,
+        source_system: IdentitySource | None = None,
+        campaign_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[CampaignIdentityMapping]:
+        return self.store.list_identity_mappings(
+            source_system=source_system, campaign_id=campaign_id, limit=limit
+        )
+
+    def _resolve_source_event(
+        self, event: SourceTouchpointEvent
+    ) -> tuple[list[str], list[str], list[str]]:
+        candidates: set[str] = set()
+        methods: list[str] = []
+        mapping_ids: list[str] = []
+        if event.canonical_campaign_id:
+            if self.store.get_campaign(event.canonical_campaign_id) is not None:
+                candidates.add(event.canonical_campaign_id)
+                methods.append("canonical_campaign_id")
+        if event.utm_campaign:
+            contract_matches = [
+                campaign.campaign_id
+                for campaign in self.store.list_campaigns(limit=1000)
+                if campaign.tracking.utm_campaign.casefold()
+                == event.utm_campaign.casefold()
+            ]
+            candidates.update(contract_matches)
+            if contract_matches:
+                methods.append("utm_contract")
+        for mapping in self.store.list_identity_mappings(
+            source_system=event.source_system, limit=5000
+        ):
+            if self._mapping_matches_event(mapping, event):
+                candidates.add(mapping.campaign_id)
+                mapping_ids.append(mapping.mapping_id)
+        if mapping_ids:
+            methods.append("owner_verified_registry")
+        return sorted(candidates), sorted(set(methods)), sorted(mapping_ids)
+
+    @staticmethod
+    def _event_fingerprint(event: SourceTouchpointEvent) -> str:
+        return hashlib.sha256(
+            f"{event.source_system.value}:{event.source_event_id}".encode("utf-8")
+        ).hexdigest()[:32]
+
+    @staticmethod
+    def _same_immutable_payload(left: TouchpointEvent, right: TouchpointEvent) -> bool:
+        return left.model_dump(exclude={"ingested_at"}, mode="json") == right.model_dump(
+            exclude={"ingested_at"}, mode="json"
+        )
+
+    def ingest_source_touchpoints(
+        self, request: SourceTouchpointIngestRequest, *, actor: str
+    ) -> AttributionDataQualitySnapshot:
+        inserted = duplicates = resolved = unknown = conflicts = 0
+        issues: list[TouchpointIngestIssue] = []
+        resolved_times: list[datetime] = []
+        seen_payloads: dict[str, TouchpointEvent] = {}
+
+        for source_event in request.events:
+            campaign_ids, methods, mapping_ids = self._resolve_source_event(source_event)
+            if not campaign_ids:
+                unknown += 1
+                issues.append(
+                    TouchpointIngestIssue(
+                        source_event_id=source_event.source_event_id,
+                        state=IdentityResolutionState.UNKNOWN,
+                        detail="No canonical Campaign matched verified IDs or UTM contract.",
+                    )
+                )
+                continue
+            if len(campaign_ids) > 1:
+                conflicts += 1
+                issues.append(
+                    TouchpointIngestIssue(
+                        source_event_id=source_event.source_event_id,
+                        state=IdentityResolutionState.CONFLICT,
+                        detail="Verified evidence resolves to multiple Campaigns; ledger write blocked.",
+                        candidate_campaign_ids=campaign_ids,
+                    )
+                )
+                continue
+
+            resolved += 1
+            resolved_times.append(source_event.occurred_at)
+            event = TouchpointEvent(
+                event_id=f"tpt_{self._event_fingerprint(source_event)}",
+                campaign_id=campaign_ids[0],
+                event_type=source_event.event_type,
+                occurred_at=source_event.occurred_at,
+                source_system=source_event.source_system.value,
+                channel=source_event.channel,
+                lead_id=source_event.lead_id,
+                opportunity_id=source_event.opportunity_id,
+                source_campaign_id=source_event.source_campaign_id,
+                source_adset_id=source_event.source_adset_id,
+                source_ad_group_id=source_event.source_ad_group_id,
+                source_ad_id=source_event.source_ad_id,
+                utm_source=source_event.utm_source,
+                utm_medium=source_event.utm_medium,
+                utm_campaign=source_event.utm_campaign,
+                utm_content=source_event.utm_content,
+                landing_page=source_event.landing_page,
+                metadata={
+                    **source_event.metadata,
+                    "source_event_id": source_event.source_event_id,
+                    "identity_resolution": methods,
+                    "identity_mapping_ids": mapping_ids,
+                    "external_side_effect": False,
+                },
+            )
+            existing = self.store.get_touchpoint(event.event_id)
+            pending = seen_payloads.get(event.event_id)
+            comparison = existing or pending
+            if comparison is not None:
+                if self._same_immutable_payload(comparison, event):
+                    duplicates += 1
+                    continue
+                conflicts += 1
+                issues.append(
+                    TouchpointIngestIssue(
+                        source_event_id=source_event.source_event_id,
+                        state=IdentityResolutionState.CONFLICT,
+                        detail="source_event_id payload changed; immutable ledger write blocked.",
+                        candidate_campaign_ids=campaign_ids,
+                    )
+                )
+                continue
+            self.store.append_touchpoint(event)
+            seen_payloads[event.event_id] = event
+            inserted += 1
+
+        received = len(request.events)
+        latest = max(resolved_times) if resolved_times else None
+        now = datetime.now(timezone.utc)
+        age_hours: float | None = None
+        freshness = FreshnessState.NO_DATA
+        if latest is not None:
+            normalized_latest = (
+                latest.replace(tzinfo=timezone.utc) if latest.tzinfo is None else latest
+            )
+            age_hours = round(max(0.0, (now - normalized_latest).total_seconds() / 3600), 2)
+            freshness = (
+                FreshnessState.FRESH
+                if age_hours <= request.stale_after_hours
+                else FreshnessState.STALE
+            )
+        snapshot = AttributionDataQualitySnapshot(
+            received=received,
+            resolved=resolved,
+            inserted=inserted,
+            duplicates=duplicates,
+            unknown=unknown,
+            conflicts=conflicts,
+            coverage_rate=round(resolved / received, 4),
+            mismatch_rate=round((unknown + conflicts) / received, 4),
+            freshness_state=freshness,
+            latest_occurred_at=latest,
+            freshness_age_hours=age_hours,
+            issues=issues,
+            created_by=actor,
+        )
+        self.store.save_attribution_quality_snapshot(snapshot)
+        self._audit(
+            event_type="source_touchpoints_ingested",
+            actor=actor,
+            detail="Pseudonymous source events passed through verified identity resolution.",
+            metadata={
+                "snapshot_id": snapshot.snapshot_id,
+                "received": received,
+                "resolved": resolved,
+                "inserted": inserted,
+                "duplicates": duplicates,
+                "unknown": unknown,
+                "conflicts": conflicts,
+                "freshness_state": freshness.value,
+                "external_side_effect": False,
+            },
+        )
+        return snapshot
+
+    def identity_status(self) -> AttributionIdentityStatus:
+        snapshots = self.store.list_attribution_quality_snapshots(limit=1)
+        return AttributionIdentityStatus(
+            mapping_count=len(self.store.list_identity_mappings(limit=5000)),
+            touchpoint_count=len(self.store.list_touchpoints(limit=5000)),
+            latest_snapshot=snapshots[0] if snapshots else None,
+        )
+
+    def list_data_quality_snapshots(
+        self, *, limit: int = 50
+    ) -> list[AttributionDataQualitySnapshot]:
+        return self.store.list_attribution_quality_snapshots(limit=limit)
 
     def _audit(
         self,
