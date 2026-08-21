@@ -220,12 +220,38 @@ for viewer. The accepted projection now has ten fields, including `cCampaignId`,
 has Opportunity `read=all` and `create/edit/delete/stream=no`. Caddy and the existing
 n8n/Redis topology were not changed, and the n8n write executor remains disabled.
 
-Production still contains zero real Opportunity records. The source therefore remains
-`no_data`; reconciliation and owner quality acceptance remain intentionally blocked.
-The next acceptance step is for the normal Sales process to create the first real
-Opportunity with a valid Campaign OS `CMP-*` value, then run the read-only
-reconciliation and have the owner review its evidence. Full database restore is never
-automatic because it could overwrite newer CRM records.
+### Explicit acceptance Opportunity — 2026-08-21
+
+After explicit owner authorization, production created the planning-only Campaign
+`CMP-VGP-VINHTIEN-202609-01` from the standard Vịnh Tiên brief. It remains `planned`;
+none of its Ads, email, ZBS or landing-page plans were executed.
+
+EspoCRM then created one clearly labelled acceptance record:
+
+- Opportunity ID `6a881aa4bb9606e32`;
+- name `[ACCEPTANCE] Vinh Tien thang 9 - Campaign OS`;
+- stage `Prospecting`, close date `2026-09-30`;
+- canonical field `cCampaignId=CMP-VGP-VINHTIEN-202609-01`;
+- amount `0`, so it does not represent real pipeline or revenue.
+
+EspoCRM currently permits only `USD` in its global currency list. The acceptance
+record therefore stores `0 USD`; the CRM-wide currency configuration was not changed
+as part of this scoped operation. Enabling VND for real Opportunities requires a
+separate data-governance decision and migration review.
+
+Before the authorized writes, Agent Hub Redis and the full EspoCRM database were
+backed up under
+`/var/backups/npd-agent-hub/opportunity-acceptance-20260821T092725Z`. The database
+archive passed its integrity test, and rollback remains manual to avoid overwriting
+newer CRM records.
+
+Local and public source reads now report `available`, one reported/one read
+Opportunity, the correct Campaign ID, no raw PII and no external writes. Read-only
+reconciliation `rec_1bd18f18c4dc41c585ba` matched the Opportunity to the Campaign at
+100 percent but remains `blocked_by_data_quality`: there is no real closed-won
+Opportunity with covered revenue. No owner quality acceptance was recorded, and the
+acceptance record must not be converted to fake won revenue to bypass this gate. The
+next acceptance input must come from the normal Sales process.
 
 ## Acceptance example
 
