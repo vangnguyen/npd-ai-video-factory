@@ -124,8 +124,6 @@ class OpportunityObservation(BaseModel):
 
     @model_validator(mode="after")
     def validate_observation(self) -> "OpportunityObservation":
-        if self.status == OpportunityStatus.WON and self.closed_at is None:
-            raise ValueError("won opportunity requires closed_at")
         assert_no_raw_pii(self.metadata, path="opportunity.metadata")
         return self
 
@@ -136,6 +134,18 @@ class TouchpointBackfillRequest(BaseModel):
 
 class ReconciliationRequest(BaseModel):
     observations: list[OpportunityObservation] = Field(min_length=1, max_length=500)
+
+
+class OpportunitySourceSnapshot(BaseModel):
+    source: str = "EspoCRM Opportunity read-only"
+    status: str
+    projection: list[str]
+    campaign_field: str = "not_configured"
+    reported_total: int
+    records_read: int
+    observations: list[OpportunityObservation] = Field(default_factory=list)
+    contains_raw_pii: bool = False
+    external_writes_enabled: bool = False
 
 
 class OpportunityMatch(BaseModel):

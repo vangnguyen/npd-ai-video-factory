@@ -40,9 +40,10 @@ DASHBOARD_HTML = r'''<!doctype html>
 </div>
 
 <div class="section attribution-os">
-  <div class="section-head"><div><h2>Attribution & Revenue OS</h2><span class="section-note">Shadow chỉ-đọc. Doanh thu bị khóa cho đến khi owner chấp thuận quality gate.</span></div><button class="smallbtn secondary" onclick="loadAttributionStatus()">Làm mới</button></div>
+  <div class="section-head"><div><h2>Attribution & Revenue OS</h2><span class="section-note">Shadow chỉ-đọc. Doanh thu bị khóa cho đến khi owner chấp thuận quality gate.</span></div><div class="row"><button class="smallbtn secondary" onclick="loadAttributionOpportunitySource()">Kiểm tra Opportunity</button><button class="smallbtn secondary" onclick="loadAttributionStatus()">Làm mới</button></div></div>
   <div class="card">
     <div id="attributionStatus" class="attribution-grid"><div class="muted">Chưa tải trạng thái attribution.</div></div>
+    <div id="attributionSource" class="notice" style="margin:10px 0 0">Nguồn EspoCRM Opportunity chỉ đọc khi owner/operator yêu cầu; UI không hiển thị ID bản ghi.</div>
     <div class="notice" style="margin:10px 0 0">Không ghi CRM, không đổi Ads và không liên hệ khách hàng. CAC/ROAS không được suy diễn nếu chưa có chi phí cùng Campaign/kỳ đã đối soát.</div>
   </div>
 </div>
@@ -112,6 +113,7 @@ function renderSources(sources){$('sources').innerHTML=Object.entries(sources||{
 function renderCampaignProviders(providers){$('campaignProviders').innerHTML=Object.entries(providers||{}).map(([name,p])=>`<span class="source ${esc(p.status)}">${esc(name)}: ${esc(p.status)}</span>`).join('')}
 function renderAttributionStatus(s){$('attributionStatus').innerHTML=`<div class="attribution-state"><strong>Chế độ</strong>${esc(s.mode)}</div><div class="attribution-state"><strong>Touchpoints bất biến</strong>${number(s.touchpoint_count)}</div><div class="attribution-state"><strong>Reconciliation snapshots</strong>${number(s.reconciliation_count)}</div><div class="attribution-state"><strong>Quality gate gần nhất</strong>${esc(s.latest_state)}</div><div class="attribution-state"><strong>Production write</strong>${s.production_write_enabled?'enabled':'disabled'}</div>`}
 async function loadAttributionStatus(){try{renderAttributionStatus(await api('/api/v1/attribution/status'))}catch(e){setStatus(e.message,'error')}}
+async function loadAttributionOpportunitySource(){try{const s=await api('/api/v1/attribution/sources/espocrm/opportunities?limit=200');$('attributionSource').innerHTML=`<strong>EspoCRM Opportunity: ${esc(s.status)}</strong><div class="muted">Tổng CRM: ${number(s.reported_total)} · Đã đọc: ${number(s.records_read)} · Campaign field: ${esc(s.campaign_field)} · Raw PII: ${s.contains_raw_pii?'có':'không'} · Write: ${s.external_writes_enabled?'enabled':'disabled'}</div><div class="muted">Projection: ${(s.projection||[]).map(esc).join(' · ')}</div>`}catch(e){setStatus(e.message,'error')}}
 let selectedCampaign=null,activeCampaignTab='overview';
 const CAMPAIGN_TABS=[['overview','Campaign Overview'],['kpis','KPIs'],['channels','Channel Plans'],['creatives','Creatives'],['landing','Landing Pages'],['email','Email'],['zalo','Zalo/ZBS'],['tracking','Tracking'],['approvals','Approvals'],['funnel','Lead Funnel']];
 async function loadCampaigns(){const rows=await api('/api/v1/campaigns?limit=20');$('campaignList').innerHTML=rows.length?rows.map(c=>`<button class="campaign-card" onclick="openCampaign('${esc(c.campaign_id)}')"><strong>${esc(c.name)}</strong><div class="task-id">${esc(c.campaign_id)}</div><div class="row" style="margin-top:7px"><span class="tag">${esc(c.status)}</span><span class="muted">${money(c.budget.amount,c.budget.currency)}</span></div></button>`).join(''):'<div class="muted">Chưa có campaign. Dùng brief mẫu để tạo plan.</div>';if(selectedCampaign){const current=rows.find(c=>c.campaign_id===selectedCampaign.campaign_id);if(current){selectedCampaign=current;renderCampaignDetail()}}}

@@ -20,10 +20,12 @@ from .attribution_models import (
     AttributionReconciliation,
     AttributionReport,
     AttributionStatus,
+    OpportunitySourceSnapshot,
     ReconciliationRequest,
     TouchpointBackfillRequest,
     TouchpointEvent,
 )
+from .espocrm_opportunities import EspoOpportunityError, EspoOpportunityNotConfigured
 from .campaign_models import (
     Campaign,
     CampaignApprovalDecision,
@@ -566,6 +568,51 @@ def attribution_audit(
     _principal: Principal = Depends(require_viewer),
 ) -> list[AttributionAuditEvent]:
     return hub.attribution.audit(limit=limit)
+
+
+@app.get(
+    "/api/v1/attribution/sources/espocrm/opportunities",
+    response_model=OpportunitySourceSnapshot,
+)
+async def read_espocrm_opportunity_snapshot(
+    limit: int = Query(default=200, ge=1, le=500),
+    _principal: Principal = Depends(require_operator),
+) -> OpportunitySourceSnapshot:
+    try:
+        return await hub.opportunity_reader.read(limit=limit)
+    except EspoOpportunityNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except EspoOpportunityError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/attribution/reconciliations/espocrm",
+    response_model=AttributionReconciliation,
+    status_code=201,
+)
+async def reconcile_espocrm_opportunities(
+    limit: int = Query(default=200, ge=1, le=500),
+    principal: Principal = Depends(require_operator),
+) -> AttributionReconciliation:
+    try:
+        snapshot = await hub.opportunity_reader.read(limit=limit)
+    except EspoOpportunityNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except EspoOpportunityError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not snapshot.observations:
+        raise HTTPException(
+            status_code=409,
+            detail="EspoCRM has no Opportunity snapshots; quality acceptance remains blocked",
+        )
+    try:
+        return hub.attribution.reconcile(
+            ReconciliationRequest(observations=snapshot.observations),
+            actor=principal.subject,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get(

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import asyncio
+import json
 
 import fakeredis
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -27,6 +30,7 @@ from npd_agent_hub.campaign_models import (
 from npd_agent_hub.campaigns import CampaignService
 from npd_agent_hub.config import HubSettings
 from npd_agent_hub.dashboard import DASHBOARD_HTML
+from npd_agent_hub.espocrm_opportunities import EspoOpportunityReader
 from npd_agent_hub.main import app
 from npd_agent_hub.models import AgentName, AgentTask
 from npd_agent_hub.orchestrator import AgentHub, hub
@@ -244,6 +248,27 @@ def test_bad_reconciliation_cannot_be_owner_accepted():
         )
 
 
+def test_closed_won_missing_revenue_date_is_reported_as_quality_issue():
+    store = MemoryHubStore()
+    campaigns = CampaignService(store)
+    campaign = campaigns.create(campaign_create("Vịnh Tiên"), actor="operator")
+    attribution = AttributionService(store)
+    observation = OpportunityObservation(
+        opportunity_id="won-without-close-date",
+        campaign_id_hint=campaign.campaign_id,
+        stage="Closed Won",
+        status=OpportunityStatus.WON,
+        amount=12_000_000,
+        observed_at=datetime(2026, 9, 20, tzinfo=UTC),
+    )
+    reconciliation = attribution.reconcile(
+        ReconciliationRequest(observations=[observation]), actor="operator"
+    )
+    assert reconciliation.quality.eligible_for_acceptance is False
+    assert reconciliation.quality.won_revenue_coverage_rate == 0
+    assert "closed_at" in " ".join(reconciliation.quality.issues)
+
+
 def test_redis_recovery_uses_attribution_subnamespace():
     redis_client = fakeredis.FakeRedis(decode_responses=True)
     store = RedisHubStore(client=redis_client, namespace="test:agent-hub")
@@ -353,4 +378,108 @@ def test_dashboard_exposes_read_only_attribution_workspace():
     assert "Attribution & Revenue OS" in DASHBOARD_HTML
     assert "Shadow chỉ-đọc" in DASHBOARD_HTML
     assert "/api/v1/attribution/status" in DASHBOARD_HTML
+    assert "/api/v1/attribution/sources/espocrm/opportunities" in DASHBOARD_HTML
     assert "CAC/ROAS không được suy diễn" in DASHBOARD_HTML
+
+
+def test_espocrm_opportunity_reader_uses_only_safe_get_projection():
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["select"] = request.url.params.get("select")
+        seen["api_key"] = request.headers.get("X-Api-Key")
+        return httpx.Response(
+            200,
+            json={
+                "total": 1,
+                "list": [
+                    {
+                        "id": "opp-safe-001",
+                        "name": "Must never be requested or returned",
+                        "stage": "Closed Won",
+                        "amount": 12_000_000,
+                        "amountCurrency": "VND",
+                        "closeDate": "2026-09-19",
+                        "leadSource": "Facebook",
+                        "campaignId": "espo-campaign-id",
+                        "modifiedAt": "2026-09-20 08:30:00",
+                    }
+                ],
+            },
+        )
+
+    reader = EspoOpportunityReader(
+        HubSettings(
+            espocrm_url="https://crm.local",
+            espocrm_api_key="read-only-key",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    snapshot = asyncio.run(reader.read(limit=20))
+
+    assert snapshot.status == "available"
+    assert snapshot.contains_raw_pii is False
+    assert snapshot.external_writes_enabled is False
+    assert snapshot.observations[0].status == OpportunityStatus.WON
+    assert snapshot.observations[0].closed_at == datetime(2026, 9, 19, tzinfo=UTC)
+    assert snapshot.observations[0].campaign_id_hint is None
+    serialized = json.dumps(snapshot.model_dump(mode="json"))
+    assert "Must never be requested" not in serialized
+    assert seen == {
+        "method": "GET",
+        "path": "/api/v1/Opportunity",
+        "select": (
+            "id,stage,amount,amountCurrency,closeDate,leadSource,"
+            "campaignId,createdAt,modifiedAt"
+        ),
+        "api_key": "read-only-key",
+    }
+
+
+def test_espocrm_no_data_endpoint_blocks_reconciliation_without_side_effects():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        return httpx.Response(200, json={"total": 0, "list": []})
+
+    previous_settings = authorizer.settings
+    previous_store = hub.store
+    previous_attribution = hub.attribution
+    previous_reader = hub.opportunity_reader
+    settings = HubSettings(
+        auth_mode="static_token",
+        viewer_token="viewer-secret",
+        operator_token="operator-secret",
+        owner_token="owner-secret",
+        espocrm_url="https://crm.local",
+        espocrm_api_key="read-only-key",
+    )
+    authorizer.settings = settings
+    store = MemoryHubStore()
+    hub.store = store
+    hub.attribution = AttributionService(store)
+    hub.opportunity_reader = EspoOpportunityReader(
+        settings, transport=httpx.MockTransport(handler)
+    )
+    client = TestClient(app)
+    viewer = {"Authorization": "Bearer viewer-secret"}
+    operator = {"Authorization": "Bearer operator-secret"}
+    try:
+        url = "/api/v1/attribution/sources/espocrm/opportunities"
+        assert client.get(url, headers=viewer).status_code == 403
+        snapshot = client.get(url, headers=operator)
+        assert snapshot.status_code == 200
+        assert snapshot.json()["status"] == "no_data"
+        assert snapshot.json()["observations"] == []
+        reconcile = client.post(
+            "/api/v1/attribution/reconciliations/espocrm", headers=operator
+        )
+        assert reconcile.status_code == 409
+        assert "quality acceptance remains blocked" in reconcile.json()["detail"]
+        assert hub.attribution.status().reconciliation_count == 0
+    finally:
+        authorizer.settings = previous_settings
+        hub.store = previous_store
+        hub.attribution = previous_attribution
+        hub.opportunity_reader = previous_reader

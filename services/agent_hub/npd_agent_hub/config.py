@@ -9,6 +9,7 @@ class HubSettings:
     video_api_url: str = "http://api:8000"
     espocrm_url: str = ""
     espocrm_api_key: str = ""
+    espocrm_opportunity_campaign_field: str = ""
     n8n_executor_webhook_url: str = ""
     request_timeout_seconds: float = 30.0
     store_backend: str = "memory"
@@ -53,6 +54,9 @@ class HubSettings:
             video_api_url=os.getenv("VIDEO_API_URL", "http://api:8000").rstrip("/"),
             espocrm_url=os.getenv("ESPOCRM_URL", "").rstrip("/"),
             espocrm_api_key=os.getenv("ESPOCRM_API_KEY", "").strip(),
+            espocrm_opportunity_campaign_field=os.getenv(
+                "ESPOCRM_OPPORTUNITY_CAMPAIGN_FIELD", ""
+            ).strip(),
             n8n_executor_webhook_url=os.getenv("N8N_AGENT_EXECUTOR_WEBHOOK_URL", "").strip(),
             request_timeout_seconds=float(os.getenv("AGENT_TOOL_TIMEOUT_SECONDS", "30")),
             store_backend=os.getenv("AGENT_STORE_BACKEND", "memory").strip().lower(),

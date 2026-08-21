@@ -64,8 +64,9 @@ Supported event types are `ad_click`, `landing_view`, `form_submit`, `lead_creat
 
 An observation is an immutable read snapshot with Opportunity/Lead references,
 stage, `open|won|lost`, amount, currency, observed time and closed time. A won
-Opportunity must have `closed_at`. The reconciliation batch accepts only one latest
-snapshot for each Opportunity.
+Opportunity without positive revenue or `closed_at` is retained as data-quality
+evidence but cannot pass owner acceptance. The reconciliation batch accepts only one
+latest snapshot for each Opportunity.
 
 ### Reconciliation
 
@@ -131,10 +132,19 @@ send messages or execute an n8n write workflow.
 | Accept/reject quality snapshot | `POST /api/v1/attribution/reconciliations/{id}/acceptance` | owner |
 | Read shadow report | `GET /api/v1/attribution/reconciliations/{id}/report` | viewer |
 | Read audit history | `GET /api/v1/attribution/audit` | viewer |
+| Read safe EspoCRM Opportunity snapshot | `GET /api/v1/attribution/sources/espocrm/opportunities` | operator |
+| Reconcile latest EspoCRM Opportunity snapshot | `POST /api/v1/attribution/reconciliations/espocrm` | operator |
 
 Backfill writes only to the internal immutable ledger. It does not write any source
 system. Production onboarding of a source adapter needs a separate least-privilege
 review and acceptance record.
+
+The EspoCRM adapter requests only `id`, `stage`, `amount`, `amountCurrency`,
+`closeDate`, `leadSource`, `campaignId`, `createdAt` and `modifiedAt`. It never requests
+Opportunity name, contact, account, email, phone, notes or description. An optional
+`ESPOCRM_OPPORTUNITY_CAMPAIGN_FIELD` may be configured only after a custom field that
+carries the canonical `CMP-*` value exists; native EspoCRM `campaignId` remains a
+source reference and is never treated as the Campaign OS ID.
 
 ## Persistence
 
@@ -165,6 +175,21 @@ The responsive Command Center adds an Attribution & Revenue OS status panel show
 The UI deliberately does not provide a shortcut to accept quality or import arbitrary
 revenue. Owner acceptance uses the authenticated API after the reconciliation evidence
 has been reviewed.
+
+### Production read-projection audit — 2026-08-21
+
+The existing `agent-hub-readonly` API role initially had no Opportunity scope. Its
+single role was backed up to
+`/var/backups/npd-agent-hub/espocrm-role-agent-hub-readonly-before-opportunity-20260821T083314Z.sql`,
+then extended with `read=all` and `create/edit/delete/stream=no` for Opportunity.
+Metadata and record GETs were verified; Lead access and all write restrictions remain
+unchanged.
+
+The accepted production projection has nine fields and no raw PII. EspoCRM currently
+reports zero Opportunity records and no canonical Campaign OS custom field. Therefore
+the production source state is `no_data`, no reconciliation snapshot is created, and
+owner quality acceptance/revenue reporting remains blocked. Phase 7 must not create a
+synthetic CRM Opportunity to bypass this gate.
 
 ## Acceptance example
 
