@@ -421,6 +421,29 @@ no raw PII and external writes remain disabled. No quality decision or evaluatio
 been applied; the owner must review the historical-comparison caveat before accepting
 the snapshot.
 
+### Owner quality acceptance and advisory evaluation — 2026-08-21
+
+After reviewing the campaign/ad selection, read-only provenance and identical-copy
+causality caveat, the owner explicitly accepted observation
+`eobs_5f994a164de04fcba4f2`. The system recorded the owner decision, regenerated a
+`quality_accepted` preview and evaluated the snapshot at 95% confidence with a minimum
+sample threshold of 100 impressions per variant.
+
+Evaluation `eeval_b2ddca24467248ecbb64` reported:
+
+- recommendation `continue` and no winner candidate;
+- both variants sample-sufficient and the source snapshot fresh;
+- control lead/impression rate `0.042397%` versus comparator `0.02013%`;
+- comparator observed lift `-52.5201%` relative to control;
+- `p=0.23081915`, which is not statistically significant at 95% confidence;
+- no CPL guardrail breach;
+- advisory-only output with external writes and automatic decisions disabled.
+
+The experiment returned to `previewed`; one observation is quality-accepted, one
+evaluation exists and none are pending. The `/execute` route remains absent with HTTP
+404. No traffic allocation, budget change, Ads mutation or production content change
+was performed.
+
 ## Intentional limits and next increment
 
 There is still no traffic allocation, live experiment start, winner application, budget
