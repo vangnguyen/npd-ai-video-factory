@@ -433,6 +433,12 @@ class MarketingSourceReader:
 
         base_url = f"https://graph.facebook.com/{version}/{page_id}"
         headers = {"Authorization": f"Bearer {self.settings.social_meta_access_token}"}
+        # Meta treats `until` as an exclusive boundary for the posts edge and
+        # rejects a zero-width range. Keep the public reporting period intact,
+        # but advance only the Graph request boundary for a one-day query.
+        graph_until = until
+        if since == until:
+            graph_until = (date.fromisoformat(until) + timedelta(days=1)).isoformat()
         async with self._client() as client:
             try:
                 page_response, posts_response = await asyncio.gather(
@@ -450,7 +456,7 @@ class MarketingSourceReader:
                                 "reactions.limit(0).summary(true)"
                             ),
                             "since": since,
-                            "until": until,
+                            "until": graph_until,
                             "limit": "100",
                         },
                         headers=headers,

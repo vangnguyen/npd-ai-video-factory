@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import date, timedelta
 
 import httpx
 
@@ -248,6 +249,38 @@ def test_meta_page_social_reader_uses_separate_read_only_credential_and_aggregat
     serialized = json.dumps(result)
     assert "social-page-secret" not in serialized
     assert all("social-page-secret" not in url for _, url, _ in seen)
+
+
+def test_meta_page_one_day_reader_uses_nonzero_exclusive_graph_range():
+    posts_params = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/112233"):
+            return httpx.Response(
+                200,
+                json={"name": "Căn Hộ Express", "followers_count": 1350},
+            )
+        if request.url.path.endswith("/112233/posts"):
+            posts_params.update(dict(request.url.params))
+            return httpx.Response(200, json={"data": []})
+        raise AssertionError(f"unexpected request: {request.url}")
+
+    reader = MarketingSourceReader(
+        HubSettings(
+            social_meta_page_id="112233",
+            social_meta_access_token="social-page-secret",
+            social_meta_graph_version="v23.0",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = run(reader.read_all(period_days=1))
+
+    reported_day = date.fromisoformat(result["period_end"])
+    assert result["source_status"]["social"] == "available"
+    assert posts_params["since"] == reported_day.isoformat()
+    assert posts_params["until"] == (reported_day + timedelta(days=1)).isoformat()
+    assert result["sources"]["social"]["period_end"] == reported_day.isoformat()
 
 
 def test_partial_native_social_configuration_is_not_treated_as_configured():
