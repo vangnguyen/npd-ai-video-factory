@@ -18,6 +18,7 @@ class AgentName(str, Enum):
     ZALO_ZBS_MARKETING = "zalo_zbs_marketing"
     WEB_LANDING = "web_landing"
     REVENUE_ATTRIBUTION = "revenue_attribution"
+    EXPERIMENT_OPTIMIZATION = "experiment_optimization"
     SALES = "sales"
     CRM_MANAGER = "crm_manager"
 

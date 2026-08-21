@@ -262,3 +262,12 @@ customer contact. Kiến trúc, RBAC, persistence, acceptance và Phase 8 handof
 4. Join spend theo cùng Campaign/currency/period trước khi tính CAC hoặc ROAS.
 5. Chỉ sau acceptance mới thiết kế Phase 8 Experiment & Optimization OS ở plan/preview.
 6. Production write mappings vẫn cần một phase và approval riêng.
+
+## Phase 8 Experiment & Optimization OS
+
+Phase 8 bổ sung Experiment Optimization Agent và workspace plan/preview có experiment
+ID, hypothesis, variants, KPI, guardrails và stop conditions. Experiment chỉ được tạo
+từ attribution snapshot đã được owner chấp thuận và phải được snapshot đó bao phủ đúng
+Campaign. Approval chỉ duyệt kế hoạch; không có execute API, không phân bổ traffic,
+không đổi Ads/CMS/CRM và không bật n8n write executor. Kiến trúc, persistence, RBAC,
+acceptance và giới hạn nằm trong `docs/PHASE_8_EXPERIMENT_OPTIMIZATION_OS.md`.

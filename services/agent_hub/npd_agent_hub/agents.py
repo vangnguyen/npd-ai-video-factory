@@ -478,6 +478,58 @@ class CRMManagerAgent(BaseAgent):
         )
 
 
+class ExperimentOptimizationAgent(BaseAgent):
+    name = AgentName.EXPERIMENT_OPTIMIZATION
+    role = "Thiết kế thử nghiệm có giả thuyết, KPI, guardrail và stop condition từ attribution đã được owner chấp thuận."
+    capabilities = (
+        "experiment hypothesis design",
+        "creative and audience variant planning",
+        "landing-page test planning",
+        "metric and guardrail definition",
+        "plan-only experiment preview",
+    )
+
+    def plan(self, task: AgentTask) -> AgentReport:
+        return AgentReport(
+            agent=self.name,
+            summary=f"Thiết kế Experiment OS plan/preview cho '{task.objective}' mà không thay đổi production.",
+            priorities=[
+                "Chỉ dùng attribution snapshot đã được owner chấp thuận.",
+                "Nêu rõ control, variants, primary metric, guardrails và stop conditions.",
+                "Giữ traffic allocation, ngân sách và production content ở trạng thái không thực thi.",
+            ],
+            actions=[
+                action(
+                    agent=self.name,
+                    title="Tạo experiment plan",
+                    description="Chuẩn hóa hypothesis, variants, KPI và cửa sổ đánh giá.",
+                    tool="experiment.plan.create",
+                    payload={"objective": task.objective, "mode": "plan_preview"},
+                ),
+                action(
+                    agent=self.name,
+                    title="Sinh experiment preview",
+                    description="Xem trước phân bổ và guardrails mà không ghi hệ thống ngoài.",
+                    tool="experiment.preview.generate",
+                    payload={"objective": task.objective, "external_writes": False},
+                ),
+            ],
+            metrics_to_watch=[
+                "primary metric baseline",
+                "target lift",
+                "guardrail breaches",
+                "evaluation window",
+                "sample sufficiency",
+            ],
+            handoffs=[
+                AgentName.MARKETING_LEADER,
+                AgentName.REVENUE_ATTRIBUTION,
+                AgentName.PERFORMANCE_ADS,
+                AgentName.WEB_LANDING,
+            ],
+        )
+
+
 SPECIALIST_AGENTS: dict[AgentName, BaseAgent] = {
     AgentName.MARKETING_LEADER: MarketingLeaderAgent(),
     AgentName.CONTENT_TREND: ContentTrendAgent(),
@@ -488,6 +540,7 @@ SPECIALIST_AGENTS: dict[AgentName, BaseAgent] = {
     AgentName.ZALO_ZBS_MARKETING: ZaloZBSMarketingAgent(),
     AgentName.WEB_LANDING: WebLandingAgent(),
     AgentName.REVENUE_ATTRIBUTION: RevenueAttributionAgent(),
+    AgentName.EXPERIMENT_OPTIMIZATION: ExperimentOptimizationAgent(),
     AgentName.SALES: SalesAgent(),
     AgentName.CRM_MANAGER: CRMManagerAgent(),
 }
@@ -510,6 +563,17 @@ ROUTING_KEYWORDS: dict[AgentName, tuple[str, ...]] = {
         "cac",
         "closed won",
         "touchpoint",
+    ),
+    AgentName.EXPERIMENT_OPTIMIZATION: (
+        "experiment",
+        "a/b",
+        "ab test",
+        "thử nghiệm",
+        "tối ưu",
+        "optimization",
+        "variant",
+        "guardrail",
+        "stop condition",
     ),
     AgentName.SALES: ("sales", "sale", "khách", "tư vấn", "chăm sóc", "follow-up", "booking"),
     AgentName.CRM_MANAGER: (

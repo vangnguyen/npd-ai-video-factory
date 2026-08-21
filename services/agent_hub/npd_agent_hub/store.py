@@ -13,6 +13,7 @@ from .attribution_models import (
 )
 from .campaign_models import Campaign, CampaignAuditEvent, CampaignStatus
 from .config import HubSettings, settings as default_settings
+from .experiment_models import Experiment, ExperimentAuditEvent, ExperimentStatus
 from .models import AgentTask, AuditEvent, CommandCenterReport, ToolExecutionResult
 
 
@@ -86,6 +87,23 @@ class HubStore(Protocol):
 
     def list_attribution_audit(self, limit: int = 100) -> list[AttributionAuditEvent]: ...
 
+    def save_experiment(self, experiment: Experiment) -> None: ...
+
+    def get_experiment(self, experiment_id: str) -> Experiment | None: ...
+
+    def list_experiments(
+        self,
+        limit: int = 50,
+        campaign_id: str | None = None,
+        status: ExperimentStatus | None = None,
+    ) -> list[Experiment]: ...
+
+    def append_experiment_audit(self, event: ExperimentAuditEvent) -> None: ...
+
+    def list_experiment_audit(
+        self, experiment_id: str, limit: int = 100
+    ) -> list[ExperimentAuditEvent]: ...
+
 
 @dataclass
 class MemoryHubStore:
@@ -104,6 +122,9 @@ class MemoryHubStore:
         default_factory=dict
     )
     attribution_audit: list[AttributionAuditEvent] = field(default_factory=list)
+    experiments: dict[str, Experiment] = field(default_factory=dict)
+    experiment_updated_at: dict[str, datetime] = field(default_factory=dict)
+    experiment_audit: dict[str, list[ExperimentAuditEvent]] = field(default_factory=dict)
 
     def _touch(self, task_id: str) -> None:
         self.updated_at[task_id] = datetime.now(timezone.utc)
@@ -256,6 +277,47 @@ class MemoryHubStore:
     def list_attribution_audit(self, limit: int = 100) -> list[AttributionAuditEvent]:
         limit = max(1, min(limit, 1000))
         return [item.model_copy(deep=True) for item in self.attribution_audit[-limit:]][::-1]
+
+    def save_experiment(self, experiment: Experiment) -> None:
+        self.experiments[experiment.experiment_id] = experiment.model_copy(deep=True)
+        self.experiment_updated_at[experiment.experiment_id] = experiment.updated_at
+
+    def get_experiment(self, experiment_id: str) -> Experiment | None:
+        experiment = self.experiments.get(experiment_id)
+        return experiment.model_copy(deep=True) if experiment is not None else None
+
+    def list_experiments(
+        self,
+        limit: int = 50,
+        campaign_id: str | None = None,
+        status: ExperimentStatus | None = None,
+    ) -> list[Experiment]:
+        limit = max(1, min(limit, 1000))
+        ids = sorted(
+            self.experiment_updated_at,
+            key=self.experiment_updated_at.__getitem__,
+            reverse=True,
+        )
+        rows = [self.experiments[item] for item in ids]
+        if campaign_id is not None:
+            rows = [item for item in rows if item.campaign_id == campaign_id]
+        if status is not None:
+            rows = [item for item in rows if item.status == status]
+        return [item.model_copy(deep=True) for item in rows[:limit]]
+
+    def append_experiment_audit(self, event: ExperimentAuditEvent) -> None:
+        bucket = self.experiment_audit.setdefault(event.experiment_id, [])
+        bucket.append(event.model_copy(deep=True))
+        del bucket[:-2000]
+
+    def list_experiment_audit(
+        self, experiment_id: str, limit: int = 100
+    ) -> list[ExperimentAuditEvent]:
+        limit = max(1, min(limit, 1000))
+        return [
+            item.model_copy(deep=True)
+            for item in self.experiment_audit.get(experiment_id, [])[-limit:]
+        ][::-1]
 
 
 class RedisHubStore:
@@ -507,6 +569,63 @@ class RedisHubStore:
             self._key("attribution-os", "audit"), -limit, -1
         )
         return [AttributionAuditEvent.model_validate_json(raw) for raw in reversed(rows)]
+
+    def save_experiment(self, experiment: Experiment) -> None:
+        pipe = self.redis.pipeline()
+        pipe.set(
+            self._key("experiment-os", "experiment", experiment.experiment_id),
+            experiment.model_dump_json(),
+        )
+        pipe.zadd(
+            self._key("experiment-os", "experiments"),
+            {experiment.experiment_id: experiment.updated_at.timestamp()},
+        )
+        pipe.zadd(
+            self._key("experiment-os", "campaign", experiment.campaign_id, "experiments"),
+            {experiment.experiment_id: experiment.updated_at.timestamp()},
+        )
+        pipe.execute()
+
+    def get_experiment(self, experiment_id: str) -> Experiment | None:
+        raw = self.redis.get(
+            self._key("experiment-os", "experiment", experiment_id)
+        )
+        return Experiment.model_validate_json(raw) if raw else None
+
+    def list_experiments(
+        self,
+        limit: int = 50,
+        campaign_id: str | None = None,
+        status: ExperimentStatus | None = None,
+    ) -> list[Experiment]:
+        limit = max(1, min(limit, 1000))
+        key = (
+            self._key("experiment-os", "campaign", campaign_id, "experiments")
+            if campaign_id is not None
+            else self._key("experiment-os", "experiments")
+        )
+        ids = self.redis.zrevrange(key, 0, max(limit * 5, limit) - 1)
+        rows = [self.get_experiment(str(item)) for item in ids]
+        filtered = [item for item in rows if item is not None]
+        if status is not None:
+            filtered = [item for item in filtered if item.status == status]
+        return filtered[:limit]
+
+    def append_experiment_audit(self, event: ExperimentAuditEvent) -> None:
+        key = self._key("experiment-os", "audit", event.experiment_id)
+        pipe = self.redis.pipeline()
+        pipe.rpush(key, event.model_dump_json())
+        pipe.ltrim(key, -2000, -1)
+        pipe.execute()
+
+    def list_experiment_audit(
+        self, experiment_id: str, limit: int = 100
+    ) -> list[ExperimentAuditEvent]:
+        limit = max(1, min(limit, 1000))
+        rows = self.redis.lrange(
+            self._key("experiment-os", "audit", experiment_id), -limit, -1
+        )
+        return [ExperimentAuditEvent.model_validate_json(raw) for raw in reversed(rows)]
 
 
 def build_store(settings: HubSettings | None = None) -> HubStore:
