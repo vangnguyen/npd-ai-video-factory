@@ -14,12 +14,13 @@ spend for the same Campaign, currency and period.
 
 ## Branch strategy
 
-Phase 6B was merged through PR #11 into `main` at `aa1e21e`. Phase 7 is implemented
-on `agent/phase-7-attribution-revenue-os`; PR #12 is based directly on `main` and
-remains draft until it receives a separate owner review and rollout decision.
+Phase 6B was merged through PR #11 into `main` at `aa1e21e`. Phase 7 was merged
+through PR #12 at `1cc65a3` and tagged `agent-hub-v0.11.0`. Production acceptance
+hardening is recorded on draft PR #13 (`agent/phase-7-campaign-id-baseline`) and
+remains independently reviewable/unmerged.
 
-Phase 7 is not part of the production `agent-hub-v0.9.0` baseline and must not be
-deployed merely because repository CI passes.
+Production deployment is always gated by repository CI, guarded backup/deploy/smoke,
+read-only source evidence and owner quality acceptance; a merge alone is insufficient.
 
 ## Architecture
 
@@ -254,14 +255,13 @@ backed up under
 archive passed its integrity test, and rollback remains manual to avoid overwriting
 newer CRM records.
 
-Local and public source reads now report `available`, one reported/one read
+Local and public source reads then reported `available`, one reported/one read
 Opportunity, the correct Campaign ID, currency `VND`, no raw PII and no external
-writes. The original USD snapshot is retained in audit history. Current read-only
-reconciliation `rec_5c00f1d5d75540759da4` matched the Opportunity to the Campaign at
-100 percent but remains `blocked_by_data_quality`: there is no real closed-won
-Opportunity with covered revenue. No owner quality acceptance was recorded, and the
-acceptance record must not be converted to fake won revenue to bypass this gate. The
-next acceptance input must come from the normal Sales process.
+writes. The original USD snapshot is retained in audit history. Reconciliation
+`rec_5c00f1d5d75540759da4` matched the Opportunity to the Campaign at 100 percent but
+remained `blocked_by_data_quality`: there was no real closed-won Opportunity with
+covered revenue. No owner quality acceptance was recorded at that point, and the
+acceptance record was not converted to fake won revenue to bypass the gate.
 
 ### Existing-customer source classification
 
@@ -272,6 +272,36 @@ Campaign contract. A source Campaign remains draft/planning-only, has no channel
 or execution permission, and its `crm_source_refs` records the owner-confirmed source
 type without customer PII. The resulting revenue remains a shadow calculation and must
 not be reported as Ads ROAS.
+
+### Final production quality acceptance — 2026-08-21
+
+The owner classified a real `13,000,000,000 VND` Closed Won Opportunity as originating
+from an existing customer. Campaign OS was extended to allow a truthful zero-budget
+non-paid source rather than inventing nominal media spend. Production created source
+Campaign `CMP-VSGP-KHACHHANGCU-202608-01` in `draft`, with no channel plans or execution
+permission, then attached that canonical ID to only the confirmed Opportunity.
+
+Before the mapping change, the complete Agent Hub namespace, full EspoCRM database,
+original Opportunity mapping and manual rollback SQL were stored under
+`/var/backups/npd-agent-hub/existing-customer-attribution-20260821T121012Z`. The Agent
+Hub deployment of commit `408c35d` also created Redis backup
+`/var/backups/npd-agent-hub/agent-hub-20260821T120746Z.json`, rollback image
+`npd-agent-hub:rollback-20260821T120746Z` and deployment receipt
+`/var/lib/npd-ai/agent-hub-deployments/deploy-20260821T120746Z.json`.
+
+Reconciliation `rec_1218e8a9db744c3a9720` then passed the owner gate:
+
+- `2/2` Opportunities mapped with no conflicts;
+- `1/1` Closed Won Opportunity had positive revenue and `closed_at`;
+- match and won-revenue coverage rates were both 100 percent;
+- owner quality state became `quality_accepted`;
+- last-touch shadow pipeline was `25,700,008,957 VND`;
+- last-touch shadow closed revenue was `13,000,000,000 VND`;
+- public status remained `read_only_shadow` with production writes disabled.
+
+The existing-customer Campaign is explicitly not Ads-attributed and is ineligible for
+ROAS. CAC/ROAS remain unavailable until reconciled paid-media spend exists for the same
+Campaign, currency and period.
 
 ## Acceptance example
 
