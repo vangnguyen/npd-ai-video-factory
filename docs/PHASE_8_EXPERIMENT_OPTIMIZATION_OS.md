@@ -343,6 +343,51 @@ applied and no ID was inferred from a similar campaign name. Phase 8.3 must rema
 `partial` for Meta until the real campaign and its two ads exist and their IDs are
 verified in Ads Manager/API.
 
+### Phase 8.3 production acceptance — 2026-08-21
+
+CI-green code commit `9fecd6a` was deployed from the guarded worktree
+`/opt/npd-ai-video-factory-phase8`. Preflight verified the existing
+`n8n-marketing` project, `n8n-marketing-caddy-1`, shared video/n8n networks, Redis
+storage and Google/static-token RBAC before replacing only the Agent Hub container.
+
+The deployment created:
+
+- Redis namespace backup
+  `/var/backups/npd-agent-hub/agent-hub-20260821T143441Z.json` with 444 keys;
+- rollback image `npd-agent-hub:rollback-20260821T143441Z`;
+- deployment receipt
+  `/var/lib/npd-ai/agent-hub-deployments/deploy-20260821T143441Z.json`.
+
+Local smoke passed immediately. The first HTTPS health probe briefly returned HTTP 503
+while the recreated upstream was entering the healthy state; direct localhost,
+Caddy-to-upstream and public health then all returned HTTP 200, and the complete public
+viewer/operator/owner plus CRM/marketing smoke passed on retry.
+
+Production reported version `0.12.3`, mode
+`plan_preview_direct_read_owner_gate`, and CRM/Meta Ads/GA4/Social all configured.
+Acceptance against `EXP-VGP-202609-001` confirmed:
+
+- GA4 tracking `ready`, with deterministic URLs for `VAR-CONTROL` and `VAR-HOOKA`
+  carrying `campaign_id=CMP-VGP-VINHTIEN-202609-01`,
+  `utm_campaign=cmp-vgp-vinhtien-202609-01` and the matching `utm_content`;
+- a 14-day GA4 read returned `no_data`, created no synthetic observation and performed
+  no external write;
+- Meta tracking remained `partial`; a direct read stopped before querying/storing an
+  observation because no verified Meta campaign/ad mapping exists;
+- an operator mapping request was denied with HTTP 403; an owner request with incomplete
+  variant coverage was denied with HTTP 409; variant asset references and readiness
+  remained unchanged;
+- observation and evaluation counts remained zero, production/experiment execution and
+  external writes remained disabled, and `/execute` returned HTTP 404;
+- authenticated visual QA with `nguyenvanvangct@gmail.com` confirmed the owner UI,
+  readiness counters, UTM previews, direct-read controls, owner mapping control and a
+  disabled evaluation action while no accepted observation exists.
+
+Only the Agent Hub restarted at `2026-08-21T14:35:02Z`. n8n, Caddy and the existing
+video Redis retained their earlier start times (`2026-08-14T01:55:28Z`,
+`2026-08-08T07:21:11Z` and `2026-08-14T06:46:07Z`). No Meta ID was fabricated or
+applied, and no traffic, Ads, CRM/CMS, n8n or customer-contact mutation occurred.
+
 ## Intentional limits and next increment
 
 There is still no traffic allocation, live experiment start, winner application, budget
