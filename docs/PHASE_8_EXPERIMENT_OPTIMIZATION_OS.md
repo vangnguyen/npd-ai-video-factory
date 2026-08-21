@@ -388,6 +388,39 @@ video Redis retained their earlier start times (`2026-08-14T01:55:28Z`,
 `2026-08-08T07:21:11Z` and `2026-08-14T06:46:07Z`). No Meta ID was fabricated or
 applied, and no traffic, Ads, CRM/CMS, n8n or customer-contact mutation occurred.
 
+### Historical Meta evidence activation — 2026-08-21
+
+The owner allowed the acceptance experiment to use an existing Vịnh Ngọc/Vin campaign,
+or otherwise the most recent real campaign with reported leads, because production Ads
+names do not consistently contain project names. A 90-day, read-only Meta query found no
+campaign name matching `Vịnh Ngọc` or `Vịnh Tiên`. The most recent lead campaign had only
+one ad and could not satisfy the two-variant contract.
+
+The next-most-recent eligible campaign was therefore selected from account
+`Bat Dong San 1`:
+
+- Meta campaign `120247585611660280`, `Lead-v1-page bds vin-24/7-1`, objective
+  `OUTCOME_LEADS`, paused at acceptance time;
+- 90-day campaign aggregate: 18 Meta-reported leads, 49,722 impressions,
+  1,080 clicks and 5,234,425 VND spend;
+- `VAR-CONTROL` mapped to ad `120247586290300280`: 33,021 impressions,
+  14 reported leads and read-only CPL 245,560.29 VND;
+- `VAR-HOOKA` mapped as a comparison label to ad `120247585611680280`:
+  14,903 impressions, 3 reported leads and read-only CPL 502,943.33 VND.
+
+Both ads have distinct Meta creative IDs but the visible title/body metadata is the
+same. The mapping therefore does not claim that the second ad is a newly designed hook,
+and the historical data cannot establish creative causality. It is an evidence-pipeline
+acceptance comparison only.
+
+The coordinated owner mapping returned HTTP 200, changed Meta tracking from `partial` to
+`ready`, invalidated the old preview and returned the experiment to `planned`. A direct
+Meta read for `2026-05-24` through `2026-08-21` stored observation
+`eobs_5f994a164de04fcba4f2` as `verified_read_only` and `pending_owner`. The payload has
+no raw PII and external writes remain disabled. No quality decision or evaluation has
+been applied; the owner must review the historical-comparison caveat before accepting
+the snapshot.
+
 ## Intentional limits and next increment
 
 There is still no traffic allocation, live experiment start, winner application, budget
