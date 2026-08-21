@@ -92,7 +92,14 @@ class MarketingLeaderAgent(BaseAgent):
                 ),
             ],
             metrics_to_watch=["qualified leads", "CPL", "conversion rate", "CAC", "revenue contribution"],
-            handoffs=[AgentName.CONTENT_TREND, AgentName.SALES],
+            handoffs=[
+                AgentName.PERFORMANCE_ADS,
+                AgentName.EMAIL_MARKETING,
+                AgentName.ZALO_ZBS_MARKETING,
+                AgentName.WEB_LANDING,
+                AgentName.CONTENT_TREND,
+                AgentName.SALES,
+            ],
         )
 
 
@@ -220,6 +227,117 @@ class SocialMediaAgent(BaseAgent):
         )
 
 
+class PerformanceAdsAgent(BaseAgent):
+    name = AgentName.PERFORMANCE_ADS
+    role = "Lập Meta/Google Ads plan, cấu trúc, audience/keyword, ngân sách, tracking và creative-test preview."
+    capabilities = (
+        "Meta Ads planning",
+        "Google Ads planning contract",
+        "campaign/ad set/ad group structure",
+        "audience and keyword proposals",
+        "budget and creative test plans",
+        "tracking validation",
+    )
+
+    def plan(self, task: AgentTask) -> AgentReport:
+        return AgentReport(
+            agent=self.name,
+            summary=f"Chuẩn bị Ads plan/preview cho '{task.objective}' mà không launch hoặc mutate live Ads.",
+            priorities=[
+                "Tách Meta Ads và Google Ads thành cấu trúc có campaign_id chung.",
+                "Dùng dữ liệu Meta hiện có ở chế độ chỉ-đọc; Google Ads phải ghi rõ not_configured khi chưa có adapter.",
+                "Mọi launch hoặc budget mutation vẫn cần owner approval và executor riêng.",
+            ],
+            actions=[
+                action(agent=self.name, title="Tạo Performance Ads preview", description="Tạo cấu trúc, audience/keyword, budget, tracking và creative-test plan.", tool="ads.plan.create", payload={"objective": task.objective, "execution": "disabled"}),
+                action(agent=self.name, title="Kiểm tra tracking Ads", description="Kiểm tra UTM và source campaign/ad set/ad group/ad IDs.", tool="tracking.validate", payload={"objective": task.objective}),
+            ],
+            metrics_to_watch=["planned spend", "CPL target", "lead target", "CTR hypothesis", "tracking coverage"],
+            handoffs=[AgentName.MARKETING_LEADER, AgentName.WEB_LANDING],
+        )
+
+
+class EmailMarketingAgent(BaseAgent):
+    name = AgentName.EMAIL_MARKETING
+    role = "Lập segmentation và lifecycle/nurture/re-engagement email sequence ở chế độ draft/preview."
+    capabilities = (
+        "segmentation",
+        "lifecycle and nurture sequence",
+        "re-engagement planning",
+        "subject/content A/B drafts",
+        "campaign tracking",
+    )
+
+    def plan(self, task: AgentTask) -> AgentReport:
+        return AgentReport(
+            agent=self.name,
+            summary=f"Tạo email segmentation và sequence draft cho '{task.objective}', không bulk-send.",
+            priorities=[
+                "Chỉ dùng lead đã có consent marketing.",
+                "Không dùng WordPress Gmail SMTP cho bulk marketing.",
+                "Gắn campaign_id/UTM/lead_id vào tracking contract.",
+            ],
+            actions=[action(agent=self.name, title="Tạo email sequence draft", description="Tạo segment, nurture/re-engagement flow và A/B draft.", tool="email.sequence.draft", payload={"objective": task.objective, "live_send": False})],
+            metrics_to_watch=["eligible audience", "open/click hypothesis", "unsubscribe guardrail", "site-visit CTA"],
+            handoffs=[AgentName.MARKETING_LEADER, AgentName.SALES],
+        )
+
+
+class ZaloZBSMarketingAgent(BaseAgent):
+    name = AgentName.ZALO_ZBS_MARKETING
+    role = "Lập OA/ZBS campaign, consent/frequency guardrail, sequence draft và CRM handoff."
+    capabilities = (
+        "OA/ZBS campaign planning",
+        "audience segmentation",
+        "template/sequence drafting",
+        "consent and frequency controls",
+        "CRM handoff",
+    )
+
+    def plan(self, task: AgentTask) -> AgentReport:
+        return AgentReport(
+            agent=self.name,
+            summary=f"Tạo OA/ZBS plan/preview cho '{task.objective}' mà không gửi live message.",
+            priorities=[
+                "Không tái sử dụng transactional GMF flow cho bulk marketing.",
+                "Chỉ đưa vào segment người nhận đã đồng ý và đủ điều kiện tần suất.",
+                "Handoff về EspoCRM/Sales Hub bằng tracking contract, không mass-write.",
+            ],
+            actions=[action(agent=self.name, title="Tạo ZBS/OA sequence draft", description="Tạo segment, template, frequency guardrail và CRM handoff preview.", tool="zalo_zbs.sequence.draft", payload={"objective": task.objective, "live_send": False})],
+            metrics_to_watch=["consented audience", "frequency cap", "template status", "handoff SLA"],
+            handoffs=[AgentName.MARKETING_LEADER, AgentName.CRM_MANAGER, AgentName.SALES],
+        )
+
+
+class WebLandingAgent(BaseAgent):
+    name = AgentName.WEB_LANDING
+    role = "Tạo landing-page brief/preview, CTA/form, SEO/CRO và WordPress target metadata."
+    capabilities = (
+        "landing-page campaign brief",
+        "CTA and form structure",
+        "SEO/CRO review",
+        "UTM/tracking contract",
+        "WordPress staging metadata",
+    )
+
+    def plan(self, task: AgentTask) -> AgentReport:
+        return AgentReport(
+            agent=self.name,
+            summary=f"Tạo landing-page staging brief/preview cho '{task.objective}', không publish production.",
+            priorities=[
+                "Dùng WordPress/Sales Hub hiện hữu, không tạo CMS song song.",
+                "Propagate campaign_id, UTM, source IDs và lead/opportunity refs.",
+                "Staging/preview và tracking validation trước mọi production publish.",
+            ],
+            actions=[
+                action(agent=self.name, title="Tạo landing-page preview", description="Tạo brief, CTA/form, SEO/CRO và staging metadata.", tool="landing.preview.create", payload={"objective": task.objective, "environment": "staging"}),
+                action(agent=self.name, title="Kiểm tra tracking landing page", description="Xác nhận form và downstream propagation contract.", tool="tracking.validate", payload={"objective": task.objective}),
+            ],
+            metrics_to_watch=["form completion hypothesis", "tracking coverage", "page-speed budget", "preview review status"],
+            handoffs=[AgentName.MARKETING_LEADER, AgentName.CRM_MANAGER, AgentName.SALES],
+        )
+
+
 class SalesAgent(BaseAgent):
     name = AgentName.SALES
     role = "Ưu tiên lead, chuẩn bị tư vấn và hỗ trợ follow-up cho đội sales."
@@ -311,6 +429,10 @@ SPECIALIST_AGENTS: dict[AgentName, BaseAgent] = {
     AgentName.CONTENT_TREND: ContentTrendAgent(),
     AgentName.VIDEO_PRODUCER: VideoProducerAgent(),
     AgentName.SOCIAL_MEDIA: SocialMediaAgent(),
+    AgentName.PERFORMANCE_ADS: PerformanceAdsAgent(),
+    AgentName.EMAIL_MARKETING: EmailMarketingAgent(),
+    AgentName.ZALO_ZBS_MARKETING: ZaloZBSMarketingAgent(),
+    AgentName.WEB_LANDING: WebLandingAgent(),
     AgentName.SALES: SalesAgent(),
     AgentName.CRM_MANAGER: CRMManagerAgent(),
 }
@@ -321,6 +443,10 @@ ROUTING_KEYWORDS: dict[AgentName, tuple[str, ...]] = {
     AgentName.CONTENT_TREND: ("trend", "content", "ý tưởng", "chủ đề", "viral", "hook", "niche"),
     AgentName.VIDEO_PRODUCER: ("video", "script", "storyboard", "voice", "subtitle", "render"),
     AgentName.SOCIAL_MEDIA: ("tiktok", "youtube", "facebook", "reel", "instagram", "social", "đăng bài"),
+    AgentName.PERFORMANCE_ADS: ("performance", "google ads", "ad set", "ad group", "keyword"),
+    AgentName.EMAIL_MARKETING: ("email", "nurture", "re-engagement", "newsletter"),
+    AgentName.ZALO_ZBS_MARKETING: ("zalo", "zbs", "zalo oa", "zns"),
+    AgentName.WEB_LANDING: ("landing page", "website", "wordpress", "cta", "form", "cro"),
     AgentName.SALES: ("sales", "sale", "khách", "tư vấn", "chăm sóc", "follow-up", "booking"),
     AgentName.CRM_MANAGER: (
         "crm",
@@ -352,6 +478,14 @@ def select_agents(task: AgentTask) -> list[AgentName]:
         return list(dict.fromkeys(preferred))
 
     text = task.objective.casefold()
+    if any(phrase in text for phrase in ("tạo chiến dịch", "lập chiến dịch", "campaign operating")):
+        return [
+            AgentName.MARKETING_LEADER,
+            AgentName.PERFORMANCE_ADS,
+            AgentName.EMAIL_MARKETING,
+            AgentName.ZALO_ZBS_MARKETING,
+            AgentName.WEB_LANDING,
+        ]
     if any(keyword in text for keyword in BROAD_OBJECTIVE_KEYWORDS):
         return list(SPECIALIST_AGENTS)
 

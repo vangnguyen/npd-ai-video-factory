@@ -29,6 +29,7 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install --upgrade pip
       - run: pip install -e ".[dev]"
-      - run: pytest -q
+      - name: Run Agent Hub and Campaign OS tests
+        run: pytest -q
       - name: Run Phase 5.1 business-answer eval gate
         run: python -m npd_agent_hub.evals --minimum-pass-rate 1.0

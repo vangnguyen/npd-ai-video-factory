@@ -41,6 +41,26 @@ def test_dashboard_explains_approval_scope_and_separate_execution():
     assert "@media(max-width:760px){.approval-grid{grid-template-columns:1fr}}" in DASHBOARD_HTML
 
 
+def test_dashboard_exposes_responsive_campaign_workspace_without_live_execution():
+    assert "Campaign Workspace" in DASHBOARD_HTML
+    for tab in (
+        "Campaign Overview",
+        "KPIs",
+        "Channel Plans",
+        "Creatives",
+        "Landing Pages",
+        "Email",
+        "Zalo/ZBS",
+        "Tracking",
+        "Approvals",
+        "Lead Funnel",
+    ):
+        assert tab in DASHBOARD_HTML
+    assert "/api/v1/campaigns/from-brief" in DASHBOARD_HTML
+    assert "Production execution luôn tắt trong Phase 6B" in DASHBOARD_HTML
+    assert "@media(max-width:900px)" in DASHBOARD_HTML
+
+
 def test_google_login_dashboard_keeps_questions_and_removes_token_input():
     response = command_center_html(browser_login_enabled=True)
     content = response.body.decode("utf-8")

@@ -13,6 +13,10 @@ class AgentName(str, Enum):
     CONTENT_TREND = "content_trend"
     VIDEO_PRODUCER = "video_producer"
     SOCIAL_MEDIA = "social_media"
+    PERFORMANCE_ADS = "performance_ads"
+    EMAIL_MARKETING = "email_marketing"
+    ZALO_ZBS_MARKETING = "zalo_zbs_marketing"
+    WEB_LANDING = "web_landing"
     SALES = "sales"
     CRM_MANAGER = "crm_manager"
 

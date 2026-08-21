@@ -6,6 +6,7 @@ from typing import Protocol
 
 from redis import Redis
 
+from .campaign_models import Campaign, CampaignAuditEvent, CampaignStatus
 from .config import HubSettings, settings as default_settings
 from .models import AgentTask, AuditEvent, CommandCenterReport, ToolExecutionResult
 
@@ -35,6 +36,20 @@ class HubStore(Protocol):
 
     def list_recent_tasks(self, limit: int = 50) -> list[tuple[str, datetime]]: ...
 
+    def save_campaign(self, campaign: Campaign) -> None: ...
+
+    def get_campaign(self, campaign_id: str) -> Campaign | None: ...
+
+    def list_campaigns(
+        self, limit: int = 50, status: CampaignStatus | None = None
+    ) -> list[Campaign]: ...
+
+    def append_campaign_audit(self, event: CampaignAuditEvent) -> None: ...
+
+    def list_campaign_audit(
+        self, campaign_id: str, limit: int = 100
+    ) -> list[CampaignAuditEvent]: ...
+
 
 @dataclass
 class MemoryHubStore:
@@ -45,6 +60,9 @@ class MemoryHubStore:
     audit: dict[str, list[AuditEvent]] = field(default_factory=dict)
     global_audit: list[AuditEvent] = field(default_factory=list)
     updated_at: dict[str, datetime] = field(default_factory=dict)
+    campaigns: dict[str, Campaign] = field(default_factory=dict)
+    campaign_updated_at: dict[str, datetime] = field(default_factory=dict)
+    campaign_audit: dict[str, list[CampaignAuditEvent]] = field(default_factory=dict)
 
     def _touch(self, task_id: str) -> None:
         self.updated_at[task_id] = datetime.now(timezone.utc)
@@ -98,6 +116,42 @@ class MemoryHubStore:
         limit = max(1, min(limit, 200))
         items = sorted(self.updated_at.items(), key=lambda item: item[1], reverse=True)
         return items[:limit]
+
+    def save_campaign(self, campaign: Campaign) -> None:
+        self.campaigns[campaign.campaign_id] = campaign.model_copy(deep=True)
+        self.campaign_updated_at[campaign.campaign_id] = campaign.updated_at
+
+    def get_campaign(self, campaign_id: str) -> Campaign | None:
+        campaign = self.campaigns.get(campaign_id)
+        return campaign.model_copy(deep=True) if campaign is not None else None
+
+    def list_campaigns(
+        self, limit: int = 50, status: CampaignStatus | None = None
+    ) -> list[Campaign]:
+        limit = max(1, min(limit, 1000))
+        campaign_ids = sorted(
+            self.campaign_updated_at,
+            key=self.campaign_updated_at.__getitem__,
+            reverse=True,
+        )
+        rows = [self.campaigns[campaign_id] for campaign_id in campaign_ids]
+        if status is not None:
+            rows = [campaign for campaign in rows if campaign.status == status]
+        return [campaign.model_copy(deep=True) for campaign in rows[:limit]]
+
+    def append_campaign_audit(self, event: CampaignAuditEvent) -> None:
+        bucket = self.campaign_audit.setdefault(event.campaign_id, [])
+        bucket.append(event.model_copy(deep=True))
+        del bucket[:-2000]
+
+    def list_campaign_audit(
+        self, campaign_id: str, limit: int = 100
+    ) -> list[CampaignAuditEvent]:
+        limit = max(1, min(limit, 1000))
+        return [
+            event.model_copy(deep=True)
+            for event in self.campaign_audit.get(campaign_id, [])[-limit:]
+        ][::-1]
 
 
 class RedisHubStore:
@@ -190,6 +244,53 @@ class RedisHubStore:
             (str(task_id), datetime.fromtimestamp(float(score), tz=timezone.utc))
             for task_id, score in rows
         ]
+
+    def save_campaign(self, campaign: Campaign) -> None:
+        pipe = self.redis.pipeline()
+        pipe.set(
+            self._key("campaign-os", "campaign", campaign.campaign_id),
+            campaign.model_dump_json(),
+        )
+        pipe.zadd(
+            self._key("campaign-os", "campaigns"),
+            {campaign.campaign_id: campaign.updated_at.timestamp()},
+        )
+        pipe.execute()
+
+    def get_campaign(self, campaign_id: str) -> Campaign | None:
+        raw = self.redis.get(self._key("campaign-os", "campaign", campaign_id))
+        return Campaign.model_validate_json(raw) if raw else None
+
+    def list_campaigns(
+        self, limit: int = 50, status: CampaignStatus | None = None
+    ) -> list[Campaign]:
+        limit = max(1, min(limit, 1000))
+        # Read a bounded superset so a status filter remains useful without a
+        # second global index. Campaign OS stays in its own Redis subnamespace.
+        rows = self.redis.zrevrange(
+            self._key("campaign-os", "campaigns"), 0, max(limit * 5, limit) - 1
+        )
+        campaigns = [self.get_campaign(str(campaign_id)) for campaign_id in rows]
+        filtered = [campaign for campaign in campaigns if campaign is not None]
+        if status is not None:
+            filtered = [campaign for campaign in filtered if campaign.status == status]
+        return filtered[:limit]
+
+    def append_campaign_audit(self, event: CampaignAuditEvent) -> None:
+        key = self._key("campaign-os", "audit", event.campaign_id)
+        pipe = self.redis.pipeline()
+        pipe.rpush(key, event.model_dump_json())
+        pipe.ltrim(key, -2000, -1)
+        pipe.execute()
+
+    def list_campaign_audit(
+        self, campaign_id: str, limit: int = 100
+    ) -> list[CampaignAuditEvent]:
+        limit = max(1, min(limit, 1000))
+        rows = self.redis.lrange(
+            self._key("campaign-os", "audit", campaign_id), -limit, -1
+        )
+        return [CampaignAuditEvent.model_validate_json(raw) for raw in reversed(rows)]
 
 
 def build_store(settings: HubSettings | None = None) -> HubStore:

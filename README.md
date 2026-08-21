@@ -27,6 +27,11 @@ Phase 5.1 deterministic business-answer evals plus Phase 6 read-only multi-sourc
 adapter contracts. External Ads/GA4/social sources remain unconfigured until dedicated
 least-privilege credentials are accepted.
 
+Phase 6B adds an attribution-ready Campaign Operating System on a stacked draft
+branch: unified campaign IDs, lifecycle/RBAC/approval boundaries, channel planning,
+specialist agents and a responsive Campaign Workspace. It is deliberately limited to
+research, plan, draft and preview; production writes remain disabled.
+
 ## Handoff package
 
 - [Technical handoff](docs/technical-handoff.md)
@@ -34,6 +39,7 @@ least-privilege credentials are accepted.
 - [13-task implementation plan](docs/implementation-plan.md)
 - [API contract and error model](docs/api-contract.md)
 - [Acceptance tests](docs/acceptance-tests.md)
+- [Phase 6B Campaign Operating System](docs/PHASE_6B_CAMPAIGN_OPERATING_SYSTEM.md)
 - [Video manifest JSON Schema](packages/contracts/video-manifest.schema.json)
 - [n8n smoke-test workflow](workflows/n8n/sprint-1-smoke-test.json)
 - [45-second sample request](examples/vinhomes-green-paradise.request.json)

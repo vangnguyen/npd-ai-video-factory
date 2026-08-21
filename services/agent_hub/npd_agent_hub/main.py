@@ -7,11 +7,25 @@ from .auth import (
     OAUTH_STATE_COOKIE,
     SESSION_COOKIE,
     Principal,
+    Role,
     authorizer,
     require_operator,
     require_owner,
     require_viewer,
 )
+from .campaign_models import (
+    Campaign,
+    CampaignApprovalDecision,
+    CampaignApprovalRequest,
+    CampaignAuditEvent,
+    CampaignBriefRequest,
+    CampaignCreate,
+    CampaignDraftUpdate,
+    CampaignStatus,
+    CampaignSummary,
+    CampaignTransitionRequest,
+)
+from .campaign_providers import ProviderContract, campaign_provider_contracts
 from .dashboard import command_center_html
 from .espocrm_mapping import EspoMappingReader, EspoMappingRecommendation
 from .espocrm_schema import (
@@ -37,12 +51,13 @@ from .google_login import (
     logout_response,
 )
 from .orchestrator import hub
+from .tool_registry import ToolCapability, list_tool_capabilities
 
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.9.0",
-    description="Multi-agent management control plane for marketing, content, video, social, sales and CRM.",
+    version="0.10.0",
+    description="Multi-agent management control plane with Phase 6B Campaign Operating System planning workflows.",
 )
 schema_reader = EspoSchemaReader()
 mapping_reader = EspoMappingReader(schema_reader)
@@ -154,6 +169,23 @@ def marketing_source_status(
     return hub.executor.marketing_sources.configuration_status()
 
 
+@app.get(
+    "/api/v1/integrations/campaign/status",
+    response_model=dict[str, ProviderContract],
+)
+def campaign_provider_status(
+    _principal: Principal = Depends(require_viewer),
+) -> dict[str, ProviderContract]:
+    return campaign_provider_contracts()
+
+
+@app.get("/api/v1/tools/capabilities", response_model=list[ToolCapability])
+def tool_capabilities(
+    _principal: Principal = Depends(require_viewer),
+) -> list[ToolCapability]:
+    return list_tool_capabilities()
+
+
 @app.post("/api/v1/agent-tasks", response_model=CommandCenterReport)
 async def create_agent_task(
     task: AgentTask,
@@ -261,6 +293,159 @@ def command_center(
     _principal: Principal = Depends(require_viewer),
 ) -> CommandCenterSnapshot:
     return hub.command_center(limit=limit, audit_limit=audit_limit)
+
+
+@app.post("/api/v1/campaigns", response_model=Campaign, status_code=201)
+def create_campaign(
+    request: CampaignCreate,
+    principal: Principal = Depends(require_operator),
+) -> Campaign:
+    return hub.campaigns.create(request, actor=principal.subject)
+
+
+@app.post("/api/v1/campaigns/from-brief", response_model=Campaign, status_code=201)
+def create_campaign_from_brief(
+    request: CampaignBriefRequest,
+    principal: Principal = Depends(require_operator),
+) -> Campaign:
+    try:
+        return hub.campaigns.create_from_brief(request, actor=principal.subject)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/campaigns", response_model=list[Campaign])
+def list_campaigns(
+    limit: int = Query(default=50, ge=1, le=1000),
+    status: CampaignStatus | None = Query(default=None),
+    _principal: Principal = Depends(require_viewer),
+) -> list[Campaign]:
+    return hub.campaigns.list(limit=limit, status=status)
+
+
+@app.get("/api/v1/campaigns/{campaign_id}", response_model=Campaign)
+def get_campaign(
+    campaign_id: str,
+    _principal: Principal = Depends(require_viewer),
+) -> Campaign:
+    try:
+        return hub.campaigns.get(campaign_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="campaign not found") from exc
+
+
+@app.patch("/api/v1/campaigns/{campaign_id}", response_model=Campaign)
+def update_campaign(
+    campaign_id: str,
+    update: CampaignDraftUpdate,
+    principal: Principal = Depends(require_operator),
+) -> Campaign:
+    try:
+        return hub.campaigns.update_draft(campaign_id, update, actor=principal.subject)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="campaign not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/campaigns/{campaign_id}/channel-plans/refresh", response_model=Campaign)
+def refresh_campaign_channel_plans(
+    campaign_id: str,
+    principal: Principal = Depends(require_operator),
+) -> Campaign:
+    try:
+        return hub.campaigns.refresh_plans(campaign_id, actor=principal.subject)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="campaign not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/campaigns/{campaign_id}/approvals/request", response_model=Campaign)
+def request_campaign_approval(
+    campaign_id: str,
+    request: CampaignApprovalRequest,
+    principal: Principal = Depends(require_operator),
+) -> Campaign:
+    try:
+        return hub.campaigns.request_approval(
+            campaign_id,
+            scope=request.scope,
+            actor=principal.subject,
+            note=request.note,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="campaign not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/campaigns/{campaign_id}/approvals/{scope}/decision",
+    response_model=Campaign,
+)
+def decide_campaign_approval(
+    campaign_id: str,
+    scope: str,
+    decision: CampaignApprovalDecision,
+    principal: Principal = Depends(require_owner),
+) -> Campaign:
+    try:
+        return hub.campaigns.decide_approval(
+            campaign_id,
+            scope=scope,
+            decision=decision,
+            actor=principal.subject,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="campaign not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/campaigns/{campaign_id}/transitions", response_model=Campaign)
+def transition_campaign(
+    campaign_id: str,
+    request: CampaignTransitionRequest,
+    principal: Principal = Depends(require_operator),
+) -> Campaign:
+    try:
+        return hub.campaigns.transition(
+            campaign_id,
+            target=request.target_status,
+            actor=principal.subject,
+            owner_authorized=principal.role == Role.OWNER,
+            note=request.note,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="campaign not found") from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/campaigns/{campaign_id}/audit", response_model=list[CampaignAuditEvent])
+def campaign_audit(
+    campaign_id: str,
+    limit: int = Query(default=100, ge=1, le=1000),
+    _principal: Principal = Depends(require_viewer),
+) -> list[CampaignAuditEvent]:
+    try:
+        return hub.campaigns.history(campaign_id, limit=limit)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="campaign not found") from exc
+
+
+@app.get("/api/v1/campaigns/{campaign_id}/summary", response_model=CampaignSummary)
+def campaign_summary(
+    campaign_id: str,
+    _principal: Principal = Depends(require_viewer),
+) -> CampaignSummary:
+    try:
+        return hub.campaigns.summary(campaign_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="campaign not found") from exc
 
 
 @app.get(
