@@ -220,6 +220,13 @@ for viewer. The accepted projection now has ten fields, including `cCampaignId`,
 has Opportunity `read=all` and `create/edit/delete/stream=no`. Caddy and the existing
 n8n/Redis topology were not changed, and the n8n write executor remains disabled.
 
+A follow-up security audit rotated the Agent Hub browser session signing key. No key
+value is stored in the repository or this document. The previous environment was
+backed up under
+`/var/backups/npd-agent-hub/session-key-rotation-20260821T100309Z`; guarded deployment
+receipt `deploy-20260821T100309Z.json` confirms a healthy restart. Existing browser
+sessions may need to authenticate again after this rotation.
+
 ### Explicit acceptance Opportunity — 2026-08-21
 
 After explicit owner authorization, production created the planning-only Campaign
@@ -234,10 +241,12 @@ EspoCRM then created one clearly labelled acceptance record:
 - canonical field `cCampaignId=CMP-VGP-VINHTIEN-202609-01`;
 - amount `0`, so it does not represent real pipeline or revenue.
 
-EspoCRM currently permits only `USD` in its global currency list. The acceptance
-record therefore stores `0 USD`; the CRM-wide currency configuration was not changed
-as part of this scoped operation. Enabling VND for real Opportunities requires a
-separate data-governance decision and migration review.
+At initial creation EspoCRM permitted only `USD`, so the record started at `0 USD`.
+A follow-up audit confirmed that `VND` had subsequently been enabled and set as the
+CRM default. After another full database and Agent Hub namespace backup, the acceptance
+record was aligned to `0 VND`; no positive pipeline or revenue value was introduced.
+The alignment evidence and rollback assets are stored under
+`/var/backups/npd-agent-hub/opportunity-vnd-alignment-20260821T100411Z`.
 
 Before the authorized writes, Agent Hub Redis and the full EspoCRM database were
 backed up under
@@ -246,8 +255,9 @@ archive passed its integrity test, and rollback remains manual to avoid overwrit
 newer CRM records.
 
 Local and public source reads now report `available`, one reported/one read
-Opportunity, the correct Campaign ID, no raw PII and no external writes. Read-only
-reconciliation `rec_1bd18f18c4dc41c585ba` matched the Opportunity to the Campaign at
+Opportunity, the correct Campaign ID, currency `VND`, no raw PII and no external
+writes. The original USD snapshot is retained in audit history. Current read-only
+reconciliation `rec_5c00f1d5d75540759da4` matched the Opportunity to the Campaign at
 100 percent but remains `blocked_by_data_quality`: there is no real closed-won
 Opportunity with covered revenue. No owner quality acceptance was recorded, and the
 acceptance record must not be converted to fake won revenue to bypass this gate. The
