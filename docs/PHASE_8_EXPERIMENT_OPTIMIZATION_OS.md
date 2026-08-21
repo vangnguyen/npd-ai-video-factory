@@ -444,6 +444,32 @@ evaluation exists and none are pending. The `/execute` route remains absent with
 404. No traffic allocation, budget change, Ads mutation or production content change
 was performed.
 
+### Prospective distinct-creative experiment — 2026-08-21
+
+After the historical comparison returned `continue` without a winner, production created
+`EXP-VGP-202609-002` as a separate prospective plan. This avoids treating the two
+historical ads with matching visible copy as a causal creative test.
+
+The new 50/50 plan contains:
+
+- `VAR-CONTROL`: current house-size and August 2026 handover message, referenced to the
+  existing read-only baseline ad `120247586290300280`;
+- `VAR-FINANCE`: a genuinely distinct finance-first hook covering bank support,
+  principal/interest grace period and ownership economics. All commercial claims must
+  be checked against the current owner-approved sales policy before an ad is created;
+  its current asset reference is only `creative_brief:vinh-ngoc-finance-hook-v1`.
+
+The primary metric is Meta lead/impression rate. The accepted historical control rate
+`0.042397%` is the planning baseline, target lift is 30% and preview target is
+`0.0551%`. The evaluation window is 14 days; the CPL guardrail remains 1,500,000 VND
+and every stop condition remains manual.
+
+GA4 tracking is `ready` with deterministic `VAR-CONTROL` and `VAR-FINANCE` UTM URLs.
+Meta tracking is intentionally `partial` until the challenger exists as a real ad and an
+owner maps its numeric ID. The experiment remains `previewed`; approval was not requested
+because the material creative and exact Meta mapping must be reviewed first. Execution
+and external writes are disabled.
+
 ## Intentional limits and next increment
 
 There is still no traffic allocation, live experiment start, winner application, budget
