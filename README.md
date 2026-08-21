@@ -22,15 +22,16 @@ Sprint 1 Tasks 1-13 are implemented and covered by Docker Compose E2E:
 - video-manifest builder and Draft 2020-12 JSON Schema validation
 - API, worker, renderer, QC and Docker Compose E2E tests executed by GitHub Actions
 
-The separate Agent Hub workstream has completed production Phase 5 and now includes
-Phase 5.1 deterministic business-answer evals plus Phase 6 read-only multi-source
-adapter contracts. External Ads/GA4/social sources remain unconfigured until dedicated
-least-privilege credentials are accepted.
+The separate Agent Hub workstream has completed the accepted production baseline
+`agent-hub-v0.9.0`, including Phase 5.1 deterministic business-answer evals and
+Phase 6 read-only CRM, Meta Ads, GA4 and Social integrations with dedicated
+least-privilege credentials.
 
-Phase 6B adds an attribution-ready Campaign Operating System on a stacked draft
-branch: unified campaign IDs, lifecycle/RBAC/approval boundaries, channel planning,
+Phase 6B adds an attribution-ready Campaign Operating System in draft PR #11, based
+on `main`: unified campaign IDs, lifecycle/RBAC/approval boundaries, channel planning,
 specialist agents and a responsive Campaign Workspace. It is deliberately limited to
-research, plan, draft and preview; production writes remain disabled.
+research, plan, draft and preview; it is not deployed and production writes remain
+disabled.
 
 ## Handoff package
 

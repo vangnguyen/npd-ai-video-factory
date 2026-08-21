@@ -20,11 +20,11 @@ disabled/inactive for Campaign OS acceptance.
 
 ## Base-branch and rollout strategy
 
-PR #9 is still draft/unmerged. Phase 6B is therefore implemented on
-`agent/phase-6b-campaign-os`, stacked on `agent/multi-agent-management-hub` at the PR
-#9 head. The Phase 6B PR must use that branch as its base and remain draft/unmerged.
-After the owner accepts and merges PR #9, the Phase 6B branch can be rebased or its PR
-base can be changed to `main`; neither operation is automatic.
+PR #9 was owner-accepted and merged to `main` at `8396eb8`; the production baseline
+is tagged `agent-hub-v0.9.0`. Phase 6B is implemented on
+`agent/phase-6b-campaign-os` in draft PR #11, rebased onto `main`. PR #11 remains
+unmerged and Phase 6B has not been deployed to production. Phase 7 work must use PR
+#11 as its stacked base until Phase 6B receives separate owner approval and merges.
 
 No deployment bundle topology changes are required. A later rollout continues to use
 the existing `n8n-marketing` stack, Caddy container and Redis service. Campaign data
@@ -262,7 +262,7 @@ draft-safe updates, RBAC, approval boundaries, Redis recovery, audit, four speci
 provider absence, sample acceptance, no planning executor calls, API and UI. Agent Hub
 CI runs the complete suite and the 20-question business-answer eval gate.
 
-Before a rollout, the stacked PR also requires:
+Before any Phase 6B rollout, the draft PR also requires:
 
 - Agent Hub CI;
 - Phase 5 Deployment Bundle CI if the deployment bundle is touched;
