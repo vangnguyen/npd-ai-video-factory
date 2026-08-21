@@ -185,11 +185,47 @@ then extended with `read=all` and `create/edit/delete/stream=no` for Opportunity
 Metadata and record GETs were verified; Lead access and all write restrictions remain
 unchanged.
 
-The accepted production projection has nine fields and no raw PII. EspoCRM currently
-reports zero Opportunity records and no canonical Campaign OS custom field. Therefore
-the production source state is `no_data`, no reconciliation snapshot is created, and
-owner quality acceptance/revenue reporting remains blocked. Phase 7 must not create a
-synthetic CRM Opportunity to bypass this gate.
+The initial accepted production projection had nine fields and no raw PII. EspoCRM
+reported zero Opportunity records and no canonical Campaign OS custom field, so no
+reconciliation snapshot was created and owner quality acceptance/revenue reporting
+remained blocked. Phase 7 must not create a synthetic CRM Opportunity to bypass this
+gate.
+
+### Canonical Campaign ID onboarding — 2026-08-21
+
+EspoCRM Opportunity now has the custom audited field `cCampaignId`, labelled
+`Campaign ID`. It is a nullable 64-character varchar with validation pattern
+`^CMP-[A-Z0-9][A-Z0-9-]{1,47}-[0-9]{6}-[0-9]{2}$`. The field is visible in the
+Opportunity detail/edit layout and list layout. It is distinct from EspoCRM's native
+`campaignId` link and is the only field used to carry the canonical Campaign OS ID.
+
+Before the schema change, production created and verified these rollback assets:
+
+- full EspoCRM database dump and custom metadata archive under
+  `/var/backups/npd-agent-hub/espocrm-opportunity-campaign-field-20260821T090329Z`;
+- pre-change Opportunity detail and list layouts in the same directory;
+- the pre-change Agent Hub environment file in the same directory.
+
+The production Agent Hub is configured with
+`ESPOCRM_OPPORTUNITY_CAMPAIGN_FIELD=cCampaignId` and was recreated from git SHA
+`1cc65a30a8f2e50df10ddeaa9e23d1feb2ea0d69`. The guarded deployment created Redis
+namespace backup
+`/var/backups/npd-agent-hub/agent-hub-20260821T090747Z.json`, rollback image
+`npd-agent-hub:rollback-20260821T090747Z`, and deployment receipt
+`/var/lib/npd-ai/agent-hub-deployments/deploy-20260821T090747Z.json`.
+
+Local and public source smoke tests both returned HTTP 200 for operator and HTTP 403
+for viewer. The accepted projection now has ten fields, including `cCampaignId`, with
+`contains_raw_pii=false` and `external_writes_enabled=false`. The Agent Hub role still
+has Opportunity `read=all` and `create/edit/delete/stream=no`. Caddy and the existing
+n8n/Redis topology were not changed, and the n8n write executor remains disabled.
+
+Production still contains zero real Opportunity records. The source therefore remains
+`no_data`; reconciliation and owner quality acceptance remain intentionally blocked.
+The next acceptance step is for the normal Sales process to create the first real
+Opportunity with a valid Campaign OS `CMP-*` value, then run the read-only
+reconciliation and have the owner review its evidence. Full database restore is never
+automatic because it could overwrite newer CRM records.
 
 ## Acceptance example
 
