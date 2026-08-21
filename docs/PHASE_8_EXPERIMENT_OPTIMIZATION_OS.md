@@ -251,11 +251,41 @@ their earlier start times, confirming that the production topology was not recre
 No synthetic observation, traffic allocation, budget mutation, CRM/CMS write, n8n write
 or customer-contact action was performed.
 
+## Phase 8.2 direct source reads and owner observation gate
+
+Version `0.12.2` adds provider-specific, aggregate-only reads for experiment evidence:
+
+- GA4 reads `sessionManualCampaignName` using the Campaign tracking
+  `utm_campaign`, maps `sessionManualAdContent` exactly to planned `VAR-*` IDs,
+  and stores only sessions/key events by variant;
+- Meta Ads reads Insights at ad level only after
+  `attribution_refs.meta_ads_campaign_id` and every variant
+  `asset_ref=meta_ad:<numeric_ad_id>` are explicit. Unmapped ads are ignored;
+- tracking validation reports `ready`, `partial` or `not_configured` and a failed
+  contract never creates an observation;
+- a successful query with no mapped rows reports `no_data` and does not create
+  synthetic zero observations;
+- every stored source snapshot starts `pending_owner`. Evaluation is blocked until
+  an owner accepts its source, date window, mapping and aggregate quality. Rejection
+  remains audited and cannot be evaluated;
+- direct reads, decisions and evaluations persist through the existing Experiment OS
+  Redis subnamespace. Payloads contain no raw customer PII or credentials.
+
+The Command Center now exposes direct GA4/Meta read controls, snapshot quality state,
+owner accept/reject controls, and enables evaluation only when an accepted observation
+exists. These controls do not allocate traffic or call a write executor.
+
+### Phase 8.2 acceptance contract
+
+For the Vịnh Tiên acceptance experiment, the safe production outcome is either a real
+mapped aggregate observation pending owner acceptance, or an explicit `partial`/
+`no_data` response while the Campaign has no live variant mapping/data. The system must
+not fabricate an observation merely to complete acceptance.
+
 ## Intentional limits and next increment
 
 There is still no traffic allocation, live experiment start, winner application, budget
-reallocation, CMS change or autonomous optimization loop. The service does not pretend
-that current aggregate GA4/Meta reports contain variant-level evidence. The next safe
-increment is provider-specific read-only extraction keyed by canonical `campaign_id` and
-`utm_content`/variant ID, with tracking validation and owner acceptance of the source
-snapshot. Live execution belongs to a separate later phase and approval design.
+reallocation, CMS change or autonomous optimization loop. Meta extraction requires
+explicit live campaign/ad IDs; GA4 requires the canonical UTM contract to have reached
+live sessions. A winner candidate remains an advisory result even after owner quality
+acceptance. Live execution belongs to a separate later phase and approval design.

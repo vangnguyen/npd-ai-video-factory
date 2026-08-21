@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -47,6 +47,12 @@ class ObservationSource(str, Enum):
 class ObservationState(str, Enum):
     VERIFIED_READ_ONLY = "verified_read_only"
     PARTIAL = "partial"
+
+
+class ObservationQualityState(str, Enum):
+    PENDING_OWNER = "pending_owner"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
 
 
 class RecommendationAction(str, Enum):
@@ -215,6 +221,54 @@ class ExperimentObservation(ExperimentObservationCreate):
     experiment_id: str = Field(pattern=EXPERIMENT_ID_PATTERN.pattern)
     ingested_by: str
     ingested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    quality_state: ObservationQualityState = ObservationQualityState.PENDING_OWNER
+    quality_decided_by: str | None = None
+    quality_decided_at: datetime | None = None
+    quality_note: str | None = Field(default=None, max_length=1000)
+
+
+class ExperimentObservationQualityDecision(BaseModel):
+    accepted: bool
+    note: str = Field(min_length=3, max_length=1000)
+
+
+class ExperimentSourceReadRequest(BaseModel):
+    source_system: ObservationSource
+    window_start: date
+    window_end: date
+
+    @model_validator(mode="after")
+    def validate_window(self) -> "ExperimentSourceReadRequest":
+        if self.source_system == ObservationSource.VERIFIED_IMPORT:
+            raise ValueError("verified_import cannot be read from a live adapter")
+        if self.window_end < self.window_start:
+            raise ValueError("window_end must not be before window_start")
+        if self.window_end > date.today():
+            raise ValueError("window_end cannot be in the future")
+        if (self.window_end - self.window_start).days > 90:
+            raise ValueError("direct source-read window cannot exceed 90 days")
+        return self
+
+
+class ExperimentTrackingValidation(BaseModel):
+    experiment_id: str = Field(pattern=EXPERIMENT_ID_PATTERN.pattern)
+    campaign_id: str = Field(pattern=CAMPAIGN_ID_PATTERN.pattern)
+    source_system: ObservationSource
+    state: str = Field(pattern=r"^(ready|partial|not_configured)$")
+    issues: list[str] = Field(default_factory=list)
+    campaign_key: str | None = None
+    variant_keys: dict[str, str] = Field(default_factory=dict)
+    read_only: bool = True
+
+
+class ExperimentSourceReadResult(BaseModel):
+    experiment_id: str = Field(pattern=EXPERIMENT_ID_PATTERN.pattern)
+    source_system: ObservationSource
+    state: str = Field(pattern=r"^(observed|partial|no_data|not_configured)$")
+    tracking: ExperimentTrackingValidation
+    observation: ExperimentObservation | None = None
+    message: str
+    external_writes_enabled: bool = False
 
 
 class ExperimentEvaluationRequest(BaseModel):
@@ -302,12 +356,14 @@ class ExperimentAuditEvent(BaseModel):
 
 
 class ExperimentOSStatus(BaseModel):
-    mode: str = "plan_preview_observe"
+    mode: str = "plan_preview_direct_read_owner_gate"
     experiment_count: int
     awaiting_approval: int
     approved_plans: int
     previewed: int
     observation_count: int = 0
+    observations_pending_owner: int = 0
+    observations_quality_accepted: int = 0
     evaluated: int = 0
     awaiting_observation: int = 0
     observation_sources: dict[str, str] = Field(default_factory=dict)

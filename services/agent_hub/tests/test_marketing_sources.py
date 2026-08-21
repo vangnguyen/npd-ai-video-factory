@@ -188,6 +188,83 @@ def test_meta_ads_reader_aggregates_two_read_only_accounts():
     }
 
 
+def test_meta_experiment_reader_uses_explicit_campaign_and_ad_mappings_only():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["level"] = request.url.params["level"]
+        captured["filtering"] = json.loads(request.url.params["filtering"])
+        captured["authorization"] = request.headers.get("Authorization")
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "campaign_id": "998877",
+                        "ad_id": "101",
+                        "spend": "1200000",
+                        "impressions": "2000",
+                        "clicks": "200",
+                        "actions": [{"action_type": "lead", "value": "20"}],
+                    },
+                    {
+                        "campaign_id": "998877",
+                        "ad_id": "202",
+                        "spend": "1500000",
+                        "impressions": "2500",
+                        "clicks": "250",
+                        "actions": [{"action_type": "lead", "value": "30"}],
+                    },
+                    {
+                        "campaign_id": "998877",
+                        "ad_id": "unmapped",
+                        "spend": "999999",
+                        "impressions": "9999",
+                        "clicks": "999",
+                        "actions": [{"action_type": "lead", "value": "999"}],
+                    },
+                ]
+            },
+        )
+
+    reader = MarketingSourceReader(
+        HubSettings(
+            meta_ads_account_id="123456",
+            meta_ads_access_token="meta-read-only-secret",
+            meta_graph_version="v23.0",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    result = run(
+        reader.read_meta_experiment(
+            source_campaign_id="998877",
+            variant_ad_ids={"VAR-CONTROL": "101", "VAR-HOOKA": "202"},
+            since="2026-08-01",
+            until="2026-08-14",
+        )
+    )
+    assert captured["level"] == "ad"
+    assert captured["filtering"] == [
+        {"field": "campaign.id", "operator": "EQUAL", "value": "998877"}
+    ]
+    assert result["present_variant_ids"] == ["VAR-CONTROL", "VAR-HOOKA"]
+    assert result["variants"] == [
+        {
+            "variant_id": "VAR-CONTROL",
+            "sample_size": 2000,
+            "conversions": 20,
+            "guardrail_values": {"Cost per qualified lead": 60000.0},
+        },
+        {
+            "variant_id": "VAR-HOOKA",
+            "sample_size": 2500,
+            "conversions": 30,
+            "guardrail_values": {"Cost per qualified lead": 50000.0},
+        },
+    ]
+    assert "meta-read-only-secret" not in json.dumps(result)
+
+
 def test_meta_page_social_reader_uses_separate_read_only_credential_and_aggregate_fields():
     seen = []
 

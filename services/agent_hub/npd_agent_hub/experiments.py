@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from math import erfc, sqrt
 from collections.abc import Callable
+from datetime import datetime, time, timezone
+from math import erfc, sqrt
 
 from .experiment_models import (
     Experiment,
@@ -14,14 +14,21 @@ from .experiment_models import (
     ExperimentEvaluationRequest,
     ExperimentObservation,
     ExperimentObservationCreate,
+    ExperimentObservationQualityDecision,
     ExperimentOSStatus,
     ExperimentPreview,
+    ExperimentSourceReadRequest,
+    ExperimentSourceReadResult,
     ExperimentStatus,
+    ExperimentTrackingValidation,
     MetricDirection,
+    ObservationQualityState,
+    ObservationSource,
     ObservationState,
     RecommendationAction,
     VariantObservation,
 )
+from .marketing_sources import MarketingSourceError, MarketingSourceReader
 from .store import HubStore
 
 
@@ -33,9 +40,11 @@ class ExperimentService:
         store: HubStore,
         *,
         source_status_provider: Callable[[], dict[str, str]] | None = None,
+        source_reader: MarketingSourceReader | None = None,
     ) -> None:
         self.store = store
         self.source_status_provider = source_status_provider
+        self.source_reader = source_reader
 
     def _audit(
         self,
@@ -327,6 +336,203 @@ class ExperimentService:
         limit = max(1, min(limit, 100))
         return [item.model_copy(deep=True) for item in experiment.observations[-limit:]][::-1]
 
+    def decide_observation_quality(
+        self,
+        experiment_id: str,
+        observation_id: str,
+        decision: ExperimentObservationQualityDecision,
+        *,
+        actor: str,
+    ) -> ExperimentObservation:
+        experiment = self.get(experiment_id)
+        target = next(
+            (item for item in experiment.observations if item.observation_id == observation_id),
+            None,
+        )
+        if target is None:
+            raise KeyError("observation")
+        state = (
+            ObservationQualityState.ACCEPTED
+            if decision.accepted
+            else ObservationQualityState.REJECTED
+        )
+        decided = target.model_copy(
+            update={
+                "quality_state": state,
+                "quality_decided_by": actor,
+                "quality_decided_at": datetime.now(timezone.utc),
+                "quality_note": decision.note,
+            },
+            deep=True,
+        )
+        observations = [
+            decided if item.observation_id == observation_id else item
+            for item in experiment.observations
+        ]
+        updated = experiment.model_copy(
+            update={
+                "observations": observations,
+                "last_evaluation": None,
+                "updated_by": actor,
+                "updated_at": datetime.now(timezone.utc),
+            },
+            deep=True,
+        )
+        self.store.save_experiment(updated)
+        self._audit(
+            updated,
+            event_type="experiment_observation_quality_decided",
+            actor=actor,
+            detail="Owner accepted or rejected the read-only source snapshot quality.",
+            metadata={
+                "observation_id": observation_id,
+                "quality_state": state.value,
+                "source_state": target.source_state.value,
+                "external_side_effect": False,
+            },
+        )
+        return decided
+
+    def validate_tracking(
+        self, experiment_id: str, source_system: ObservationSource
+    ) -> ExperimentTrackingValidation:
+        experiment = self.get(experiment_id)
+        campaign = self.store.get_campaign(experiment.campaign_id)
+        if campaign is None:
+            raise KeyError("campaign")
+        configured = self.source_status_provider() if self.source_status_provider else {}
+        issues: list[str] = []
+        variant_keys: dict[str, str] = {}
+        campaign_key: str | None = None
+        if source_system == ObservationSource.GA4:
+            if configured.get("ga4") != "configured":
+                state = "not_configured"
+                issues.append("GA4 read-only credential/property is not configured.")
+            else:
+                campaign_key = campaign.tracking.utm_campaign
+                if not campaign_key or "{{" in campaign_key:
+                    issues.append("utm_campaign must be a concrete Campaign tracking key.")
+                variant_keys = {item.variant_id: item.variant_id for item in experiment.variants}
+                state = "ready" if not issues else "partial"
+        elif source_system == ObservationSource.META_ADS:
+            if configured.get("meta_ads") != "configured":
+                state = "not_configured"
+                issues.append("Meta Ads read-only credential/account is not configured.")
+            else:
+                campaign_key = campaign.attribution_refs.get("meta_ads_campaign_id")
+                if not campaign_key or not campaign_key.isdigit():
+                    issues.append(
+                        "Campaign attribution_refs.meta_ads_campaign_id must be a numeric Meta campaign ID."
+                    )
+                for item in experiment.variants:
+                    asset_ref = item.asset_ref or ""
+                    if asset_ref.startswith("meta_ad:") and asset_ref[8:].isdigit():
+                        variant_keys[item.variant_id] = asset_ref[8:]
+                    else:
+                        issues.append(
+                            f"{item.variant_id} needs asset_ref=meta_ad:<numeric_ad_id>."
+                        )
+                state = "ready" if not issues else "partial"
+        else:
+            state = "partial"
+            issues.append("verified_import is manually ingested and has no live adapter.")
+        return ExperimentTrackingValidation(
+            experiment_id=experiment_id,
+            campaign_id=experiment.campaign_id,
+            source_system=source_system,
+            state=state,
+            issues=issues,
+            campaign_key=campaign_key,
+            variant_keys=variant_keys,
+        )
+
+    async def read_source_observation(
+        self,
+        experiment_id: str,
+        request: ExperimentSourceReadRequest,
+        *,
+        actor: str,
+    ) -> ExperimentSourceReadResult:
+        experiment = self.get(experiment_id)
+        tracking = self.validate_tracking(experiment_id, request.source_system)
+        if tracking.state != "ready" or self.source_reader is None:
+            state = "not_configured" if tracking.state == "not_configured" else "partial"
+            return ExperimentSourceReadResult(
+                experiment_id=experiment_id,
+                source_system=request.source_system,
+                state=state,
+                tracking=tracking,
+                message="Tracking/source contract is not ready; no observation was stored.",
+            )
+        try:
+            if request.source_system == ObservationSource.GA4:
+                snapshot = await self.source_reader.read_ga4_experiment(
+                    campaign_key=str(tracking.campaign_key),
+                    variant_ids=[item.variant_id for item in experiment.variants],
+                    since=request.window_start.isoformat(),
+                    until=request.window_end.isoformat(),
+                )
+            else:
+                snapshot = await self.source_reader.read_meta_experiment(
+                    source_campaign_id=str(tracking.campaign_key),
+                    variant_ad_ids=tracking.variant_keys,
+                    since=request.window_start.isoformat(),
+                    until=request.window_end.isoformat(),
+                )
+        except MarketingSourceError as exc:
+            raise ValueError(str(exc)) from exc
+        raw_variants = list(snapshot.get("variants") or [])
+        if not raw_variants:
+            self._audit(
+                experiment,
+                event_type="experiment_source_read_no_data",
+                actor=actor,
+                detail="Read-only source query returned no mapped variant evidence.",
+                metadata={
+                    "source_system": request.source_system.value,
+                    "external_side_effect": False,
+                },
+            )
+            return ExperimentSourceReadResult(
+                experiment_id=experiment_id,
+                source_system=request.source_system,
+                state="no_data",
+                tracking=tracking,
+                message="Source query succeeded but returned no mapped variant data.",
+            )
+        expected = {item.variant_id for item in experiment.variants}
+        present = {str(item.get("variant_id")) for item in raw_variants}
+        complete = bool(snapshot.get("coverage_complete")) and present == expected
+        observed_at = datetime.fromisoformat(str(snapshot["observed_at"]))
+        window_end = min(
+            datetime.combine(request.window_end, time.max, tzinfo=timezone.utc),
+            observed_at,
+        )
+        observation = self.add_observation(
+            experiment_id,
+            ExperimentObservationCreate(
+                source_system=request.source_system,
+                source_state=(
+                    ObservationState.VERIFIED_READ_ONLY if complete else ObservationState.PARTIAL
+                ),
+                source_snapshot_id=str(snapshot["source_snapshot_id"]),
+                window_start=datetime.combine(request.window_start, time.min, tzinfo=timezone.utc),
+                window_end=window_end,
+                collected_at=observed_at,
+                variants=[VariantObservation.model_validate(item) for item in raw_variants],
+                note="Direct read-only aggregate source snapshot; pending owner quality acceptance.",
+            ),
+            actor=actor,
+        )
+        return ExperimentSourceReadResult(
+            experiment_id=experiment_id,
+            source_system=request.source_system,
+            state="observed" if complete else "partial",
+            tracking=tracking,
+            observation=observation,
+            message="Read-only observation stored and is pending owner quality acceptance.",
+        )
+
     @staticmethod
     def _metric_value(item: VariantObservation) -> float:
         if item.conversions is not None and item.sample_size:
@@ -393,13 +599,22 @@ class ExperimentService:
             (
                 item
                 for item in reversed(experiment.observations)
-                if request.observation_id is None
-                or item.observation_id == request.observation_id
+                if (
+                    item.observation_id == request.observation_id
+                    if request.observation_id is not None
+                    else item.quality_state == ObservationQualityState.ACCEPTED
+                )
             ),
             None,
         )
         if observation is None:
+            if experiment.observations and request.observation_id is None:
+                raise ValueError(
+                    "observation quality must be accepted by an owner before evaluation"
+                )
             raise ValueError("no matching observation is available")
+        if observation.quality_state != ObservationQualityState.ACCEPTED:
+            raise ValueError("observation quality must be accepted by an owner before evaluation")
 
         planned_ids = [item.variant_id for item in experiment.variants]
         observed = {item.variant_id: item for item in observation.variants}
@@ -538,6 +753,16 @@ class ExperimentService:
             approved_plans=sum(item.status == ExperimentStatus.APPROVED for item in rows),
             previewed=sum(item.last_preview is not None for item in rows),
             observation_count=sum(len(item.observations) for item in rows),
+            observations_pending_owner=sum(
+                observation.quality_state == ObservationQualityState.PENDING_OWNER
+                for item in rows
+                for observation in item.observations
+            ),
+            observations_quality_accepted=sum(
+                observation.quality_state == ObservationQualityState.ACCEPTED
+                for item in rows
+                for observation in item.observations
+            ),
             evaluated=sum(item.last_evaluation is not None for item in rows),
             awaiting_observation=sum(not item.observations for item in rows),
             observation_sources=self._observation_sources(),

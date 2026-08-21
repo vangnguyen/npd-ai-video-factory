@@ -51,6 +51,7 @@ class AgentHub:
             source_status_provider=getattr(
                 marketing_sources, "configuration_status", None
             ),
+            source_reader=marketing_sources,
         )
         self.opportunity_reader = EspoOpportunityReader(
             getattr(self.executor, "settings", None),

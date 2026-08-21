@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import UTC, date, datetime, timedelta
 
 import fakeredis
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -25,16 +28,19 @@ from npd_agent_hub.experiment_models import (
     ExperimentGuardrail,
     ExperimentMetric,
     ExperimentObservationCreate,
+    ExperimentObservationQualityDecision,
     ExperimentStatus,
     ExperimentStopCondition,
     ExperimentType,
     ExperimentVariant,
     ObservationSource,
+    ObservationQualityState,
     ObservationState,
     RecommendationAction,
     VariantObservation,
 )
 from npd_agent_hub.experiments import ExperimentService
+from npd_agent_hub.marketing_sources import MarketingSourceReader
 from npd_agent_hub.main import app
 from npd_agent_hub.models import AgentName, AgentTask
 from npd_agent_hub.orchestrator import AgentHub, hub
@@ -166,6 +172,15 @@ def observation_request(
     )
 
 
+def accept_observation(service, experiment_id: str, observation_id: str):
+    return service.decide_observation_quality(
+        experiment_id,
+        observation_id,
+        ExperimentObservationQualityDecision(accepted=True, note="Owner verified source snapshot"),
+        actor="owner",
+    )
+
+
 def test_experiment_requires_owner_accepted_attribution_and_campaign_coverage():
     store = MemoryHubStore()
     campaign = CampaignService(store).create(
@@ -278,6 +293,7 @@ def test_read_only_observation_generates_advisory_winner_candidate():
     observation = service.add_observation(
         experiment.experiment_id, observation_request(), actor="operator"
     )
+    accept_observation(service, experiment.experiment_id, observation.observation_id)
     evaluation = service.evaluate(
         experiment.experiment_id,
         ExperimentEvaluationRequest(min_sample_per_variant=100),
@@ -295,8 +311,9 @@ def test_read_only_observation_generates_advisory_winner_candidate():
     assert evaluation.external_writes_enabled is False
     assert evaluation.automatic_decision_enabled is False
     assert service.get(experiment.experiment_id).status == ExperimentStatus.PLANNED
-    assert [item.event_type for item in service.history(experiment.experiment_id)[:2]] == [
+    assert [item.event_type for item in service.history(experiment.experiment_id)[:3]] == [
         "experiment_evaluated",
+        "experiment_observation_quality_decided",
         "experiment_observation_ingested",
     ]
 
@@ -314,6 +331,7 @@ def test_partial_or_insufficient_observation_cannot_produce_winner():
         observation_request(state=ObservationState.PARTIAL),
         actor="operator",
     )
+    accept_observation(service, experiment.experiment_id, partial.observation_id)
     partial_result = service.evaluate(
         experiment.experiment_id,
         ExperimentEvaluationRequest(observation_id=partial.observation_id),
@@ -327,6 +345,7 @@ def test_partial_or_insufficient_observation_cannot_produce_winner():
         observation_request(sample_size=50, control_conversions=2, challenger_conversions=4),
         actor="operator",
     )
+    accept_observation(service, experiment.experiment_id, insufficient.observation_id)
     insufficient_result = service.evaluate(
         experiment.experiment_id,
         ExperimentEvaluationRequest(
@@ -361,6 +380,128 @@ def test_observation_contract_rejects_pii_write_flags_and_unknown_variants():
         service.add_observation(experiment.experiment_id, unknown, actor="operator")
 
 
+def test_owner_quality_gate_blocks_evaluation_until_snapshot_is_accepted():
+    store = MemoryHubStore()
+    campaign, reconciliation = accepted_fixture(store)
+    service = ExperimentService(store)
+    experiment = service.create(
+        experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
+        actor="operator",
+    )
+    observation = service.add_observation(
+        experiment.experiment_id, observation_request(), actor="operator"
+    )
+    assert observation.quality_state == ObservationQualityState.PENDING_OWNER
+    with pytest.raises(ValueError, match="accepted by an owner"):
+        service.evaluate(experiment.experiment_id, ExperimentEvaluationRequest(), actor="operator")
+    rejected = service.decide_observation_quality(
+        experiment.experiment_id,
+        observation.observation_id,
+        ExperimentObservationQualityDecision(accepted=False, note="Tracking mismatch"),
+        actor="owner",
+    )
+    assert rejected.quality_state == ObservationQualityState.REJECTED
+    with pytest.raises(ValueError, match="accepted by an owner"):
+        service.evaluate(experiment.experiment_id, ExperimentEvaluationRequest(), actor="operator")
+
+
+def test_direct_ga4_read_maps_campaign_and_utm_content_without_side_effects():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content.decode())
+        captured["authorization"] = request.headers.get("Authorization")
+        return httpx.Response(
+            200,
+            json={
+                "rows": [
+                    {
+                        "dimensionValues": [
+                            {"value": "cmp-vgp-vinhtien-202609-01"},
+                            {"value": "VAR-CONTROL"},
+                        ],
+                        "metricValues": [{"value": "1000"}, {"value": "25"}],
+                    },
+                    {
+                        "dimensionValues": [
+                            {"value": "cmp-vgp-vinhtien-202609-01"},
+                            {"value": "VAR-HOOKA"},
+                        ],
+                        "metricValues": [{"value": "1000"}, {"value": "45"}],
+                    },
+                ],
+                "rowCount": 2,
+            },
+        )
+
+    store = MemoryHubStore()
+    campaign, reconciliation = accepted_fixture(store)
+    reader = MarketingSourceReader(
+        HubSettings(ga4_property_id="251054384"),
+        transport=httpx.MockTransport(handler),
+        ga4_token_provider=lambda: "read-only-token",
+    )
+    service = ExperimentService(
+        store,
+        source_status_provider=reader.configuration_status,
+        source_reader=reader,
+    )
+    experiment = service.create(
+        experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
+        actor="operator",
+    )
+    from npd_agent_hub.experiment_models import ExperimentSourceReadRequest
+
+    result = asyncio.run(
+        service.read_source_observation(
+            experiment.experiment_id,
+            ExperimentSourceReadRequest(
+                source_system=ObservationSource.GA4,
+                window_start=date.today() - timedelta(days=7),
+                window_end=date.today(),
+            ),
+            actor="operator",
+        )
+    )
+    assert result.state == "observed"
+    assert result.observation is not None
+    assert result.observation.quality_state == ObservationQualityState.PENDING_OWNER
+    assert result.observation.external_writes_enabled is False
+    body = captured["body"]
+    assert body["dimensionFilter"]["filter"]["stringFilter"]["value"] == campaign.tracking.utm_campaign
+    assert [item["name"] for item in body["dimensions"]] == [
+        "sessionManualCampaignName",
+        "sessionManualAdContent",
+    ]
+    assert "read-only-token" not in json.dumps(result.model_dump(mode="json"))
+    assert service.get(experiment.experiment_id).last_evaluation is None
+
+
+def test_meta_tracking_requires_explicit_campaign_and_ad_id_mappings():
+    store = MemoryHubStore()
+    campaign, reconciliation = accepted_fixture(store)
+    reader = MarketingSourceReader(
+        HubSettings(
+            meta_ads_account_id="123456",
+            meta_ads_access_token="read-only-token",
+            meta_graph_version="v23.0",
+        )
+    )
+    service = ExperimentService(
+        store,
+        source_status_provider=reader.configuration_status,
+        source_reader=reader,
+    )
+    experiment = service.create(
+        experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
+        actor="operator",
+    )
+    validation = service.validate_tracking(experiment.experiment_id, ObservationSource.META_ADS)
+    assert validation.state == "partial"
+    assert any("meta_ads_campaign_id" in issue for issue in validation.issues)
+    assert sum("asset_ref" in issue for issue in validation.issues) == 2
+
+
 def test_guardrail_breach_stops_for_manual_review_without_execution():
     store = MemoryHubStore()
     campaign, reconciliation = accepted_fixture(store)
@@ -371,7 +512,8 @@ def test_guardrail_breach_stops_for_manual_review_without_execution():
     )
     request = observation_request()
     request.variants[1].guardrail_values["Cost per qualified lead"] = 1_700_000
-    service.add_observation(experiment.experiment_id, request, actor="operator")
+    observation = service.add_observation(experiment.experiment_id, request, actor="operator")
+    accept_observation(service, experiment.experiment_id, observation.observation_id)
     evaluation = service.evaluate(
         experiment.experiment_id, ExperimentEvaluationRequest(), actor="operator"
     )
@@ -389,7 +531,10 @@ def test_observation_and_evaluation_recover_from_redis():
         experiment_request(campaign.campaign_id, reconciliation.reconciliation_id),
         actor="operator",
     )
-    service.add_observation(experiment.experiment_id, observation_request(), actor="operator")
+    observation = service.add_observation(
+        experiment.experiment_id, observation_request(), actor="operator"
+    )
+    accept_observation(service, experiment.experiment_id, observation.observation_id)
     service.evaluate(
         experiment.experiment_id, ExperimentEvaluationRequest(), actor="operator"
     )
@@ -432,6 +577,31 @@ def test_experiment_http_rbac_and_no_execution_endpoint():
         created = client.post("/api/v1/experiments", headers=operator, json=payload)
         assert created.status_code == 201
         experiment_id = created.json()["experiment_id"]
+        tracking = client.get(
+            f"/api/v1/experiments/{experiment_id}/tracking-validation",
+            headers=viewer,
+            params={"source_system": "ga4"},
+        )
+        assert tracking.status_code == 200
+        assert tracking.json()["state"] == "not_configured"
+        source_payload = {
+            "source_system": "ga4",
+            "window_start": (date.today() - timedelta(days=13)).isoformat(),
+            "window_end": date.today().isoformat(),
+        }
+        assert client.post(
+            f"/api/v1/experiments/{experiment_id}/source-read",
+            headers=viewer,
+            json=source_payload,
+        ).status_code == 403
+        no_source = client.post(
+            f"/api/v1/experiments/{experiment_id}/source-read",
+            headers=operator,
+            json=source_payload,
+        )
+        assert no_source.status_code == 200
+        assert no_source.json()["state"] == "not_configured"
+        assert no_source.json()["observation"] is None
         assert client.post(
             f"/api/v1/experiments/{experiment_id}/preview", headers=operator
         ).status_code == 200
@@ -463,6 +633,7 @@ def test_experiment_http_rbac_and_no_execution_endpoint():
             json=observation_request().model_dump(mode="json"),
         )
         assert observed.status_code == 201
+        observation_id = observed.json()["observation_id"]
         assert client.get(
             f"/api/v1/experiments/{experiment_id}/observations", headers=viewer
         ).status_code == 200
@@ -471,6 +642,18 @@ def test_experiment_http_rbac_and_no_execution_endpoint():
             headers=viewer,
             json={},
         ).status_code == 403
+        assert client.post(
+            f"/api/v1/experiments/{experiment_id}/observations/{observation_id}/quality-decision",
+            headers=operator,
+            json={"accepted": True, "note": "operator must not decide"},
+        ).status_code == 403
+        accepted = client.post(
+            f"/api/v1/experiments/{experiment_id}/observations/{observation_id}/quality-decision",
+            headers=owner,
+            json={"accepted": True, "note": "Owner verified aggregate evidence"},
+        )
+        assert accepted.status_code == 200
+        assert accepted.json()["quality_state"] == "accepted"
         evaluated = client.post(
             f"/api/v1/experiments/{experiment_id}/evaluations",
             headers=operator,
@@ -526,3 +709,6 @@ def test_dashboard_exposes_responsive_experiment_workspace():
     assert "Đánh giá bằng dữ liệu chỉ-đọc" in DASHBOARD_HTML
     assert "/observations" in DASHBOARD_HTML
     assert "/evaluations" in DASHBOARD_HTML
+    assert "/source-read" in DASHBOARD_HTML
+    assert "/quality-decision" in DASHBOARD_HTML
+    assert "Owner chấp nhận dữ liệu" in DASHBOARD_HTML
