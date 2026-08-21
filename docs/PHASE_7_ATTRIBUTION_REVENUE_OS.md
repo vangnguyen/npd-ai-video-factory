@@ -14,10 +14,9 @@ spend for the same Campaign, currency and period.
 
 ## Branch strategy
 
-Phase 6B is still draft/unmerged in PR #11. Phase 7 is therefore implemented on
-`agent/phase-7-attribution-revenue-os`, stacked on
-`agent/phase-6b-campaign-os`. Its PR must remain draft and use the Phase 6B branch as
-its base until Phase 6B receives separate owner approval and merges.
+Phase 6B was merged through PR #11 into `main` at `aa1e21e`. Phase 7 is implemented
+on `agent/phase-7-attribution-revenue-os`; PR #12 is based directly on `main` and
+remains draft until it receives a separate owner review and rollout decision.
 
 Phase 7 is not part of the production `agent-hub-v0.9.0` baseline and must not be
 deployed merely because repository CI passes.

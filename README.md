@@ -27,11 +27,11 @@ The separate Agent Hub workstream has completed the accepted production baseline
 Phase 6 read-only CRM, Meta Ads, GA4 and Social integrations with dedicated
 least-privilege credentials.
 
-Phase 6B adds an attribution-ready Campaign Operating System in draft PR #11, based
-on `main`: unified campaign IDs, lifecycle/RBAC/approval boundaries, channel planning,
-specialist agents and a responsive Campaign Workspace. It is deliberately limited to
-research, plan, draft and preview; it is not deployed and production writes remain
-disabled.
+Phase 6B adds an attribution-ready Campaign Operating System, merged through PR #11
+into `main`: unified campaign IDs, lifecycle/RBAC/approval boundaries, channel
+planning, specialist agents and a responsive Campaign Workspace. It is deliberately
+limited to research, plan, draft and preview; it is not deployed and production writes
+remain disabled.
 
 Phase 7 builds on that draft with an immutable touchpoint ledger, read-only
 Opportunity/revenue reconciliation, an owner-controlled data-quality gate and

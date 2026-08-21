@@ -7,8 +7,6 @@ on:
   pull_request:
     branches:
       - main
-      # Phase 7 remains stacked while Phase 6B PR #11 is draft/unmerged.
-      - agent/phase-6b-campaign-os
 
 jobs:
   test-api:
