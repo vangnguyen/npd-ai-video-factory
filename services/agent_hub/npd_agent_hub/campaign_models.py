@@ -90,7 +90,10 @@ class CampaignChannel(str, Enum):
 
 
 class CampaignBudget(BaseModel):
-    amount: int = Field(gt=0)
+    # Zero-budget Campaigns are valid for explicitly classified non-paid
+    # sources such as existing customers, referrals and organic demand. This
+    # keeps attribution truthful without inventing a nominal media cost.
+    amount: int = Field(ge=0)
     currency: str = Field(default="VND", pattern=r"^[A-Z]{3}$")
 
 

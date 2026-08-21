@@ -14,12 +14,13 @@ spend for the same Campaign, currency and period.
 
 ## Branch strategy
 
-Phase 6B was merged through PR #11 into `main` at `aa1e21e`. Phase 7 is implemented
-on `agent/phase-7-attribution-revenue-os`; PR #12 is based directly on `main` and
-remains draft until it receives a separate owner review and rollout decision.
+Phase 6B was merged through PR #11 into `main` at `aa1e21e`. Phase 7 was merged
+through PR #12 at `1cc65a3` and tagged `agent-hub-v0.11.0`. Production acceptance
+hardening is recorded on draft PR #13 (`agent/phase-7-campaign-id-baseline`) and
+remains independently reviewable/unmerged.
 
-Phase 7 is not part of the production `agent-hub-v0.9.0` baseline and must not be
-deployed merely because repository CI passes.
+Production deployment is always gated by repository CI, guarded backup/deploy/smoke,
+read-only source evidence and owner quality acceptance; a merge alone is insufficient.
 
 ## Architecture
 
@@ -185,11 +186,122 @@ then extended with `read=all` and `create/edit/delete/stream=no` for Opportunity
 Metadata and record GETs were verified; Lead access and all write restrictions remain
 unchanged.
 
-The accepted production projection has nine fields and no raw PII. EspoCRM currently
-reports zero Opportunity records and no canonical Campaign OS custom field. Therefore
-the production source state is `no_data`, no reconciliation snapshot is created, and
-owner quality acceptance/revenue reporting remains blocked. Phase 7 must not create a
-synthetic CRM Opportunity to bypass this gate.
+The initial accepted production projection had nine fields and no raw PII. EspoCRM
+reported zero Opportunity records and no canonical Campaign OS custom field, so no
+reconciliation snapshot was created and owner quality acceptance/revenue reporting
+remained blocked. Phase 7 must not create a synthetic CRM Opportunity to bypass this
+gate.
+
+### Canonical Campaign ID onboarding — 2026-08-21
+
+EspoCRM Opportunity now has the custom audited field `cCampaignId`, labelled
+`Campaign ID`. It is a nullable 64-character varchar with validation pattern
+`^CMP-[A-Z0-9][A-Z0-9-]{1,47}-[0-9]{6}-[0-9]{2}$`. The field is visible in the
+Opportunity detail/edit layout and list layout. It is distinct from EspoCRM's native
+`campaignId` link and is the only field used to carry the canonical Campaign OS ID.
+
+Before the schema change, production created and verified these rollback assets:
+
+- full EspoCRM database dump and custom metadata archive under
+  `/var/backups/npd-agent-hub/espocrm-opportunity-campaign-field-20260821T090329Z`;
+- pre-change Opportunity detail and list layouts in the same directory;
+- the pre-change Agent Hub environment file in the same directory.
+
+The production Agent Hub is configured with
+`ESPOCRM_OPPORTUNITY_CAMPAIGN_FIELD=cCampaignId` and was recreated from git SHA
+`1cc65a30a8f2e50df10ddeaa9e23d1feb2ea0d69`. The guarded deployment created Redis
+namespace backup
+`/var/backups/npd-agent-hub/agent-hub-20260821T090747Z.json`, rollback image
+`npd-agent-hub:rollback-20260821T090747Z`, and deployment receipt
+`/var/lib/npd-ai/agent-hub-deployments/deploy-20260821T090747Z.json`.
+
+Local and public source smoke tests both returned HTTP 200 for operator and HTTP 403
+for viewer. The accepted projection now has ten fields, including `cCampaignId`, with
+`contains_raw_pii=false` and `external_writes_enabled=false`. The Agent Hub role still
+has Opportunity `read=all` and `create/edit/delete/stream=no`. Caddy and the existing
+n8n/Redis topology were not changed, and the n8n write executor remains disabled.
+
+A follow-up security audit rotated the Agent Hub browser session signing key. No key
+value is stored in the repository or this document. The previous environment was
+backed up under
+`/var/backups/npd-agent-hub/session-key-rotation-20260821T100309Z`; guarded deployment
+receipt `deploy-20260821T100309Z.json` confirms a healthy restart. Existing browser
+sessions may need to authenticate again after this rotation.
+
+### Explicit acceptance Opportunity — 2026-08-21
+
+After explicit owner authorization, production created the planning-only Campaign
+`CMP-VGP-VINHTIEN-202609-01` from the standard Vịnh Tiên brief. It remains `planned`;
+none of its Ads, email, ZBS or landing-page plans were executed.
+
+EspoCRM then created one clearly labelled acceptance record:
+
+- Opportunity ID `6a881aa4bb9606e32`;
+- name `[ACCEPTANCE] Vinh Tien thang 9 - Campaign OS`;
+- stage `Prospecting`, close date `2026-09-30`;
+- canonical field `cCampaignId=CMP-VGP-VINHTIEN-202609-01`;
+- amount `0`, so it does not represent real pipeline or revenue.
+
+At initial creation EspoCRM permitted only `USD`, so the record started at `0 USD`.
+A follow-up audit confirmed that `VND` had subsequently been enabled and set as the
+CRM default. After another full database and Agent Hub namespace backup, the acceptance
+record was aligned to `0 VND`; no positive pipeline or revenue value was introduced.
+The alignment evidence and rollback assets are stored under
+`/var/backups/npd-agent-hub/opportunity-vnd-alignment-20260821T100411Z`.
+
+Before the authorized writes, Agent Hub Redis and the full EspoCRM database were
+backed up under
+`/var/backups/npd-agent-hub/opportunity-acceptance-20260821T092725Z`. The database
+archive passed its integrity test, and rollback remains manual to avoid overwriting
+newer CRM records.
+
+Local and public source reads then reported `available`, one reported/one read
+Opportunity, the correct Campaign ID, currency `VND`, no raw PII and no external
+writes. The original USD snapshot is retained in audit history. Reconciliation
+`rec_5c00f1d5d75540759da4` matched the Opportunity to the Campaign at 100 percent but
+remained `blocked_by_data_quality`: there was no real closed-won Opportunity with
+covered revenue. No owner quality acceptance was recorded at that point, and the
+acceptance record was not converted to fake won revenue to bypass the gate.
+
+### Existing-customer source classification
+
+Campaign OS permits a zero-budget source Campaign when the owner explicitly classifies
+revenue as non-paid demand such as an existing customer, referral or organic source.
+This prevents the attribution ledger from inventing media spend merely to satisfy the
+Campaign contract. A source Campaign remains draft/planning-only, has no channel plans
+or execution permission, and its `crm_source_refs` records the owner-confirmed source
+type without customer PII. The resulting revenue remains a shadow calculation and must
+not be reported as Ads ROAS.
+
+### Final production quality acceptance — 2026-08-21
+
+The owner classified a real `13,000,000,000 VND` Closed Won Opportunity as originating
+from an existing customer. Campaign OS was extended to allow a truthful zero-budget
+non-paid source rather than inventing nominal media spend. Production created source
+Campaign `CMP-VSGP-KHACHHANGCU-202608-01` in `draft`, with no channel plans or execution
+permission, then attached that canonical ID to only the confirmed Opportunity.
+
+Before the mapping change, the complete Agent Hub namespace, full EspoCRM database,
+original Opportunity mapping and manual rollback SQL were stored under
+`/var/backups/npd-agent-hub/existing-customer-attribution-20260821T121012Z`. The Agent
+Hub deployment of commit `408c35d` also created Redis backup
+`/var/backups/npd-agent-hub/agent-hub-20260821T120746Z.json`, rollback image
+`npd-agent-hub:rollback-20260821T120746Z` and deployment receipt
+`/var/lib/npd-ai/agent-hub-deployments/deploy-20260821T120746Z.json`.
+
+Reconciliation `rec_1218e8a9db744c3a9720` then passed the owner gate:
+
+- `2/2` Opportunities mapped with no conflicts;
+- `1/1` Closed Won Opportunity had positive revenue and `closed_at`;
+- match and won-revenue coverage rates were both 100 percent;
+- owner quality state became `quality_accepted`;
+- last-touch shadow pipeline was `25,700,008,957 VND`;
+- last-touch shadow closed revenue was `13,000,000,000 VND`;
+- public status remained `read_only_shadow` with production writes disabled.
+
+The existing-customer Campaign is explicitly not Ads-attributed and is ineligible for
+ROAS. CAC/ROAS remain unavailable until reconciled paid-media spend exists for the same
+Campaign, currency and period.
 
 ## Acceptance example
 
