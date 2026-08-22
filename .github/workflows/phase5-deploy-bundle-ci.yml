@@ -50,6 +50,10 @@ jobs:
           AGENT_GOOGLE_CLIENT_ID=ci-client.apps.googleusercontent.com
           AGENT_GOOGLE_CLIENT_SECRET=ci-client-secret-placeholder
           AGENT_SESSION_SIGNING_KEY=ci-session-key-00000000000000000000000000000000
+          AGENT_ATTRIBUTION_ACTIVE_SIGNING_KEY=ci-attribution-receipt-key-0000000000000000000000
+          AGENT_ATTRIBUTION_ACTIVE_KEY_ID=ci-attribution-v1
+          AGENT_ATTRIBUTION_VERIFICATION_KEYS_HOST_FILE=/tmp/npd-attribution-verification-keys.json
+          AGENT_ATTRIBUTION_VERIFICATION_KEYS_FILE=/run/secrets/agent-attribution-verification-keys.json
           AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY=ci-attribution-receipt-key-0000000000000000000000
           AGENT_ATTRIBUTION_RECEIPT_KEY_ID=ci-attribution-v1
           AGENT_ATTRIBUTION_DELIVERY_MAX_ATTEMPTS=4
@@ -63,6 +67,8 @@ jobs:
           N8N_AGENT_EXECUTOR_WEBHOOK_URL=
           EOF
           chmod 600 /tmp/npd-agent-hub-ci.env
+          printf '{}\n' > /tmp/npd-attribution-verification-keys.json
+          chmod 600 /tmp/npd-attribution-verification-keys.json
 
       - name: Validate production Compose rendering
         env:
@@ -70,22 +76,44 @@ jobs:
           NPD_DOCKER_NETWORK: npd-ai-video-factory_default
           N8N_DOCKER_NETWORK: n8n-marketing_n8n_net
           AGENT_HUB_PORT: "8010"
+          AGENT_ATTRIBUTION_VERIFICATION_KEYS_HOST_FILE: /tmp/npd-attribution-verification-keys.json
         run: docker compose -f deploy/phase5/docker-compose.agent-hub.prod.yml config --quiet
 
       - name: Validate guarded attribution delivery configuration
         run: |
           cp /tmp/npd-agent-hub-ci.env /tmp/npd-agent-hub-config-test.env
           sed -i '/^AGENT_ATTRIBUTION_/d' /tmp/npd-agent-hub-config-test.env
+          printf '%s\n' \
+            'AGENT_ATTRIBUTION_VERIFICATION_KEYS_HOST_FILE=/tmp/npd-attribution-config-test-keys.json' \
+            'AGENT_ATTRIBUTION_VERIFICATION_KEYS_FILE=/run/secrets/agent-attribution-verification-keys.json' \
+            >> /tmp/npd-agent-hub-config-test.env
           before_session="$(grep '^AGENT_SESSION_SIGNING_KEY=' /tmp/npd-agent-hub-config-test.env)"
           output="$(bash scripts/phase5/configure-attribution-delivery.sh \
             --apply \
             --env-file /tmp/npd-agent-hub-config-test.env \
             --backup-dir /tmp/npd-agent-hub-config-backups)"
-          grep -q '^AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY=.' /tmp/npd-agent-hub-config-test.env
+          grep -q '^AGENT_ATTRIBUTION_ACTIVE_SIGNING_KEY=.' /tmp/npd-agent-hub-config-test.env
+          grep -q '^AGENT_ATTRIBUTION_ACTIVE_KEY_ID=npd-attribution-v1$' /tmp/npd-agent-hub-config-test.env
           grep -q '^AGENT_ATTRIBUTION_RECEIPT_KEY_ID=npd-attribution-v1$' /tmp/npd-agent-hub-config-test.env
           test "$(grep '^AGENT_SESSION_SIGNING_KEY=' /tmp/npd-agent-hub-config-test.env)" = "$before_session"
           test "$(find /tmp/npd-agent-hub-config-backups -type f | wc -l)" -eq 1
-          ! grep -q "$(grep '^AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY=' /tmp/npd-agent-hub-config-test.env | cut -d= -f2-)" <<<"$output"
+          first_key="$(grep '^AGENT_ATTRIBUTION_ACTIVE_SIGNING_KEY=' /tmp/npd-agent-hub-config-test.env | cut -d= -f2-)"
+          ! grep -q "$first_key" <<<"$output"
+          rotate_output="$(bash scripts/phase5/configure-attribution-delivery.sh \
+            --apply \
+            --rotate \
+            --new-key-id ci-attribution-v2 \
+            --env-file /tmp/npd-agent-hub-config-test.env \
+            --backup-dir /tmp/npd-agent-hub-config-backups)"
+          grep -q '^AGENT_ATTRIBUTION_ACTIVE_KEY_ID=ci-attribution-v2$' /tmp/npd-agent-hub-config-test.env
+          python3 - <<'PY'
+          import json
+          with open('/tmp/npd-attribution-config-test-keys.json', encoding='utf-8') as handle:
+              payload = json.load(handle)
+          assert set(payload) == {'npd-attribution-v1'}
+          assert len(payload['npd-attribution-v1']) >= 32
+          PY
+          ! grep -q "$first_key" <<<"$rotate_output"
 
       - name: Validate Caddy site-block syntax in the production image
         run: >-
