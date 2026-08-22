@@ -2,11 +2,8 @@ name: Phase 5 Deployment Bundle CI
 
 on:
   pull_request:
-    paths:
-      - "deploy/phase5/**"
-      - "scripts/phase5/**"
-      - "services/agent_hub/**"
-      - ".github/workflows/phase5-deploy-bundle-ci.yml"
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:

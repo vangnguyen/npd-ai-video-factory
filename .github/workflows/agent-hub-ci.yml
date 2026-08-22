@@ -1,20 +1,13 @@
 name: Agent Hub CI
 
 on:
+  workflow_dispatch:
   pull_request:
-    paths:
-      - "services/agent_hub/**"
-      - "deploy/phase5/**"
-      - "scripts/phase5/**"
-      - ".github/workflows/agent-hub-ci.yml"
-      - "docker-compose.yml"
+    branches:
+      - main
   push:
     branches:
       - main
-    paths:
-      - "services/agent_hub/**"
-      - ".github/workflows/agent-hub-ci.yml"
-      - "docker-compose.yml"
 
 jobs:
   test:
