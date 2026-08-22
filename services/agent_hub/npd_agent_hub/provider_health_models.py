@@ -120,4 +120,3 @@ class ProviderHealthStatus(BaseModel):
 
 class ProviderAlertAcknowledgeRequest(BaseModel):
     expected_status: ProviderAlertStatus = ProviderAlertStatus.OPEN
-
