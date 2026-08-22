@@ -2,9 +2,13 @@
 
 ## Audit result
 
-The read-only GitHub API audit on 2026-08-22 returned `404 Branch not protected` for
-`main`. The repository therefore had no server-side rule preventing a direct push,
-force-push, branch deletion or merge with failed checks.
+The read-only GitHub API audit on 2026-08-22 initially returned
+`404 Branch not protected` for `main`. The stabilization run then applied the policy below
+through the GitHub API. The verification response confirmed `strict=true`, the six
+required contexts, required PRs, admin enforcement, conversation resolution, and force
+push/deletion disabled. The review count remains zero until an independent reviewer is
+available, preventing a single-maintainer lockout while still blocking direct/failed-CI
+merges.
 
 This stabilization change makes all three required workflows run for every pull request
 targeting `main`. A stacked pull request may remain based on its dependency while under
