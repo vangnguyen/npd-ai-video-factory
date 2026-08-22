@@ -69,3 +69,15 @@ def test_google_login_dashboard_keeps_questions_and_removes_token_input():
     assert 'id="token"' not in content
     assert "20 câu hỏi nghiệp vụ gợi ý" in content
     assert "renderQuestions();refreshAll();" in content
+
+
+def test_dashboard_separates_pipeline_operational_signals_and_incident_timeline():
+    assert 'id="providerOperationsSummary"' in DASHBOARD_HTML
+    assert "Latest heartbeat" in DASHBOARD_HTML
+    assert "Latest lead activity" in DASHBOARD_HTML
+    assert "Latest scheduler" in DASHBOARD_HTML
+    assert "Pipeline đang sống · chưa có lead mới" in DASHBOARD_HTML
+    assert 'id="providerHealthIncidents"' in DASHBOARD_HTML
+    assert "/api/v1/provider-health/alerts?provider=n8n_lead_intake&limit=20" in DASHBOARD_HTML
+    assert "Thời lượng" in DASHBOARD_HTML
+    assert "External probes/notifications/write: disabled" in DASHBOARD_HTML

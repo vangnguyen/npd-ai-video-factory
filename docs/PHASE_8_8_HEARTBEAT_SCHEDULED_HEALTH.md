@@ -138,6 +138,122 @@ cached internal evaluation.
 10. Production cutover restarts only Agent Hub; n8n workflow activation is separately
     backed up and audited.
 
+## Production operations runbook
+
+### Validate and import
+
+Run the repository gate before touching production. It statically rejects active source
+workflows and likely inline credentials, then imports every workflow into an isolated,
+ephemeral n8n 2.33.7 container:
+
+```bash
+bash scripts/ci/validate-n8n-workflows.sh
+```
+
+Before import, back up the `n8n-marketing` PostgreSQL database and record the currently
+active workflow IDs. Import the JSON with `--activeState=false`; import must never make a
+schedule live implicitly. The source file remains inactive.
+
+Perform one manual execution before publication. On the production n8n host the manual
+CLI acceptance may need a temporary, non-production task-runner broker port to avoid the
+already-running container port:
+
+```bash
+N8N_RUNNERS_BROKER_PORT=5680 n8n execute \
+  --id=fd262c48-24c0-4ee3-a20a-09f2a417de88
+```
+
+Acceptance requires a signed Agent Hub receipt and no PII. Publish the workflow from the
+n8n UI only after that receipt verifies. Confirm that exactly one workflow with the
+Phase 8.8 ID is published and that the existing Lead Intake workflow stays active and
+unchanged. Publishing does not authorize any Ads, CRM, CMS or customer-contact action.
+
+### Unpublish and rollback
+
+If the receipt is missing, the cadence is wrong, or alerts become noisy:
+
+1. unpublish `NPD Phase 8.8 - Lead Intake Heartbeat` in the n8n UI;
+2. confirm no new scheduled receipt arrives after one interval plus clock tolerance;
+3. keep the historical signed receipts and alert audit intact;
+4. restore the previous Agent Hub image/config only if the Agent Hub change is the cause;
+5. restore the n8n database only as an explicit last resort after a new backup—never as
+   an automatic step.
+
+No n8n, Caddy, Redis or database container restart is required for normal workflow
+unpublish. Record each action and exact workflow ID in the deployment receipt.
+
+### Diagnose n8n executions safely
+
+n8n can retain soft-deleted rows whose `status` still reads `running`, particularly when
+successful execution persistence is disabled. They are not active jobs. Audit only rows
+whose `deletedAt` is null:
+
+```sql
+SELECT id, status, "workflowId", "startedAt", "stoppedAt", "deletedAt"
+FROM execution_entity
+WHERE "deletedAt" IS NULL
+  AND status IN ('new', 'running', 'waiting')
+ORDER BY "startedAt" DESC;
+```
+
+Do not delete or rewrite execution rows during diagnosis. Correlate any returned ID with
+n8n logs and workflow state before deciding that an execution is stuck.
+
+## Command Center operational signals
+
+Command Center deliberately renders four different facts:
+
+- latest PII-free heartbeat receipt;
+- latest real lead activity age;
+- latest cached-only scheduler completion;
+- incident timeline from detection through resolution, including duration.
+
+When heartbeat is fresh but lead activity is older than the SLO target, the UI says
+`Pipeline đang sống · chưa có lead mới ...`. This is an informational operating verdict,
+not a synthetic lead, an alert, or proof that marketing should be changed.
+
+## 48-hour acceptance report
+
+At a five-minute cadence, a complete 48-hour window has 576 expected intervals. Use the
+read-only report helper; pass a token only through the environment and never in a command
+argument or report file:
+
+```bash
+export NPD_AGENT_HUB_TOKEN="$AGENT_VIEWER_TOKEN"
+python3 scripts/phase8/report-heartbeat-acceptance.py \
+  --base-url http://127.0.0.1:8010 \
+  --window-hours 48 \
+  --output phase-8-8-acceptance-48h.json
+unset NPD_AGENT_HUB_TOKEN
+```
+
+The helper reports observed coverage separately from the requested window, so an early
+partial run cannot be mistaken for a completed 48-hour acceptance. The owner gate is:
+
+| Signal | Acceptance evidence |
+|---|---|
+| heartbeat success | full window, receipt count/rate and signed latest receipt |
+| max gap | no unexplained gap beyond one interval plus agreed clock/runtime tolerance |
+| scheduler jitter | last completion and lag beyond configured interval |
+| alert quality | open/resolved count; manually classify every incident/false positive |
+| recovery | maximum detection-to-resolution duration |
+| quiet lead period | pipeline liveness remains separate from lead activity |
+| Redis growth | namespace bytes before/after and capped heartbeat retention |
+| resource impact | Agent Hub/n8n restart count, CPU and memory before/after |
+| safety | cached-only scheduler true; external probes/notifications/write all false |
+
+Redis byte values are optional report inputs because the API intentionally does not expose
+Redis internals. Capture namespace-only baseline/current values on the host, then provide
+them with `--redis-baseline-bytes` and `--redis-current-bytes`. Do not scan or modify video
+job keys or Redis DB 0.
+
+## Next staged scope
+
+Phase 8.9 may add severity routing, dedupe windows, cooldown, escalation policy and
+notification preview/dry-run. External email, Zalo, PWA or ticket delivery remains disabled
+until the 48-hour evidence is reviewed and the owner explicitly approves a provider and
+least-privilege credential.
+
 ## Intentional limits
 
 Phase 8.8 does not add external alert delivery, incident tickets, auto-remediation,
