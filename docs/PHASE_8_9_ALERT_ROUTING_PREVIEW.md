@@ -31,7 +31,9 @@ purely computes:
 - the existing stable dedupe key;
 - policy windows and remaining cooldown;
 - suppression state for cooldown, acknowledged or resolved incidents;
-- whether escalation would apply;
+- whether escalation would apply after suppression; acknowledged, resolved and
+  cooldown alerts always report `escalation_would_apply=false` even when the raw
+  time/occurrence threshold has been met;
 - a bounded, PII-free notification title/message preview;
 - candidate channels with external delivery disabled.
 

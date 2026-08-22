@@ -472,7 +472,7 @@ class ProviderHealthService:
         incident_age = max(0.0, (now - alert.first_detected_at).total_seconds() / 60)
         since_last = max(0.0, (now - alert.last_detected_at).total_seconds() / 60)
         cooldown_remaining = max(0.0, policy.cooldown_minutes - since_last)
-        escalation = bool(
+        escalation_condition_met = bool(
             (policy.escalate_after_minutes and incident_age >= policy.escalate_after_minutes)
             or (
                 policy.escalate_after_occurrences
@@ -487,6 +487,10 @@ class ProviderHealthService:
             suppression = ProviderNotificationSuppression.COOLDOWN
         else:
             suppression = ProviderNotificationSuppression.PREVIEW_ELIGIBLE
+        escalation_would_apply = bool(
+            escalation_condition_met
+            and suppression == ProviderNotificationSuppression.PREVIEW_ELIGIBLE
+        )
         return ProviderAlertRoutingPreview(
             alert_id=alert.alert_id,
             dedupe_key=alert.dedupe_key,
@@ -498,7 +502,7 @@ class ProviderHealthService:
             suppression=suppression,
             cooldown_remaining_minutes=round(cooldown_remaining, 2),
             incident_age_minutes=round(incident_age, 2),
-            escalation_would_apply=escalation,
+            escalation_would_apply=escalation_would_apply,
             preview_title=f"[{alert.severity.value.upper()}] {alert.provider}: {alert.alert_type}",
             preview_message=alert.detail,
         )

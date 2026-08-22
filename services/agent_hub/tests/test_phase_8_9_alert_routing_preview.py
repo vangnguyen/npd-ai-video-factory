@@ -32,18 +32,31 @@ def service(store, now):
     return ProviderHealthService(store, delivery, clock=lambda: now)
 
 
-def critical_alert(now):
+def alert(
+    now,
+    *,
+    severity=ProviderAlertSeverity.CRITICAL,
+    age_minutes=20,
+    since_last_minutes=20,
+    occurrence_count=2,
+    status=ProviderAlertStatus.OPEN,
+):
     return ProviderHealthAlert(
         alert_id="pha_1234567890abcdef12345678",
         dedupe_key="provider_health:n8n_lead_intake:freshness_stale",
         provider="n8n_lead_intake",
         alert_type="freshness_stale",
-        severity=ProviderAlertSeverity.CRITICAL,
+        severity=severity,
         detail="Producer heartbeat exceeded its freshness SLO.",
-        first_detected_at=now - timedelta(minutes=20),
-        last_detected_at=now - timedelta(minutes=20),
-        occurrence_count=2,
+        first_detected_at=now - timedelta(minutes=age_minutes),
+        last_detected_at=now - timedelta(minutes=since_last_minutes),
+        occurrence_count=occurrence_count,
+        status=status,
     )
+
+
+def critical_alert(now):
+    return alert(now)
 
 
 def test_critical_routing_preview_models_dedupe_cooldown_and_escalation_without_send():
@@ -71,16 +84,103 @@ def test_critical_routing_preview_models_dedupe_cooldown_and_escalation_without_
     assert preview.production_write_enabled is False
 
 
-def test_acknowledged_and_resolved_alerts_are_suppressed_in_preview():
+def test_acknowledged_critical_alert_meeting_time_threshold_does_not_escalate():
     now = datetime(2026, 8, 22, 16, 0, tzinfo=UTC)
     store = MemoryHubStore()
-    alert = critical_alert(now)
-    store.save_provider_alert(alert.model_copy(update={"status": ProviderAlertStatus.ACKNOWLEDGED}))
-    provider_health = service(store, now)
-    assert provider_health.routing_preview(alert.alert_id).suppression.value == "acknowledged"
+    row = alert(
+        now,
+        age_minutes=20,
+        occurrence_count=1,
+        status=ProviderAlertStatus.ACKNOWLEDGED,
+    )
+    store.save_provider_alert(row)
 
-    store.save_provider_alert(alert.model_copy(update={"status": ProviderAlertStatus.RESOLVED, "resolved_at": now}))
-    assert provider_health.routing_preview(alert.alert_id).suppression.value == "resolved"
+    preview = service(store, now).routing_preview(row.alert_id)
+
+    assert preview.suppression.value == "acknowledged"
+    assert preview.escalation_would_apply is False
+
+
+def test_acknowledged_critical_alert_meeting_occurrence_threshold_does_not_escalate():
+    now = datetime(2026, 8, 22, 16, 0, tzinfo=UTC)
+    store = MemoryHubStore()
+    row = alert(
+        now,
+        age_minutes=5,
+        since_last_minutes=20,
+        occurrence_count=2,
+        status=ProviderAlertStatus.ACKNOWLEDGED,
+    )
+    store.save_provider_alert(row)
+
+    preview = service(store, now).routing_preview(row.alert_id)
+
+    assert preview.suppression.value == "acknowledged"
+    assert preview.escalation_would_apply is False
+
+
+def test_resolved_critical_alert_meeting_thresholds_does_not_escalate():
+    now = datetime(2026, 8, 22, 16, 0, tzinfo=UTC)
+    store = MemoryHubStore()
+    row = alert(
+        now,
+        status=ProviderAlertStatus.RESOLVED,
+    ).model_copy(update={"resolved_at": now})
+    store.save_provider_alert(row)
+
+    preview = service(store, now).routing_preview(row.alert_id)
+
+    assert preview.suppression.value == "resolved"
+    assert preview.escalation_would_apply is False
+
+
+def test_cooldown_alert_is_not_yet_eligible_for_escalation():
+    now = datetime(2026, 8, 22, 16, 0, tzinfo=UTC)
+    store = MemoryHubStore()
+    row = alert(now, since_last_minutes=5)
+    store.save_provider_alert(row)
+
+    preview = service(store, now).routing_preview(row.alert_id)
+
+    assert preview.suppression.value == "cooldown"
+    assert preview.cooldown_remaining_minutes == 10
+    assert preview.escalation_would_apply is False
+
+
+def test_warning_alert_can_escalate_only_when_open_and_preview_eligible():
+    now = datetime(2026, 8, 22, 16, 0, tzinfo=UTC)
+    store = MemoryHubStore()
+    row = alert(
+        now,
+        severity=ProviderAlertSeverity.WARNING,
+        age_minutes=70,
+        since_last_minutes=35,
+        occurrence_count=3,
+    )
+    store.save_provider_alert(row)
+
+    preview = service(store, now).routing_preview(row.alert_id)
+
+    assert preview.suppression.value == "preview_eligible"
+    assert preview.escalation_would_apply is True
+
+
+def test_info_alert_has_no_escalation_policy():
+    now = datetime(2026, 8, 22, 16, 0, tzinfo=UTC)
+    store = MemoryHubStore()
+    row = alert(
+        now,
+        severity=ProviderAlertSeverity.INFO,
+        age_minutes=120,
+        since_last_minutes=65,
+        occurrence_count=20,
+    )
+    store.save_provider_alert(row)
+
+    preview = service(store, now).routing_preview(row.alert_id)
+
+    assert preview.suppression.value == "preview_eligible"
+    assert preview.escalation_would_apply is False
 
 
 def test_routing_preview_api_is_viewer_readable_and_has_no_external_effect():
