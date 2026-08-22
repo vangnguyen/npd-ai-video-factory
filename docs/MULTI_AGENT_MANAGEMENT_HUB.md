@@ -280,3 +280,12 @@ Phase 8.4 bổ sung registry external ID đã được owner xác minh và inges
 pseudonymous chỉ-đọc. Unknown/conflict không được ghi vào ledger; Command Center hiển
 thị coverage, freshness và mismatch mà không suy đoán dự án từ tên Ads. Chi tiết nằm
 trong `docs/PHASE_8_4_CAMPAIGN_IDENTITY_DATA_QUALITY.md`.
+
+## Phase 8.7 Provider Health & Internal Alert Routing
+
+Phase 8.7 tổng hợp bounded read-only probe cho CRM, Meta Ads, GA4 và Social với signed
+delivery freshness của n8n Lead Intake. Cảnh báo được dedupe, lưu trong subnamespace
+Agent Hub và chỉ route tới Command Center/audit. Operator có thể acknowledge nội bộ;
+điều kiện hết lỗi sẽ auto-resolve. Không gửi Zalo/email/PWA, không tự retry provider,
+không sửa Ads/CRM/CMS và không bật n8n executor. Chi tiết nằm trong
+`docs/PHASE_8_7_PROVIDER_HEALTH_ALERT_ROUTING.md`.

@@ -161,6 +161,7 @@ Use `--rotate` only during an intentional key rotation. Prior receipts remain ta
 
 Phase 8.6 does not poll providers, schedule retries, perform full identity stitching,
 expose raw PII, create Ads, allocate traffic, mutate budgets, publish content or apply
-experiment winners. A later increment may add alert routing and provider-specific
-read adapters after SLO evidence is accepted; it must preserve the same no-write and
+experiment winners. Phase 8.7 adds bounded provider-health probes and internal-only
+alert routing after the Lead Intake SLO evidence is accepted; its architecture is in
+`docs/PHASE_8_7_PROVIDER_HEALTH_ALERT_ROUTING.md` and preserves the same no-write and
 approval boundaries.

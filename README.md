@@ -55,6 +55,11 @@ Phase 8.6 wraps read-only attribution delivery with tamper-evident HMAC receipts
 bounded producer retry/dead-letter evidence and per-source freshness SLOs. It observes
 delivery health but never schedules retries or enables source-system writes.
 
+Phase 8.7 adds bounded read-only provider probes and deduplicated internal alert
+routing. Health/alert state persists in a dedicated Agent Hub Redis subnamespace;
+acknowledgement is an internal audit action only. No Zalo/email/PWA notification,
+provider retry, source mutation or production write is enabled.
+
 ## Handoff package
 
 - [Technical handoff](docs/technical-handoff.md)
@@ -68,6 +73,7 @@ delivery health but never schedules retries or enables source-system writes.
 - [Phase 8.4 Campaign Identity & Attribution Data Quality](docs/PHASE_8_4_CAMPAIGN_IDENTITY_DATA_QUALITY.md)
 - [Phase 8.5 Lead Intake Attribution Operations](docs/PHASE_8_5_LEAD_INTAKE_ATTRIBUTION_OPERATIONS.md)
 - [Phase 8.6 Ingestion Delivery Observability](docs/PHASE_8_6_INGESTION_DELIVERY_OBSERVABILITY.md)
+- [Phase 8.7 Provider Health & Internal Alert Routing](docs/PHASE_8_7_PROVIDER_HEALTH_ALERT_ROUTING.md)
 - [Video manifest JSON Schema](packages/contracts/video-manifest.schema.json)
 - [n8n smoke-test workflow](workflows/n8n/sprint-1-smoke-test.json)
 - [45-second sample request](examples/vinhomes-green-paradise.request.json)

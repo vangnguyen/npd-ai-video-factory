@@ -20,6 +20,7 @@ from .config import HubSettings, settings as default_settings
 from .delivery_models import AttributionDeadLetter, AttributionDeliveryReceipt
 from .experiment_models import Experiment, ExperimentAuditEvent, ExperimentStatus
 from .models import AgentTask, AuditEvent, CommandCenterReport, ToolExecutionResult
+from .provider_health_models import ProviderHealthAlert, ProviderHealthSnapshot
 
 
 class HubStore(Protocol):
@@ -113,6 +114,18 @@ class HubStore(Protocol):
         self, *, producer: str | None = None, limit: int = 1000
     ) -> list[AttributionDeadLetter]: ...
 
+    def save_provider_health_snapshot(self, snapshot: ProviderHealthSnapshot) -> None: ...
+
+    def list_provider_health_snapshots(
+        self, limit: int = 50
+    ) -> list[ProviderHealthSnapshot]: ...
+
+    def save_provider_alert(self, alert: ProviderHealthAlert) -> None: ...
+
+    def get_provider_alert(self, alert_id: str) -> ProviderHealthAlert | None: ...
+
+    def list_provider_alerts(self, limit: int = 100) -> list[ProviderHealthAlert]: ...
+
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None: ...
 
     def list_touchpoints(
@@ -186,6 +199,10 @@ class MemoryHubStore:
     attribution_dead_letters: dict[str, AttributionDeadLetter] = field(
         default_factory=dict
     )
+    provider_health_snapshots: dict[str, ProviderHealthSnapshot] = field(
+        default_factory=dict
+    )
+    provider_alerts: dict[str, ProviderHealthAlert] = field(default_factory=dict)
     attribution_reconciliations: dict[str, AttributionReconciliation] = field(
         default_factory=dict
     )
@@ -402,6 +419,38 @@ class MemoryHubStore:
         )
         if producer is not None:
             rows = [item for item in rows if item.producer == producer]
+        return [item.model_copy(deep=True) for item in rows[:limit]]
+
+    def save_provider_health_snapshot(self, snapshot: ProviderHealthSnapshot) -> None:
+        self.provider_health_snapshots[snapshot.snapshot_id] = snapshot.model_copy(
+            deep=True
+        )
+
+    def list_provider_health_snapshots(
+        self, limit: int = 50
+    ) -> list[ProviderHealthSnapshot]:
+        limit = max(1, min(limit, 1000))
+        rows = sorted(
+            self.provider_health_snapshots.values(),
+            key=lambda item: item.observed_at,
+            reverse=True,
+        )
+        return [item.model_copy(deep=True) for item in rows[:limit]]
+
+    def save_provider_alert(self, alert: ProviderHealthAlert) -> None:
+        self.provider_alerts[alert.alert_id] = alert.model_copy(deep=True)
+
+    def get_provider_alert(self, alert_id: str) -> ProviderHealthAlert | None:
+        alert = self.provider_alerts.get(alert_id)
+        return alert.model_copy(deep=True) if alert is not None else None
+
+    def list_provider_alerts(self, limit: int = 100) -> list[ProviderHealthAlert]:
+        limit = max(1, min(limit, 5000))
+        rows = sorted(
+            self.provider_alerts.values(),
+            key=lambda item: item.last_detected_at,
+            reverse=True,
+        )
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
@@ -836,6 +885,58 @@ class RedisHubStore:
         if producer is not None:
             rows = [item for item in rows if item.producer == producer]
         return rows[:limit]
+
+    def save_provider_health_snapshot(self, snapshot: ProviderHealthSnapshot) -> None:
+        pipe = self.redis.pipeline()
+        pipe.set(
+            self._key("provider-health", "snapshot", snapshot.snapshot_id),
+            snapshot.model_dump_json(),
+        )
+        pipe.zadd(
+            self._key("provider-health", "snapshots"),
+            {snapshot.snapshot_id: snapshot.observed_at.timestamp()},
+        )
+        pipe.execute()
+
+    def list_provider_health_snapshots(
+        self, limit: int = 50
+    ) -> list[ProviderHealthSnapshot]:
+        limit = max(1, min(limit, 1000))
+        ids = self.redis.zrevrange(
+            self._key("provider-health", "snapshots"), 0, limit - 1
+        )
+        rows: list[ProviderHealthSnapshot] = []
+        for snapshot_id in ids:
+            raw = self.redis.get(
+                self._key("provider-health", "snapshot", str(snapshot_id))
+            )
+            if raw:
+                rows.append(ProviderHealthSnapshot.model_validate_json(raw))
+        return rows
+
+    def save_provider_alert(self, alert: ProviderHealthAlert) -> None:
+        pipe = self.redis.pipeline()
+        pipe.set(
+            self._key("provider-health", "alert", alert.alert_id),
+            alert.model_dump_json(),
+        )
+        pipe.zadd(
+            self._key("provider-health", "alerts"),
+            {alert.alert_id: alert.last_detected_at.timestamp()},
+        )
+        pipe.execute()
+
+    def get_provider_alert(self, alert_id: str) -> ProviderHealthAlert | None:
+        raw = self.redis.get(self._key("provider-health", "alert", alert_id))
+        return ProviderHealthAlert.model_validate_json(raw) if raw else None
+
+    def list_provider_alerts(self, limit: int = 100) -> list[ProviderHealthAlert]:
+        limit = max(1, min(limit, 5000))
+        ids = self.redis.zrevrange(
+            self._key("provider-health", "alerts"), 0, limit - 1
+        )
+        rows = [self.get_provider_alert(str(alert_id)) for alert_id in ids]
+        return [item for item in rows if item is not None]
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
         raw = self.redis.get(self._key("attribution-os", "touchpoint", event_id))
