@@ -353,6 +353,7 @@ def test_n8n_heartbeat_workflow_is_inactive_pii_free_and_internal_only():
     request = next(node for node in payload["nodes"] if node["type"].endswith("code"))
     assert schedule["parameters"]["rule"]["interval"][0]["minutesInterval"] == 5
     assert acceptance["name"] == "Internal acceptance trigger"
+    assert acceptance["parameters"]["inputSource"] == "passthrough"
     assert payload["connections"][acceptance["name"]]["main"][0][0]["node"] == request["name"]
     code = request["parameters"]["jsCode"]
     assert "NPD_AGENT_HUB_ATTRIBUTION_URL" in code

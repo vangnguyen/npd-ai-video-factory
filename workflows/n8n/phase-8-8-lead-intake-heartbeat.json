@@ -23,7 +23,9 @@
       ]
     },
     {
-      "parameters": {},
+      "parameters": {
+        "inputSource": "passthrough"
+      },
       "id": "620f86c8-14d7-44ac-9ee4-3bca24e8b0bf",
       "name": "Internal acceptance trigger",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
