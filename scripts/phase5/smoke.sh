@@ -91,6 +91,30 @@ for item in payload:
             raise SystemExit(f'intake queue persisted forbidden field: {forbidden}')
 PY
 
+code="$(http_code GET "$BASE_URL/api/v1/attribution/deliveries/status" '' '' "$workdir/delivery-unauth.json")"
+[[ "$code" == "401" ]] || fail "unauthenticated delivery status must return 401, got $code"
+
+code="$(http_code GET "$BASE_URL/api/v1/attribution/deliveries/status" "$AGENT_VIEWER_TOKEN" '' "$workdir/delivery-status.json")"
+[[ "$code" == "200" ]] || fail "viewer delivery status returned HTTP $code"
+code="$(http_code GET "$BASE_URL/api/v1/attribution/deliveries/dead-letters?limit=50" "$AGENT_VIEWER_TOKEN" '' "$workdir/dead-letters.json")"
+[[ "$code" == "200" ]] || fail "viewer dead-letter metrics returned HTTP $code"
+python3 - "$workdir/delivery-status.json" "$workdir/dead-letters.json" <<'PY'
+import json, sys
+
+status = json.load(open(sys.argv[1], encoding='utf-8'))
+dead = json.load(open(sys.argv[2], encoding='utf-8'))
+if status.get('configured') is not True:
+    raise SystemExit('signed delivery receipt service is not configured')
+if status.get('production_write_enabled') is not False:
+    raise SystemExit('delivery observability exposed production write')
+if not isinstance(status.get('sources'), list) or not status['sources']:
+    raise SystemExit('delivery freshness SLO sources are missing')
+if not isinstance(dead, list):
+    raise SystemExit('dead-letter response is not a list')
+if any(item.get('external_writes_enabled') is not False for item in dead):
+    raise SystemExit('dead-letter response exposed external write')
+PY
+
 code="$(http_code GET "$BASE_URL/api/v1/whoami" "$AGENT_OWNER_TOKEN" '' "$workdir/whoami.json")"
 [[ "$code" == "200" ]] || fail "owner whoami returned HTTP $code"
 owner_role="$(python3 - "$workdir/whoami.json" <<'PY'

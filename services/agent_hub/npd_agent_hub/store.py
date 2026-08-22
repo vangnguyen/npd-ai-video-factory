@@ -17,6 +17,7 @@ from .attribution_models import (
 )
 from .campaign_models import Campaign, CampaignAuditEvent, CampaignStatus
 from .config import HubSettings, settings as default_settings
+from .delivery_models import AttributionDeadLetter, AttributionDeliveryReceipt
 from .experiment_models import Experiment, ExperimentAuditEvent, ExperimentStatus
 from .models import AgentTask, AuditEvent, CommandCenterReport, ToolExecutionResult
 
@@ -94,6 +95,24 @@ class HubStore(Protocol):
         self, *, status: str | None = None, limit: int = 100
     ) -> list[AttributionIntakeIssue]: ...
 
+    def save_attribution_delivery_receipt(
+        self, receipt: AttributionDeliveryReceipt
+    ) -> None: ...
+
+    def get_attribution_delivery_receipt(
+        self, receipt_id: str
+    ) -> AttributionDeliveryReceipt | None: ...
+
+    def list_attribution_delivery_receipts(
+        self, *, producer: str | None = None, limit: int = 1000
+    ) -> list[AttributionDeliveryReceipt]: ...
+
+    def save_attribution_dead_letter(self, item: AttributionDeadLetter) -> None: ...
+
+    def list_attribution_dead_letters(
+        self, *, producer: str | None = None, limit: int = 1000
+    ) -> list[AttributionDeadLetter]: ...
+
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None: ...
 
     def list_touchpoints(
@@ -159,6 +178,12 @@ class MemoryHubStore:
         default_factory=dict
     )
     attribution_intake_issues: dict[str, AttributionIntakeIssue] = field(
+        default_factory=dict
+    )
+    attribution_delivery_receipts: dict[str, AttributionDeliveryReceipt] = field(
+        default_factory=dict
+    )
+    attribution_dead_letters: dict[str, AttributionDeadLetter] = field(
         default_factory=dict
     )
     attribution_reconciliations: dict[str, AttributionReconciliation] = field(
@@ -329,6 +354,54 @@ class MemoryHubStore:
         )
         if status is not None:
             rows = [item for item in rows if item.status.value == status]
+        return [item.model_copy(deep=True) for item in rows[:limit]]
+
+    def save_attribution_delivery_receipt(
+        self, receipt: AttributionDeliveryReceipt
+    ) -> None:
+        existing = self.attribution_delivery_receipts.get(receipt.receipt_id)
+        if existing is not None and existing != receipt:
+            raise ValueError("delivery receipt is immutable")
+        self.attribution_delivery_receipts[receipt.receipt_id] = receipt.model_copy(
+            deep=True
+        )
+
+    def get_attribution_delivery_receipt(
+        self, receipt_id: str
+    ) -> AttributionDeliveryReceipt | None:
+        receipt = self.attribution_delivery_receipts.get(receipt_id)
+        return receipt.model_copy(deep=True) if receipt is not None else None
+
+    def list_attribution_delivery_receipts(
+        self, *, producer: str | None = None, limit: int = 1000
+    ) -> list[AttributionDeliveryReceipt]:
+        limit = max(1, min(limit, 5000))
+        rows = sorted(
+            self.attribution_delivery_receipts.values(),
+            key=lambda item: item.received_at,
+            reverse=True,
+        )
+        if producer is not None:
+            rows = [item for item in rows if item.producer == producer]
+        return [item.model_copy(deep=True) for item in rows[:limit]]
+
+    def save_attribution_dead_letter(self, item: AttributionDeadLetter) -> None:
+        existing = self.attribution_dead_letters.get(item.dead_letter_id)
+        if existing is not None and existing != item:
+            raise ValueError("dead letter is immutable")
+        self.attribution_dead_letters[item.dead_letter_id] = item.model_copy(deep=True)
+
+    def list_attribution_dead_letters(
+        self, *, producer: str | None = None, limit: int = 1000
+    ) -> list[AttributionDeadLetter]:
+        limit = max(1, min(limit, 5000))
+        rows = sorted(
+            self.attribution_dead_letters.values(),
+            key=lambda item: item.created_at,
+            reverse=True,
+        )
+        if producer is not None:
+            rows = [item for item in rows if item.producer == producer]
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
@@ -694,6 +767,75 @@ class RedisHubStore:
         if status is not None:
             filtered = [item for item in filtered if item.status.value == status]
         return filtered[:limit]
+
+    def save_attribution_delivery_receipt(
+        self, receipt: AttributionDeliveryReceipt
+    ) -> None:
+        key = self._key("attribution-os", "delivery-receipt", receipt.receipt_id)
+        raw = receipt.model_dump_json()
+        existing = self.redis.get(key)
+        if existing is not None and existing != raw:
+            raise ValueError("delivery receipt is immutable")
+        pipe = self.redis.pipeline()
+        pipe.set(key, raw, nx=True)
+        pipe.zadd(
+            self._key("attribution-os", "delivery-receipts"),
+            {receipt.receipt_id: receipt.received_at.timestamp()},
+        )
+        pipe.execute()
+
+    def get_attribution_delivery_receipt(
+        self, receipt_id: str
+    ) -> AttributionDeliveryReceipt | None:
+        raw = self.redis.get(
+            self._key("attribution-os", "delivery-receipt", receipt_id)
+        )
+        return AttributionDeliveryReceipt.model_validate_json(raw) if raw else None
+
+    def list_attribution_delivery_receipts(
+        self, *, producer: str | None = None, limit: int = 1000
+    ) -> list[AttributionDeliveryReceipt]:
+        limit = max(1, min(limit, 5000))
+        ids = self.redis.zrevrange(
+            self._key("attribution-os", "delivery-receipts"), 0, 4999
+        )
+        rows = [self.get_attribution_delivery_receipt(str(item)) for item in ids]
+        filtered = [item for item in rows if item is not None]
+        if producer is not None:
+            filtered = [item for item in filtered if item.producer == producer]
+        return filtered[:limit]
+
+    def save_attribution_dead_letter(self, item: AttributionDeadLetter) -> None:
+        key = self._key("attribution-os", "dead-letter", item.dead_letter_id)
+        raw = item.model_dump_json()
+        existing = self.redis.get(key)
+        if existing is not None and existing != raw:
+            raise ValueError("dead letter is immutable")
+        pipe = self.redis.pipeline()
+        pipe.set(key, raw, nx=True)
+        pipe.zadd(
+            self._key("attribution-os", "dead-letters"),
+            {item.dead_letter_id: item.created_at.timestamp()},
+        )
+        pipe.execute()
+
+    def list_attribution_dead_letters(
+        self, *, producer: str | None = None, limit: int = 1000
+    ) -> list[AttributionDeadLetter]:
+        limit = max(1, min(limit, 5000))
+        ids = self.redis.zrevrange(
+            self._key("attribution-os", "dead-letters"), 0, 4999
+        )
+        rows: list[AttributionDeadLetter] = []
+        for item_id in ids:
+            raw = self.redis.get(
+                self._key("attribution-os", "dead-letter", str(item_id))
+            )
+            if raw:
+                rows.append(AttributionDeadLetter.model_validate_json(raw))
+        if producer is not None:
+            rows = [item for item in rows if item.producer == producer]
+        return rows[:limit]
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
         raw = self.redis.get(self._key("attribution-os", "touchpoint", event_id))

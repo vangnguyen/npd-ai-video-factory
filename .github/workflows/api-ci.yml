@@ -1,6 +1,7 @@
 name: Sprint 1 CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - codex/sprint-1-vertical-slice

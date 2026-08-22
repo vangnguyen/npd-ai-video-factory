@@ -50,6 +50,10 @@ jobs:
           AGENT_GOOGLE_CLIENT_ID=ci-client.apps.googleusercontent.com
           AGENT_GOOGLE_CLIENT_SECRET=ci-client-secret-placeholder
           AGENT_SESSION_SIGNING_KEY=ci-session-key-00000000000000000000000000000000
+          AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY=ci-attribution-receipt-key-0000000000000000000000
+          AGENT_ATTRIBUTION_RECEIPT_KEY_ID=ci-attribution-v1
+          AGENT_ATTRIBUTION_DELIVERY_MAX_ATTEMPTS=4
+          AGENT_ATTRIBUTION_FRESHNESS_SLOS_JSON='{"n8n_lead_intake":15,"meta_ads":1440,"ga4":1440,"espocrm":1440,"utm":60}'
           AGENT_SESSION_TTL_SECONDS=28800
           AGENT_OWNER_EMAILS=owner@example.invalid
           AGENT_OPERATOR_EMAILS=
@@ -67,6 +71,21 @@ jobs:
           N8N_DOCKER_NETWORK: n8n-marketing_n8n_net
           AGENT_HUB_PORT: "8010"
         run: docker compose -f deploy/phase5/docker-compose.agent-hub.prod.yml config --quiet
+
+      - name: Validate guarded attribution delivery configuration
+        run: |
+          cp /tmp/npd-agent-hub-ci.env /tmp/npd-agent-hub-config-test.env
+          sed -i '/^AGENT_ATTRIBUTION_/d' /tmp/npd-agent-hub-config-test.env
+          before_session="$(grep '^AGENT_SESSION_SIGNING_KEY=' /tmp/npd-agent-hub-config-test.env)"
+          output="$(bash scripts/phase5/configure-attribution-delivery.sh \
+            --apply \
+            --env-file /tmp/npd-agent-hub-config-test.env \
+            --backup-dir /tmp/npd-agent-hub-config-backups)"
+          grep -q '^AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY=.' /tmp/npd-agent-hub-config-test.env
+          grep -q '^AGENT_ATTRIBUTION_RECEIPT_KEY_ID=npd-attribution-v1$' /tmp/npd-agent-hub-config-test.env
+          test "$(grep '^AGENT_SESSION_SIGNING_KEY=' /tmp/npd-agent-hub-config-test.env)" = "$before_session"
+          test "$(find /tmp/npd-agent-hub-config-backups -type f | wc -l)" -eq 1
+          ! grep -q "$(grep '^AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY=' /tmp/npd-agent-hub-config-test.env | cut -d= -f2-)" <<<"$output"
 
       - name: Validate Caddy site-block syntax in the production image
         run: >-
