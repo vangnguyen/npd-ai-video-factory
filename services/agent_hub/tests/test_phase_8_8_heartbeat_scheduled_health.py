@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -340,6 +341,7 @@ def test_n8n_heartbeat_workflow_is_inactive_pii_free_and_internal_only():
             encoding="utf-8"
         )
     )
+    assert str(uuid.UUID(payload["id"])) == payload["id"]
     assert payload["active"] is False
     assert len(payload["nodes"]) == 2
     schedule = next(node for node in payload["nodes"] if node["type"].endswith("scheduleTrigger"))
