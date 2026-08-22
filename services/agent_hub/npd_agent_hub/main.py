@@ -104,6 +104,7 @@ from .models import (
 )
 from .provider_health_models import (
     ProviderAlertAcknowledgeRequest,
+    ProviderAlertRoutingPreview,
     ProviderAlertSeverity,
     ProviderAlertStatus,
     ProviderHealthAlert,
@@ -131,7 +132,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.12.9",
+    version="0.13.0",
     description="Multi-agent control plane with PII-free producer heartbeat and scheduled internal health evaluation.",
     lifespan=lifespan,
 )
@@ -1095,6 +1096,20 @@ def list_provider_health_alerts(
         provider=provider,
         limit=limit,
     )
+
+
+@app.get(
+    "/api/v1/provider-health/alerts/{alert_id}/routing-preview",
+    response_model=ProviderAlertRoutingPreview,
+)
+def preview_provider_alert_routing(
+    alert_id: str,
+    _principal: Principal = Depends(require_viewer),
+) -> ProviderAlertRoutingPreview:
+    try:
+        return hub.provider_health.routing_preview(alert_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="provider-health alert not found") from exc
 
 
 @app.post(

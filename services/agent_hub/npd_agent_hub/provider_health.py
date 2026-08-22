@@ -12,8 +12,11 @@ from .delivery_models import (
 )
 from .delivery_observability import AttributionDeliveryService
 from .provider_health_models import (
+    ProviderAlertRoutePolicy,
+    ProviderAlertRoutingPreview,
     ProviderAlertSeverity,
     ProviderAlertStatus,
+    ProviderNotificationSuppression,
     ProviderHealthAlert,
     ProviderHealthObservation,
     ProviderHealthSnapshot,
@@ -24,6 +27,33 @@ from .store import HubStore
 
 
 REQUIRED_DELIVERY_PRODUCERS = {"n8n_lead_intake"}
+
+ROUTING_POLICIES = {
+    ProviderAlertSeverity.INFO: ProviderAlertRoutePolicy(
+        severity=ProviderAlertSeverity.INFO,
+        candidate_external_channels=["email"],
+        dedupe_window_minutes=60,
+        cooldown_minutes=60,
+    ),
+    ProviderAlertSeverity.WARNING: ProviderAlertRoutePolicy(
+        severity=ProviderAlertSeverity.WARNING,
+        candidate_external_channels=["email", "pwa"],
+        dedupe_window_minutes=30,
+        cooldown_minutes=30,
+        escalate_after_minutes=60,
+        escalate_after_occurrences=3,
+        escalation_target="owner_review_preview",
+    ),
+    ProviderAlertSeverity.CRITICAL: ProviderAlertRoutePolicy(
+        severity=ProviderAlertSeverity.CRITICAL,
+        candidate_external_channels=["email", "pwa", "zalo", "ticket"],
+        dedupe_window_minutes=15,
+        cooldown_minutes=15,
+        escalate_after_minutes=15,
+        escalate_after_occurrences=2,
+        escalation_target="owner_review_preview",
+    ),
+}
 
 
 class ProviderHealthService:
@@ -432,6 +462,46 @@ class ProviderHealthService:
         if provider is not None:
             rows = [item for item in rows if item.provider == provider]
         return rows[:limit]
+
+    def routing_preview(self, alert_id: str) -> ProviderAlertRoutingPreview:
+        alert = self.store.get_provider_alert(alert_id)
+        if alert is None:
+            raise KeyError(alert_id)
+        now = self.clock()
+        policy = ROUTING_POLICIES[alert.severity]
+        incident_age = max(0.0, (now - alert.first_detected_at).total_seconds() / 60)
+        since_last = max(0.0, (now - alert.last_detected_at).total_seconds() / 60)
+        cooldown_remaining = max(0.0, policy.cooldown_minutes - since_last)
+        escalation = bool(
+            (policy.escalate_after_minutes and incident_age >= policy.escalate_after_minutes)
+            or (
+                policy.escalate_after_occurrences
+                and alert.occurrence_count >= policy.escalate_after_occurrences
+            )
+        )
+        if alert.status == ProviderAlertStatus.RESOLVED:
+            suppression = ProviderNotificationSuppression.RESOLVED
+        elif alert.status == ProviderAlertStatus.ACKNOWLEDGED:
+            suppression = ProviderNotificationSuppression.ACKNOWLEDGED
+        elif cooldown_remaining > 0:
+            suppression = ProviderNotificationSuppression.COOLDOWN
+        else:
+            suppression = ProviderNotificationSuppression.PREVIEW_ELIGIBLE
+        return ProviderAlertRoutingPreview(
+            alert_id=alert.alert_id,
+            dedupe_key=alert.dedupe_key,
+            provider=alert.provider,
+            alert_type=alert.alert_type,
+            severity=alert.severity,
+            status=alert.status,
+            policy=policy,
+            suppression=suppression,
+            cooldown_remaining_minutes=round(cooldown_remaining, 2),
+            incident_age_minutes=round(incident_age, 2),
+            escalation_would_apply=escalation,
+            preview_title=f"[{alert.severity.value.upper()}] {alert.provider}: {alert.alert_type}",
+            preview_message=alert.detail,
+        )
 
     def status(self) -> ProviderHealthStatus:
         snapshots = self.store.list_provider_health_snapshots(limit=1)
