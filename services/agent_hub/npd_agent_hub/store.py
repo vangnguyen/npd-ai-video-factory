@@ -7,6 +7,7 @@ from typing import Protocol
 from redis import Redis
 
 from .attribution_models import (
+    AttributionIntakeIssue,
     AttributionAuditEvent,
     AttributionDataQualitySnapshot,
     AttributionReconciliation,
@@ -83,6 +84,16 @@ class HubStore(Protocol):
         self, limit: int = 50
     ) -> list[AttributionDataQualitySnapshot]: ...
 
+    def save_attribution_intake_issue(self, issue: AttributionIntakeIssue) -> None: ...
+
+    def get_attribution_intake_issue(
+        self, issue_id: str
+    ) -> AttributionIntakeIssue | None: ...
+
+    def list_attribution_intake_issues(
+        self, *, status: str | None = None, limit: int = 100
+    ) -> list[AttributionIntakeIssue]: ...
+
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None: ...
 
     def list_touchpoints(
@@ -145,6 +156,9 @@ class MemoryHubStore:
     touchpoints: dict[str, TouchpointEvent] = field(default_factory=dict)
     identity_mappings: dict[str, CampaignIdentityMapping] = field(default_factory=dict)
     attribution_quality_snapshots: dict[str, AttributionDataQualitySnapshot] = field(
+        default_factory=dict
+    )
+    attribution_intake_issues: dict[str, AttributionIntakeIssue] = field(
         default_factory=dict
     )
     attribution_reconciliations: dict[str, AttributionReconciliation] = field(
@@ -293,6 +307,28 @@ class MemoryHubStore:
             key=lambda item: item.created_at,
             reverse=True,
         )
+        return [item.model_copy(deep=True) for item in rows[:limit]]
+
+    def save_attribution_intake_issue(self, issue: AttributionIntakeIssue) -> None:
+        self.attribution_intake_issues[issue.issue_id] = issue.model_copy(deep=True)
+
+    def get_attribution_intake_issue(
+        self, issue_id: str
+    ) -> AttributionIntakeIssue | None:
+        issue = self.attribution_intake_issues.get(issue_id)
+        return issue.model_copy(deep=True) if issue is not None else None
+
+    def list_attribution_intake_issues(
+        self, *, status: str | None = None, limit: int = 100
+    ) -> list[AttributionIntakeIssue]:
+        limit = max(1, min(limit, 1000))
+        rows = sorted(
+            self.attribution_intake_issues.values(),
+            key=lambda item: item.last_seen_at,
+            reverse=True,
+        )
+        if status is not None:
+            rows = [item for item in rows if item.status.value == status]
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
@@ -625,6 +661,39 @@ class RedisHubStore:
             if raw:
                 rows.append(AttributionDataQualitySnapshot.model_validate_json(raw))
         return rows
+
+    def save_attribution_intake_issue(self, issue: AttributionIntakeIssue) -> None:
+        pipe = self.redis.pipeline()
+        pipe.set(
+            self._key("attribution-os", "intake-issue", issue.issue_id),
+            issue.model_dump_json(),
+        )
+        pipe.zadd(
+            self._key("attribution-os", "intake-issues"),
+            {issue.issue_id: issue.last_seen_at.timestamp()},
+        )
+        pipe.execute()
+
+    def get_attribution_intake_issue(
+        self, issue_id: str
+    ) -> AttributionIntakeIssue | None:
+        raw = self.redis.get(
+            self._key("attribution-os", "intake-issue", issue_id)
+        )
+        return AttributionIntakeIssue.model_validate_json(raw) if raw else None
+
+    def list_attribution_intake_issues(
+        self, *, status: str | None = None, limit: int = 100
+    ) -> list[AttributionIntakeIssue]:
+        limit = max(1, min(limit, 1000))
+        ids = self.redis.zrevrange(
+            self._key("attribution-os", "intake-issues"), 0, 4999
+        )
+        rows = [self.get_attribution_intake_issue(str(item)) for item in ids]
+        filtered = [item for item in rows if item is not None]
+        if status is not None:
+            filtered = [item for item in filtered if item.status.value == status]
+        return filtered[:limit]
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
         raw = self.redis.get(self._key("attribution-os", "touchpoint", event_id))

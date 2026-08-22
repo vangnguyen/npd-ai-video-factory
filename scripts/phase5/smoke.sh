@@ -71,6 +71,26 @@ code="$(http_code GET "$BASE_URL/api/v1/command-center" '' '' "$workdir/unauth.j
 code="$(http_code GET "$BASE_URL/api/v1/command-center" "$AGENT_VIEWER_TOKEN" '' "$workdir/viewer.json")"
 [[ "$code" == "200" ]] || fail "viewer Command Center returned HTTP $code"
 
+code="$(http_code GET "$BASE_URL/api/v1/attribution/intake/issues?status=pending&limit=50" '' '' "$workdir/intake-unauth.json")"
+[[ "$code" == "401" ]] || fail "unauthenticated intake queue must return 401, got $code"
+
+code="$(http_code GET "$BASE_URL/api/v1/attribution/intake/issues?status=pending&limit=50" "$AGENT_VIEWER_TOKEN" '' "$workdir/intake-issues.json")"
+[[ "$code" == "200" ]] || fail "viewer intake queue returned HTTP $code"
+python3 - "$workdir/intake-issues.json" <<'PY'
+import json, sys
+
+payload = json.load(open(sys.argv[1], encoding='utf-8'))
+if not isinstance(payload, list):
+    raise SystemExit('intake queue response is not a list')
+for item in payload:
+    if item.get('external_writes_enabled') is not False:
+        raise SystemExit('intake queue exposed an external-write capability')
+    raw = json.dumps(item, ensure_ascii=False)
+    for forbidden in ('emailAddress', 'phoneNumber', 'customer_email', 'customer_phone'):
+        if forbidden in raw:
+            raise SystemExit(f'intake queue persisted forbidden field: {forbidden}')
+PY
+
 code="$(http_code GET "$BASE_URL/api/v1/whoami" "$AGENT_OWNER_TOKEN" '' "$workdir/whoami.json")"
 [[ "$code" == "200" ]] || fail "owner whoami returned HTTP $code"
 owner_role="$(python3 - "$workdir/whoami.json" <<'PY'

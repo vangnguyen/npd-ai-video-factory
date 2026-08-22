@@ -93,6 +93,11 @@ class FreshnessState(str, Enum):
     NO_DATA = "no_data"
 
 
+class IntakeIssueStatus(str, Enum):
+    PENDING = "pending"
+    RESOLVED = "resolved"
+
+
 class CampaignIdentityMappingCreate(BaseModel):
     source_system: IdentitySource
     source_account_id: str | None = Field(default=None, max_length=200)
@@ -209,6 +214,55 @@ class TouchpointIngestIssue(BaseModel):
     candidate_campaign_ids: list[str] = Field(default_factory=list)
 
 
+class AttributionIntakeIssue(BaseModel):
+    """Persisted, privacy-safe exception raised by source touchpoint ingestion."""
+
+    issue_id: str = Field(pattern=r"^ati_[0-9a-f]{24}$")
+    source_event: SourceTouchpointEvent
+    state: IdentityResolutionState
+    status: IntakeIssueStatus = IntakeIssueStatus.PENDING
+    detail: str
+    candidate_campaign_ids: list[str] = Field(default_factory=list)
+    occurrence_count: int = Field(default=1, ge=1)
+    first_seen_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_seen_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    resolved_campaign_id: str | None = Field(
+        default=None, pattern=CAMPAIGN_ID_PATTERN.pattern
+    )
+    resolution_methods: list[str] = Field(default_factory=list)
+    mapping_ids: list[str] = Field(default_factory=list)
+    resolved_by: str | None = None
+    resolved_at: datetime | None = None
+    replay_snapshot_id: str | None = None
+    shadow_mode: bool = True
+    external_writes_enabled: bool = False
+
+    @model_validator(mode="after")
+    def validate_intake_issue(self) -> "AttributionIntakeIssue":
+        if self.state not in {
+            IdentityResolutionState.UNKNOWN,
+            IdentityResolutionState.CONFLICT,
+        }:
+            raise ValueError("intake issue must represent unknown or conflict state")
+        if self.external_writes_enabled:
+            raise ValueError("intake issue cannot enable external writes")
+        assert_no_raw_pii(self.model_dump(mode="python"), path="intake_issue")
+        return self
+
+
+class AttributionIntakePreview(BaseModel):
+    issue_id: str
+    state: str
+    candidate_campaign_ids: list[str] = Field(default_factory=list)
+    resolution_methods: list[str] = Field(default_factory=list)
+    mapping_ids: list[str] = Field(default_factory=list)
+    ledger_event_id: str
+    would_insert: bool = False
+    detail: str
+    shadow_mode: bool = True
+    external_writes_enabled: bool = False
+
+
 class AttributionDataQualitySnapshot(BaseModel):
     snapshot_id: str = Field(
         default_factory=lambda: f"adq_{uuid4().hex[:20]}",
@@ -236,6 +290,7 @@ class AttributionIdentityStatus(BaseModel):
     mode: str = "verified_identity_read_only"
     mapping_count: int
     touchpoint_count: int
+    pending_intake_issues: int = 0
     latest_snapshot: AttributionDataQualitySnapshot | None = None
     production_write_enabled: bool = False
 

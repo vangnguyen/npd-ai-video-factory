@@ -9,6 +9,8 @@ from .attribution_models import (
     AttributionAuditEvent,
     AttributionDataQualitySnapshot,
     AttributionIdentityStatus,
+    AttributionIntakeIssue,
+    AttributionIntakePreview,
     AttributionModel,
     AttributionQuality,
     AttributionReconciliation,
@@ -20,6 +22,7 @@ from .attribution_models import (
     FreshnessState,
     IdentityResolutionState,
     IdentitySource,
+    IntakeIssueStatus,
     OpportunityMatch,
     OpportunityObservation,
     OpportunityStatus,
@@ -182,10 +185,135 @@ class AttributionService:
         ).hexdigest()[:32]
 
     @staticmethod
+    def _intake_issue_id(event: SourceTouchpointEvent) -> str:
+        digest = hashlib.sha256(
+            f"{event.source_system.value}:{event.source_event_id}".encode("utf-8")
+        ).hexdigest()[:24]
+        return f"ati_{digest}"
+
+    @staticmethod
     def _same_immutable_payload(left: TouchpointEvent, right: TouchpointEvent) -> bool:
         return left.model_dump(exclude={"ingested_at"}, mode="json") == right.model_dump(
             exclude={"ingested_at"}, mode="json"
         )
+
+    @staticmethod
+    def _touchpoint_from_source(
+        source_event: SourceTouchpointEvent,
+        *,
+        campaign_id: str,
+        methods: list[str],
+        mapping_ids: list[str],
+    ) -> TouchpointEvent:
+        return TouchpointEvent(
+            event_id=f"tpt_{AttributionService._event_fingerprint(source_event)}",
+            campaign_id=campaign_id,
+            event_type=source_event.event_type,
+            occurred_at=source_event.occurred_at,
+            source_system=source_event.source_system.value,
+            channel=source_event.channel,
+            lead_id=source_event.lead_id,
+            opportunity_id=source_event.opportunity_id,
+            source_campaign_id=source_event.source_campaign_id,
+            source_adset_id=source_event.source_adset_id,
+            source_ad_group_id=source_event.source_ad_group_id,
+            source_ad_id=source_event.source_ad_id,
+            utm_source=source_event.utm_source,
+            utm_medium=source_event.utm_medium,
+            utm_campaign=source_event.utm_campaign,
+            utm_content=source_event.utm_content,
+            landing_page=source_event.landing_page,
+            metadata={
+                **source_event.metadata,
+                "source_event_id": source_event.source_event_id,
+                "identity_resolution": methods,
+                "identity_mapping_ids": mapping_ids,
+                "external_side_effect": False,
+            },
+        )
+
+    def _record_intake_issue(
+        self,
+        source_event: SourceTouchpointEvent,
+        *,
+        state: IdentityResolutionState,
+        detail: str,
+        candidate_campaign_ids: list[str],
+        actor: str,
+    ) -> AttributionIntakeIssue:
+        issue_id = self._intake_issue_id(source_event)
+        existing = self.store.get_attribution_intake_issue(issue_id)
+        now = datetime.now(timezone.utc)
+        issue = AttributionIntakeIssue(
+            issue_id=issue_id,
+            source_event=source_event,
+            state=state,
+            status=IntakeIssueStatus.PENDING,
+            detail=detail,
+            candidate_campaign_ids=candidate_campaign_ids,
+            occurrence_count=(existing.occurrence_count + 1 if existing else 1),
+            first_seen_at=existing.first_seen_at if existing else now,
+            last_seen_at=now,
+        )
+        self.store.save_attribution_intake_issue(issue)
+        self._audit(
+            event_type="intake_issue_recorded",
+            actor=actor,
+            detail="A privacy-safe source identity exception was retained outside the ledger.",
+            metadata={
+                "issue_id": issue.issue_id,
+                "source_system": source_event.source_system.value,
+                "source_event_id": source_event.source_event_id,
+                "state": state.value,
+                "occurrence_count": issue.occurrence_count,
+                "external_side_effect": False,
+            },
+        )
+        return issue
+
+    def _resolve_intake_issue(
+        self,
+        source_event: SourceTouchpointEvent,
+        *,
+        campaign_id: str,
+        methods: list[str],
+        mapping_ids: list[str],
+        actor: str,
+        snapshot_id: str | None = None,
+    ) -> None:
+        issue = self.store.get_attribution_intake_issue(
+            self._intake_issue_id(source_event)
+        )
+        if issue is None:
+            return
+        now = datetime.now(timezone.utc)
+        self.store.save_attribution_intake_issue(
+            issue.model_copy(
+                update={
+                    "status": IntakeIssueStatus.RESOLVED,
+                    "resolved_campaign_id": campaign_id,
+                    "resolution_methods": methods,
+                    "mapping_ids": mapping_ids,
+                    "resolved_by": actor,
+                    "resolved_at": now,
+                    "last_seen_at": now,
+                    "replay_snapshot_id": snapshot_id,
+                },
+                deep=True,
+            )
+        )
+        if issue.status != IntakeIssueStatus.RESOLVED:
+            self._audit(
+                event_type="intake_issue_resolved",
+                actor=actor,
+                detail="Verified evidence resolved one intake exception to a canonical Campaign.",
+                metadata={
+                    "issue_id": issue.issue_id,
+                    "campaign_id": campaign_id,
+                    "mapping_ids": mapping_ids,
+                    "external_side_effect": False,
+                },
+            )
 
     def ingest_source_touchpoints(
         self, request: SourceTouchpointIngestRequest, *, actor: str
@@ -199,53 +327,49 @@ class AttributionService:
             campaign_ids, methods, mapping_ids = self._resolve_source_event(source_event)
             if not campaign_ids:
                 unknown += 1
+                detail = "No canonical Campaign matched verified IDs or UTM contract."
                 issues.append(
                     TouchpointIngestIssue(
                         source_event_id=source_event.source_event_id,
                         state=IdentityResolutionState.UNKNOWN,
-                        detail="No canonical Campaign matched verified IDs or UTM contract.",
+                        detail=detail,
                     )
+                )
+                self._record_intake_issue(
+                    source_event,
+                    state=IdentityResolutionState.UNKNOWN,
+                    detail=detail,
+                    candidate_campaign_ids=[],
+                    actor=actor,
                 )
                 continue
             if len(campaign_ids) > 1:
                 conflicts += 1
+                detail = "Verified evidence resolves to multiple Campaigns; ledger write blocked."
                 issues.append(
                     TouchpointIngestIssue(
                         source_event_id=source_event.source_event_id,
                         state=IdentityResolutionState.CONFLICT,
-                        detail="Verified evidence resolves to multiple Campaigns; ledger write blocked.",
+                        detail=detail,
                         candidate_campaign_ids=campaign_ids,
                     )
+                )
+                self._record_intake_issue(
+                    source_event,
+                    state=IdentityResolutionState.CONFLICT,
+                    detail=detail,
+                    candidate_campaign_ids=campaign_ids,
+                    actor=actor,
                 )
                 continue
 
             resolved += 1
             resolved_times.append(source_event.occurred_at)
-            event = TouchpointEvent(
-                event_id=f"tpt_{self._event_fingerprint(source_event)}",
+            event = self._touchpoint_from_source(
+                source_event,
                 campaign_id=campaign_ids[0],
-                event_type=source_event.event_type,
-                occurred_at=source_event.occurred_at,
-                source_system=source_event.source_system.value,
-                channel=source_event.channel,
-                lead_id=source_event.lead_id,
-                opportunity_id=source_event.opportunity_id,
-                source_campaign_id=source_event.source_campaign_id,
-                source_adset_id=source_event.source_adset_id,
-                source_ad_group_id=source_event.source_ad_group_id,
-                source_ad_id=source_event.source_ad_id,
-                utm_source=source_event.utm_source,
-                utm_medium=source_event.utm_medium,
-                utm_campaign=source_event.utm_campaign,
-                utm_content=source_event.utm_content,
-                landing_page=source_event.landing_page,
-                metadata={
-                    **source_event.metadata,
-                    "source_event_id": source_event.source_event_id,
-                    "identity_resolution": methods,
-                    "identity_mapping_ids": mapping_ids,
-                    "external_side_effect": False,
-                },
+                methods=methods,
+                mapping_ids=mapping_ids,
             )
             existing = self.store.get_touchpoint(event.event_id)
             pending = seen_payloads.get(event.event_id)
@@ -253,20 +377,42 @@ class AttributionService:
             if comparison is not None:
                 if self._same_immutable_payload(comparison, event):
                     duplicates += 1
+                    self._resolve_intake_issue(
+                        source_event,
+                        campaign_id=campaign_ids[0],
+                        methods=methods,
+                        mapping_ids=mapping_ids,
+                        actor=actor,
+                    )
                     continue
                 conflicts += 1
+                detail = "source_event_id payload changed; immutable ledger write blocked."
                 issues.append(
                     TouchpointIngestIssue(
                         source_event_id=source_event.source_event_id,
                         state=IdentityResolutionState.CONFLICT,
-                        detail="source_event_id payload changed; immutable ledger write blocked.",
+                        detail=detail,
                         candidate_campaign_ids=campaign_ids,
                     )
+                )
+                self._record_intake_issue(
+                    source_event,
+                    state=IdentityResolutionState.CONFLICT,
+                    detail=detail,
+                    candidate_campaign_ids=campaign_ids,
+                    actor=actor,
                 )
                 continue
             self.store.append_touchpoint(event)
             seen_payloads[event.event_id] = event
             inserted += 1
+            self._resolve_intake_issue(
+                source_event,
+                campaign_id=campaign_ids[0],
+                methods=methods,
+                mapping_ids=mapping_ids,
+                actor=actor,
+            )
 
         received = len(request.events)
         latest = max(resolved_times) if resolved_times else None
@@ -299,6 +445,14 @@ class AttributionService:
             created_by=actor,
         )
         self.store.save_attribution_quality_snapshot(snapshot)
+        for source_event in request.events:
+            issue = self.store.get_attribution_intake_issue(
+                self._intake_issue_id(source_event)
+            )
+            if issue is not None and issue.status == IntakeIssueStatus.RESOLVED:
+                self.store.save_attribution_intake_issue(
+                    issue.model_copy(update={"replay_snapshot_id": snapshot.snapshot_id})
+                )
         self._audit(
             event_type="source_touchpoints_ingested",
             actor=actor,
@@ -322,8 +476,100 @@ class AttributionService:
         return AttributionIdentityStatus(
             mapping_count=len(self.store.list_identity_mappings(limit=5000)),
             touchpoint_count=len(self.store.list_touchpoints(limit=5000)),
+            pending_intake_issues=len(
+                self.store.list_attribution_intake_issues(status="pending", limit=1000)
+            ),
             latest_snapshot=snapshots[0] if snapshots else None,
         )
+
+    def list_intake_issues(
+        self, *, status: str | None = "pending", limit: int = 100
+    ) -> list[AttributionIntakeIssue]:
+        if status not in {None, "pending", "resolved"}:
+            raise ValueError("status must be pending, resolved or omitted")
+        return self.store.list_attribution_intake_issues(status=status, limit=limit)
+
+    def preview_intake_issue(self, issue_id: str) -> AttributionIntakePreview:
+        issue = self.store.get_attribution_intake_issue(issue_id)
+        if issue is None:
+            raise KeyError(issue_id)
+        campaign_ids, methods, mapping_ids = self._resolve_source_event(issue.source_event)
+        ledger_event_id = f"tpt_{self._event_fingerprint(issue.source_event)}"
+        if not campaign_ids:
+            return AttributionIntakePreview(
+                issue_id=issue_id,
+                state="unknown",
+                ledger_event_id=ledger_event_id,
+                detail="No verified mapping or canonical UTM contract is available yet.",
+            )
+        if len(campaign_ids) > 1:
+            return AttributionIntakePreview(
+                issue_id=issue_id,
+                state="conflict",
+                candidate_campaign_ids=campaign_ids,
+                resolution_methods=methods,
+                mapping_ids=mapping_ids,
+                ledger_event_id=ledger_event_id,
+                detail="Evidence still resolves to multiple Campaigns; replay is blocked.",
+            )
+        candidate = self._touchpoint_from_source(
+            issue.source_event,
+            campaign_id=campaign_ids[0],
+            methods=methods,
+            mapping_ids=mapping_ids,
+        )
+        existing = self.store.get_touchpoint(ledger_event_id)
+        if existing is not None:
+            immutable_match = self._same_immutable_payload(existing, candidate)
+            return AttributionIntakePreview(
+                issue_id=issue_id,
+                state="duplicate" if immutable_match else "conflict",
+                candidate_campaign_ids=campaign_ids,
+                resolution_methods=methods,
+                mapping_ids=mapping_ids,
+                ledger_event_id=ledger_event_id,
+                detail=(
+                    "The immutable event already exists; replay is idempotent."
+                    if immutable_match
+                    else "The immutable event ID already exists with different content; replay is blocked."
+                ),
+            )
+        return AttributionIntakePreview(
+            issue_id=issue_id,
+            state="ready_to_replay",
+            candidate_campaign_ids=campaign_ids,
+            resolution_methods=methods,
+            mapping_ids=mapping_ids,
+            ledger_event_id=ledger_event_id,
+            would_insert=True,
+            detail="Verified evidence resolves to exactly one Campaign; internal shadow replay is safe.",
+        )
+
+    def replay_intake_issue(
+        self, issue_id: str, *, actor: str
+    ) -> AttributionDataQualitySnapshot:
+        issue = self.store.get_attribution_intake_issue(issue_id)
+        if issue is None:
+            raise KeyError(issue_id)
+        preview = self.preview_intake_issue(issue_id)
+        if preview.state not in {"ready_to_replay", "duplicate"}:
+            raise ValueError(f"intake issue is not replayable: {preview.state}")
+        snapshot = self.ingest_source_touchpoints(
+            SourceTouchpointIngestRequest(events=[issue.source_event]), actor=actor
+        )
+        self._audit(
+            event_type="intake_issue_replayed",
+            actor=actor,
+            detail="A privacy-safe Lead Intake exception was replayed into the shadow ledger.",
+            metadata={
+                "issue_id": issue_id,
+                "snapshot_id": snapshot.snapshot_id,
+                "inserted": snapshot.inserted,
+                "duplicates": snapshot.duplicates,
+                "external_side_effect": False,
+            },
+        )
+        return snapshot
 
     def list_data_quality_snapshots(
         self, *, limit: int = 50
