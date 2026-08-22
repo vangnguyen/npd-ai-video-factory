@@ -27,6 +27,14 @@ class ProviderAlertStatus(str, Enum):
     RESOLVED = "resolved"
 
 
+class ProviderHealthSchedulerState(str, Enum):
+    DISABLED = "disabled"
+    IDLE = "idle"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
 class ProviderHealthObservation(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -41,8 +49,13 @@ class ProviderHealthObservation(BaseModel):
     freshness_state: str | None = Field(
         default=None, pattern=r"^(fresh|stale|no_data)$"
     )
+    freshness_evidence: str | None = Field(
+        default=None, pattern=r"^(heartbeat|delivery_fallback|none)$"
+    )
     target_minutes: int | None = Field(default=None, ge=1, le=43200)
     age_minutes: float | None = Field(default=None, ge=0)
+    activity_age_minutes: float | None = Field(default=None, ge=0)
+    heartbeat_age_minutes: float | None = Field(default=None, ge=0)
     last_success_at: datetime | None = None
     last_receipt_id: str | None = None
     detail: str = Field(max_length=500)
@@ -116,6 +129,37 @@ class ProviderHealthStatus(BaseModel):
     routing_targets: list[str] = Field(default_factory=lambda: ["command_center", "audit"])
     external_notifications_enabled: bool = False
     production_write_enabled: bool = False
+
+
+class ProviderHealthSchedulerStatus(BaseModel):
+    mode: str = "scheduled_internal_health_evaluation"
+    enabled: bool = False
+    interval_seconds: int = Field(default=300, ge=60, le=86400)
+    state: ProviderHealthSchedulerState = ProviderHealthSchedulerState.DISABLED
+    last_started_at: datetime | None = None
+    last_finished_at: datetime | None = None
+    next_run_at: datetime | None = None
+    last_snapshot_id: str | None = None
+    run_count: int = Field(default=0, ge=0)
+    skipped_lease_count: int = Field(default=0, ge=0)
+    last_error_code: str | None = Field(
+        default=None, pattern=r"^[a-z][a-z0-9_.-]{1,79}$"
+    )
+    evaluates_cached_state_only: bool = True
+    external_provider_probes_enabled: bool = False
+    external_notifications_enabled: bool = False
+    production_write_enabled: bool = False
+
+    @model_validator(mode="after")
+    def internal_only(self) -> "ProviderHealthSchedulerStatus":
+        if (
+            not self.evaluates_cached_state_only
+            or self.external_provider_probes_enabled
+            or self.external_notifications_enabled
+            or self.production_write_enabled
+        ):
+            raise ValueError("provider-health scheduler must remain internal-only")
+        return self
 
 
 class ProviderAlertAcknowledgeRequest(BaseModel):

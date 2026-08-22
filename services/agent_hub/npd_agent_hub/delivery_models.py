@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from enum import Enum
@@ -31,6 +32,12 @@ class DeliveryFreshnessState(str, Enum):
     FRESH = "fresh"
     STALE = "stale"
     NO_DATA = "no_data"
+
+
+class DeliveryFreshnessEvidence(str, Enum):
+    HEARTBEAT = "heartbeat"
+    DELIVERY_FALLBACK = "delivery_fallback"
+    NONE = "none"
 
 
 class DeliveryFailureCode(str, Enum):
@@ -136,6 +143,56 @@ class AttributionDeliveryReceipt(BaseModel):
         return self
 
 
+class AttributionProducerHeartbeat(BaseModel):
+    heartbeat_id: str
+    producer: str = Field(pattern=PRODUCER_PATTERN.pattern)
+    emitted_at: datetime
+    sequence: int = Field(ge=1, strict=True)
+    metadata: dict[str, Any] = Field(default_factory=dict, max_length=20)
+    external_writes_enabled: bool = False
+
+    _heartbeat_id = field_validator("heartbeat_id")(validate_delivery_id)
+
+    @model_validator(mode="after")
+    def validate_heartbeat(self) -> "AttributionProducerHeartbeat":
+        if self.external_writes_enabled:
+            raise ValueError("producer heartbeat cannot enable external writes")
+        if self.emitted_at.tzinfo is None or self.emitted_at.utcoffset() is None:
+            raise ValueError("producer heartbeat emitted_at must include a timezone")
+        if len(json.dumps(self.metadata, ensure_ascii=False)) > 2048:
+            raise ValueError("producer heartbeat metadata exceeds 2048 bytes")
+        assert_no_raw_pii(self.metadata, path="producer_heartbeat.metadata")
+        assert_no_enabled_write_flags(
+            self.metadata, path="producer_heartbeat.metadata"
+        )
+        return self
+
+
+class AttributionHeartbeatReceipt(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    receipt_id: str = Field(pattern=r"^ahr_[0-9a-f]{24}$")
+    heartbeat_id: str
+    producer: str = Field(pattern=PRODUCER_PATTERN.pattern)
+    emitted_at: datetime
+    sequence: int = Field(ge=1)
+    payload_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    received_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    key_id: str = Field(min_length=3, max_length=80)
+    signature: str = Field(pattern=r"^hmac-sha256:[0-9a-f]{64}$")
+    read_only: bool = True
+    external_writes_enabled: bool = False
+
+    _heartbeat_id = field_validator("heartbeat_id")(validate_delivery_id)
+
+    @model_validator(mode="after")
+    def validate_receipt(self) -> "AttributionHeartbeatReceipt":
+        if not self.read_only or self.external_writes_enabled:
+            raise ValueError("heartbeat receipts must remain read-only")
+        assert_no_raw_pii(self.model_dump(mode="python"), path="heartbeat_receipt")
+        return self
+
+
 class AttributionDeadLetter(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -168,6 +225,11 @@ class DeliverySourceFreshness(BaseModel):
     last_success_at: datetime | None = None
     age_minutes: float | None = None
     last_receipt_id: str | None = None
+    evidence: DeliveryFreshnessEvidence = DeliveryFreshnessEvidence.NONE
+    last_activity_at: datetime | None = None
+    activity_age_minutes: float | None = None
+    last_heartbeat_at: datetime | None = None
+    heartbeat_age_minutes: float | None = None
 
 
 class AttributionDeliveryStatus(BaseModel):
@@ -180,12 +242,17 @@ class AttributionDeliveryStatus(BaseModel):
     retry_pending: int
     dead_lettered: int
     dead_letter_count: int
+    heartbeat_count: int = 0
     sources: list[DeliverySourceFreshness] = Field(default_factory=list)
     production_write_enabled: bool = False
 
 
 class AttributionReceiptVerificationRequest(BaseModel):
     receipt: AttributionDeliveryReceipt
+
+
+class AttributionHeartbeatReceiptVerificationRequest(BaseModel):
+    receipt: AttributionHeartbeatReceipt
 
 
 class AttributionReceiptVerification(BaseModel):

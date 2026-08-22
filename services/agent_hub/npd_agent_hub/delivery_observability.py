@@ -21,8 +21,11 @@ from .delivery_models import (
     AttributionDeliveryFailure,
     AttributionDeliveryReceipt,
     AttributionDeliveryStatus,
+    AttributionHeartbeatReceipt,
+    AttributionProducerHeartbeat,
     AttributionReceiptVerification,
     DeliveryFailureCode,
+    DeliveryFreshnessEvidence,
     DeliveryFreshnessState,
     DeliveryOutcome,
     DeliverySourceFreshness,
@@ -129,7 +132,7 @@ class AttributionDeliveryService:
         ).hexdigest()[:24]
         return f"adl_{digest}"
 
-    def _signature(self, receipt: AttributionDeliveryReceipt) -> str:
+    def _signature(self, receipt: BaseModel) -> str:
         payload = receipt.model_dump(mode="json", exclude={"signature"})
         digest = hmac.new(
             self.settings.attribution_receipt_signing_key.encode("utf-8"),
@@ -145,6 +148,24 @@ class AttributionDeliveryService:
             signature=f"hmac-sha256:{'0' * 64}",
         )
         return AttributionDeliveryReceipt(
+            **unsigned.model_dump(exclude={"signature"}),
+            signature=self._signature(unsigned),
+        )
+
+    @staticmethod
+    def _heartbeat_receipt_id(heartbeat_id: str) -> str:
+        digest = hashlib.sha256(heartbeat_id.encode("utf-8")).hexdigest()[:24]
+        return f"ahr_{digest}"
+
+    def _build_heartbeat_receipt(
+        self, **payload: object
+    ) -> AttributionHeartbeatReceipt:
+        unsigned = AttributionHeartbeatReceipt(
+            **payload,
+            key_id=self.settings.attribution_receipt_key_id,
+            signature=f"hmac-sha256:{'0' * 64}",
+        )
+        return AttributionHeartbeatReceipt(
             **unsigned.model_dump(exclude={"signature"}),
             signature=self._signature(unsigned),
         )
@@ -404,6 +425,69 @@ class AttributionDeliveryService:
             rows = [item for item in rows if item.outcome == outcome]
         return rows[:limit]
 
+    def ingest_heartbeat(
+        self, heartbeat: AttributionProducerHeartbeat, *, actor: str
+    ) -> AttributionHeartbeatReceipt:
+        self._require_configured()
+        now = self.clock()
+        if heartbeat.emitted_at > now + timedelta(minutes=5):
+            raise ValueError("heartbeat emitted_at is too far in the future")
+        if heartbeat.emitted_at < now - timedelta(hours=24):
+            raise ValueError("heartbeat emitted_at is outside the replay window")
+        payload_digest = self._digest_model(heartbeat)
+        receipt_id = self._heartbeat_receipt_id(heartbeat.heartbeat_id)
+        existing = self.store.get_attribution_heartbeat_receipt(receipt_id)
+        if existing is not None:
+            if existing.payload_digest == payload_digest:
+                return existing
+            self._audit(
+                event_type="heartbeat_integrity_conflict",
+                actor=actor,
+                detail="A reused heartbeat ID carried a changed payload and was rejected.",
+                metadata={
+                    "heartbeat_id": heartbeat.heartbeat_id,
+                    "receipt_id": receipt_id,
+                    "producer": heartbeat.producer,
+                },
+            )
+            raise DeliveryIntegrityConflict(
+                "heartbeat_id already has a different immutable payload"
+            )
+        latest = self.store.list_attribution_heartbeat_receipts(
+            producer=heartbeat.producer, limit=1
+        )
+        if latest and heartbeat.sequence <= latest[0].sequence:
+            raise ValueError("heartbeat sequence must increase for its producer")
+        receipt = self._build_heartbeat_receipt(
+            receipt_id=receipt_id,
+            heartbeat_id=heartbeat.heartbeat_id,
+            producer=heartbeat.producer,
+            emitted_at=heartbeat.emitted_at,
+            sequence=heartbeat.sequence,
+            payload_digest=payload_digest,
+            received_at=now,
+        )
+        self.store.save_attribution_heartbeat_receipt(receipt)
+        self._audit(
+            event_type="producer_heartbeat_received",
+            actor=actor,
+            detail="A PII-free producer heartbeat produced an immutable signed receipt.",
+            metadata={
+                "heartbeat_id": heartbeat.heartbeat_id,
+                "receipt_id": receipt.receipt_id,
+                "producer": heartbeat.producer,
+                "sequence": heartbeat.sequence,
+            },
+        )
+        return receipt
+
+    def list_heartbeats(
+        self, *, producer: str | None = None, limit: int = 100
+    ) -> list[AttributionHeartbeatReceipt]:
+        return self.store.list_attribution_heartbeat_receipts(
+            producer=producer, limit=limit
+        )
+
     def list_dead_letters(
         self, *, producer: str | None = None, limit: int = 100
     ) -> list[AttributionDeadLetter]:
@@ -430,19 +514,45 @@ class AttributionDeliveryService:
             detail="Signature is valid." if valid else "Signature verification failed.",
         )
 
+    def verify_heartbeat(
+        self, receipt: AttributionHeartbeatReceipt
+    ) -> AttributionReceiptVerification:
+        self._require_configured()
+        if receipt.key_id != self.settings.attribution_receipt_key_id:
+            return AttributionReceiptVerification(
+                receipt_id=receipt.receipt_id,
+                valid=False,
+                key_id=receipt.key_id,
+                detail="Heartbeat receipt key_id is not active.",
+            )
+        valid = hmac.compare_digest(receipt.signature, self._signature(receipt))
+        return AttributionReceiptVerification(
+            receipt_id=receipt.receipt_id,
+            valid=valid,
+            key_id=receipt.key_id,
+            detail=(
+                "Heartbeat signature is valid."
+                if valid
+                else "Heartbeat signature verification failed."
+            ),
+        )
+
     def status(self) -> AttributionDeliveryStatus:
         receipts = self.store.list_attribution_delivery_receipts(limit=5000)
+        heartbeats = self.store.list_attribution_heartbeat_receipts(limit=5000)
         dead_letters = self.store.list_attribution_dead_letters(limit=5000)
         now = self.clock()
         successful = {
             DeliveryOutcome.ACCEPTED,
             DeliveryOutcome.PARTIAL,
         }
-        observed_producers = {item.producer for item in receipts}
+        observed_producers = {item.producer for item in receipts} | {
+            item.producer for item in heartbeats
+        }
         sources: list[DeliverySourceFreshness] = []
         for producer in sorted(set(self.freshness_slos) | observed_producers):
             target = self.freshness_slos.get(producer, 1440)
-            latest = next(
+            latest_delivery = next(
                 (
                     item
                     for item in receipts
@@ -450,7 +560,33 @@ class AttributionDeliveryService:
                 ),
                 None,
             )
-            if latest is None:
+            latest_heartbeat = next(
+                (item for item in heartbeats if item.producer == producer), None
+            )
+            latest_evidence = latest_heartbeat or latest_delivery
+            activity_age = (
+                round(
+                    max(
+                        0.0,
+                        (now - latest_delivery.received_at).total_seconds() / 60,
+                    ),
+                    2,
+                )
+                if latest_delivery is not None
+                else None
+            )
+            heartbeat_age = (
+                round(
+                    max(
+                        0.0,
+                        (now - latest_heartbeat.received_at).total_seconds() / 60,
+                    ),
+                    2,
+                )
+                if latest_heartbeat is not None
+                else None
+            )
+            if latest_evidence is None:
                 sources.append(
                     DeliverySourceFreshness(
                         producer=producer,
@@ -460,7 +596,7 @@ class AttributionDeliveryService:
                 )
                 continue
             age_minutes = round(
-                max(0.0, (now - latest.received_at).total_seconds() / 60), 2
+                max(0.0, (now - latest_evidence.received_at).total_seconds() / 60), 2
             )
             sources.append(
                 DeliverySourceFreshness(
@@ -471,9 +607,26 @@ class AttributionDeliveryService:
                         if age_minutes <= target
                         else DeliveryFreshnessState.STALE
                     ),
-                    last_success_at=latest.received_at,
+                    last_success_at=latest_evidence.received_at,
                     age_minutes=age_minutes,
-                    last_receipt_id=latest.receipt_id,
+                    last_receipt_id=latest_evidence.receipt_id,
+                    evidence=(
+                        DeliveryFreshnessEvidence.HEARTBEAT
+                        if latest_heartbeat is not None
+                        else DeliveryFreshnessEvidence.DELIVERY_FALLBACK
+                    ),
+                    last_activity_at=(
+                        latest_delivery.received_at
+                        if latest_delivery is not None
+                        else None
+                    ),
+                    activity_age_minutes=activity_age,
+                    last_heartbeat_at=(
+                        latest_heartbeat.received_at
+                        if latest_heartbeat is not None
+                        else None
+                    ),
+                    heartbeat_age_minutes=heartbeat_age,
                 )
             )
         counts = {outcome: 0 for outcome in DeliveryOutcome}
@@ -491,5 +644,6 @@ class AttributionDeliveryService:
             retry_pending=counts[DeliveryOutcome.RETRY_PENDING],
             dead_lettered=counts[DeliveryOutcome.DEAD_LETTERED],
             dead_letter_count=len(dead_letters),
+            heartbeat_count=len(heartbeats),
             sources=sources,
         )

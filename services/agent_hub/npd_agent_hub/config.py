@@ -42,9 +42,17 @@ class HubSettings:
     attribution_receipt_key_id: str = "npd-attribution-v1"
     attribution_delivery_max_attempts: int = 4
     attribution_freshness_slos_json: str = ""
+    provider_health_scheduler_enabled: bool = False
+    provider_health_scheduler_interval_seconds: int = 300
 
     @classmethod
     def from_env(cls) -> "HubSettings":
+        def boolean(name: str, default: bool = False) -> bool:
+            raw = os.getenv(name, "true" if default else "false").strip().lower()
+            if raw not in {"true", "false"}:
+                raise ValueError(f"{name} must be true or false")
+            return raw == "true"
+
         def email_list(name: str) -> tuple[str, ...]:
             return tuple(
                 dict.fromkeys(
@@ -101,6 +109,12 @@ class HubSettings:
             attribution_freshness_slos_json=os.getenv(
                 "AGENT_ATTRIBUTION_FRESHNESS_SLOS_JSON", ""
             ).strip(),
+            provider_health_scheduler_enabled=boolean(
+                "AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED"
+            ),
+            provider_health_scheduler_interval_seconds=int(
+                os.getenv("AGENT_PROVIDER_HEALTH_SCHEDULER_INTERVAL_SECONDS", "300")
+            ),
         )
 
 

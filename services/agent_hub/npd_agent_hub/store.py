@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
 from redis import Redis
@@ -17,10 +17,21 @@ from .attribution_models import (
 )
 from .campaign_models import Campaign, CampaignAuditEvent, CampaignStatus
 from .config import HubSettings, settings as default_settings
-from .delivery_models import AttributionDeadLetter, AttributionDeliveryReceipt
+from .delivery_models import (
+    AttributionDeadLetter,
+    AttributionDeliveryReceipt,
+    AttributionHeartbeatReceipt,
+)
 from .experiment_models import Experiment, ExperimentAuditEvent, ExperimentStatus
 from .models import AgentTask, AuditEvent, CommandCenterReport, ToolExecutionResult
-from .provider_health_models import ProviderHealthAlert, ProviderHealthSnapshot
+from .provider_health_models import (
+    ProviderHealthAlert,
+    ProviderHealthSchedulerStatus,
+    ProviderHealthSnapshot,
+)
+
+
+HEARTBEAT_RECEIPT_RETENTION = 5000
 
 
 class HubStore(Protocol):
@@ -108,6 +119,18 @@ class HubStore(Protocol):
         self, *, producer: str | None = None, limit: int = 1000
     ) -> list[AttributionDeliveryReceipt]: ...
 
+    def save_attribution_heartbeat_receipt(
+        self, receipt: AttributionHeartbeatReceipt
+    ) -> None: ...
+
+    def get_attribution_heartbeat_receipt(
+        self, receipt_id: str
+    ) -> AttributionHeartbeatReceipt | None: ...
+
+    def list_attribution_heartbeat_receipts(
+        self, *, producer: str | None = None, limit: int = 1000
+    ) -> list[AttributionHeartbeatReceipt]: ...
+
     def save_attribution_dead_letter(self, item: AttributionDeadLetter) -> None: ...
 
     def list_attribution_dead_letters(
@@ -125,6 +148,20 @@ class HubStore(Protocol):
     def get_provider_alert(self, alert_id: str) -> ProviderHealthAlert | None: ...
 
     def list_provider_alerts(self, limit: int = 100) -> list[ProviderHealthAlert]: ...
+
+    def save_provider_health_scheduler_status(
+        self, status: ProviderHealthSchedulerStatus
+    ) -> None: ...
+
+    def get_provider_health_scheduler_status(
+        self,
+    ) -> ProviderHealthSchedulerStatus | None: ...
+
+    def acquire_provider_health_scheduler_lease(
+        self, owner: str, ttl_seconds: int
+    ) -> bool: ...
+
+    def release_provider_health_scheduler_lease(self, owner: str) -> None: ...
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None: ...
 
@@ -196,6 +233,9 @@ class MemoryHubStore:
     attribution_delivery_receipts: dict[str, AttributionDeliveryReceipt] = field(
         default_factory=dict
     )
+    attribution_heartbeat_receipts: dict[str, AttributionHeartbeatReceipt] = field(
+        default_factory=dict
+    )
     attribution_dead_letters: dict[str, AttributionDeadLetter] = field(
         default_factory=dict
     )
@@ -203,6 +243,8 @@ class MemoryHubStore:
         default_factory=dict
     )
     provider_alerts: dict[str, ProviderHealthAlert] = field(default_factory=dict)
+    provider_health_scheduler_status: ProviderHealthSchedulerStatus | None = None
+    provider_health_scheduler_lease: tuple[str, datetime] | None = None
     attribution_reconciliations: dict[str, AttributionReconciliation] = field(
         default_factory=dict
     )
@@ -402,6 +444,41 @@ class MemoryHubStore:
             rows = [item for item in rows if item.producer == producer]
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    def save_attribution_heartbeat_receipt(
+        self, receipt: AttributionHeartbeatReceipt
+    ) -> None:
+        existing = self.attribution_heartbeat_receipts.get(receipt.receipt_id)
+        if existing is not None and existing != receipt:
+            raise ValueError("heartbeat receipt is immutable")
+        self.attribution_heartbeat_receipts[receipt.receipt_id] = receipt.model_copy(
+            deep=True
+        )
+        if len(self.attribution_heartbeat_receipts) > HEARTBEAT_RECEIPT_RETENTION:
+            oldest = min(
+                self.attribution_heartbeat_receipts.values(),
+                key=lambda item: item.received_at,
+            )
+            self.attribution_heartbeat_receipts.pop(oldest.receipt_id, None)
+
+    def get_attribution_heartbeat_receipt(
+        self, receipt_id: str
+    ) -> AttributionHeartbeatReceipt | None:
+        receipt = self.attribution_heartbeat_receipts.get(receipt_id)
+        return receipt.model_copy(deep=True) if receipt is not None else None
+
+    def list_attribution_heartbeat_receipts(
+        self, *, producer: str | None = None, limit: int = 1000
+    ) -> list[AttributionHeartbeatReceipt]:
+        limit = max(1, min(limit, 5000))
+        rows = sorted(
+            self.attribution_heartbeat_receipts.values(),
+            key=lambda item: item.received_at,
+            reverse=True,
+        )
+        if producer is not None:
+            rows = [item for item in rows if item.producer == producer]
+        return [item.model_copy(deep=True) for item in rows[:limit]]
+
     def save_attribution_dead_letter(self, item: AttributionDeadLetter) -> None:
         existing = self.attribution_dead_letters.get(item.dead_letter_id)
         if existing is not None and existing != item:
@@ -452,6 +529,39 @@ class MemoryHubStore:
             reverse=True,
         )
         return [item.model_copy(deep=True) for item in rows[:limit]]
+
+    def save_provider_health_scheduler_status(
+        self, status: ProviderHealthSchedulerStatus
+    ) -> None:
+        self.provider_health_scheduler_status = status.model_copy(deep=True)
+
+    def get_provider_health_scheduler_status(
+        self,
+    ) -> ProviderHealthSchedulerStatus | None:
+        status = self.provider_health_scheduler_status
+        return status.model_copy(deep=True) if status is not None else None
+
+    def acquire_provider_health_scheduler_lease(
+        self, owner: str, ttl_seconds: int
+    ) -> bool:
+        now = datetime.now(timezone.utc)
+        if (
+            self.provider_health_scheduler_lease is not None
+            and self.provider_health_scheduler_lease[1] > now
+        ):
+            return self.provider_health_scheduler_lease[0] == owner
+        self.provider_health_scheduler_lease = (
+            owner,
+            now + timedelta(seconds=ttl_seconds),
+        )
+        return True
+
+    def release_provider_health_scheduler_lease(self, owner: str) -> None:
+        if (
+            self.provider_health_scheduler_lease is not None
+            and self.provider_health_scheduler_lease[0] == owner
+        ):
+            self.provider_health_scheduler_lease = None
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
         event = self.touchpoints.get(event_id)
@@ -854,6 +964,59 @@ class RedisHubStore:
             filtered = [item for item in filtered if item.producer == producer]
         return filtered[:limit]
 
+    def save_attribution_heartbeat_receipt(
+        self, receipt: AttributionHeartbeatReceipt
+    ) -> None:
+        key = self._key(
+            "attribution-os", "heartbeat-receipt", receipt.receipt_id
+        )
+        raw = receipt.model_dump_json()
+        existing = self.redis.get(key)
+        if existing is not None and existing != raw:
+            raise ValueError("heartbeat receipt is immutable")
+        pipe = self.redis.pipeline()
+        pipe.set(key, raw, nx=True)
+        pipe.zadd(
+            self._key("attribution-os", "heartbeat-receipts"),
+            {receipt.receipt_id: receipt.received_at.timestamp()},
+        )
+        pipe.execute()
+        index_key = self._key("attribution-os", "heartbeat-receipts")
+        overflow = int(self.redis.zcard(index_key)) - HEARTBEAT_RECEIPT_RETENTION
+        if overflow > 0:
+            expired_ids = self.redis.zrange(index_key, 0, overflow - 1)
+            cleanup = self.redis.pipeline()
+            for expired_id in expired_ids:
+                cleanup.delete(
+                    self._key(
+                        "attribution-os", "heartbeat-receipt", str(expired_id)
+                    )
+                )
+            if expired_ids:
+                cleanup.zrem(index_key, *expired_ids)
+            cleanup.execute()
+
+    def get_attribution_heartbeat_receipt(
+        self, receipt_id: str
+    ) -> AttributionHeartbeatReceipt | None:
+        raw = self.redis.get(
+            self._key("attribution-os", "heartbeat-receipt", receipt_id)
+        )
+        return AttributionHeartbeatReceipt.model_validate_json(raw) if raw else None
+
+    def list_attribution_heartbeat_receipts(
+        self, *, producer: str | None = None, limit: int = 1000
+    ) -> list[AttributionHeartbeatReceipt]:
+        limit = max(1, min(limit, 5000))
+        ids = self.redis.zrevrange(
+            self._key("attribution-os", "heartbeat-receipts"), 0, 4999
+        )
+        rows = [self.get_attribution_heartbeat_receipt(str(item)) for item in ids]
+        filtered = [item for item in rows if item is not None]
+        if producer is not None:
+            filtered = [item for item in filtered if item.producer == producer]
+        return filtered[:limit]
+
     def save_attribution_dead_letter(self, item: AttributionDeadLetter) -> None:
         key = self._key("attribution-os", "dead-letter", item.dead_letter_id)
         raw = item.model_dump_json()
@@ -937,6 +1100,35 @@ class RedisHubStore:
         )
         rows = [self.get_provider_alert(str(alert_id)) for alert_id in ids]
         return [item for item in rows if item is not None]
+
+    def save_provider_health_scheduler_status(
+        self, status: ProviderHealthSchedulerStatus
+    ) -> None:
+        self.redis.set(
+            self._key("provider-health", "scheduler", "status"),
+            status.model_dump_json(),
+        )
+
+    def get_provider_health_scheduler_status(
+        self,
+    ) -> ProviderHealthSchedulerStatus | None:
+        raw = self.redis.get(self._key("provider-health", "scheduler", "status"))
+        return ProviderHealthSchedulerStatus.model_validate_json(raw) if raw else None
+
+    def acquire_provider_health_scheduler_lease(
+        self, owner: str, ttl_seconds: int
+    ) -> bool:
+        key = self._key("provider-health", "scheduler", "lease")
+        current = self.redis.get(key)
+        if current == owner:
+            self.redis.expire(key, ttl_seconds)
+            return True
+        return bool(self.redis.set(key, owner, nx=True, ex=ttl_seconds))
+
+    def release_provider_health_scheduler_lease(self, owner: str) -> None:
+        key = self._key("provider-health", "scheduler", "lease")
+        if self.redis.get(key) == owner:
+            self.redis.delete(key)
 
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
         raw = self.redis.get(self._key("attribution-os", "touchpoint", event_id))

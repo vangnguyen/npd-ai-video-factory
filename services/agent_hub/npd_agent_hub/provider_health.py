@@ -73,37 +73,41 @@ class ProviderHealthService:
         probes: dict[str, str],
         delivery_status: AttributionDeliveryStatus,
         observed_at: datetime,
+        cached_provider_observations: list[ProviderHealthObservation] | None = None,
     ) -> list[ProviderHealthObservation]:
-        observations: list[ProviderHealthObservation] = []
-        provider_names = ("crm", "meta_ads", "ga4", "social")
-        for provider in provider_names:
-            configuration_state = configuration.get(provider, "not_configured")
-            probe_state = probes.get(provider, "not_configured")
-            if configuration_state == "not_configured":
-                state = ProviderHealthState.NOT_CONFIGURED
-                detail = "Read-only provider credential is not configured."
-            elif configuration_state == "incomplete":
-                state = ProviderHealthState.DEGRADED
-                detail = "Read-only provider configuration is incomplete."
-            elif probe_state == "failed":
-                state = ProviderHealthState.FAILED
-                detail = "The bounded read-only provider probe failed."
-            elif probe_state == "available":
-                state = ProviderHealthState.HEALTHY
-                detail = "The bounded read-only provider probe succeeded."
-            else:
-                state = ProviderHealthState.NO_DATA
-                detail = "Provider is configured but no bounded probe result is available."
-            observations.append(
-                ProviderHealthObservation(
-                    provider=provider,
-                    state=state,
-                    configuration_state=configuration_state,
-                    probe_state=probe_state,
-                    detail=detail,
-                    observed_at=observed_at,
+        observations: list[ProviderHealthObservation] = list(
+            cached_provider_observations or []
+        )
+        if cached_provider_observations is None:
+            provider_names = ("crm", "meta_ads", "ga4", "social")
+            for provider in provider_names:
+                configuration_state = configuration.get(provider, "not_configured")
+                probe_state = probes.get(provider, "not_configured")
+                if configuration_state == "not_configured":
+                    state = ProviderHealthState.NOT_CONFIGURED
+                    detail = "Read-only provider credential is not configured."
+                elif configuration_state == "incomplete":
+                    state = ProviderHealthState.DEGRADED
+                    detail = "Read-only provider configuration is incomplete."
+                elif probe_state == "failed":
+                    state = ProviderHealthState.FAILED
+                    detail = "The bounded read-only provider probe failed."
+                elif probe_state == "available":
+                    state = ProviderHealthState.HEALTHY
+                    detail = "The bounded read-only provider probe succeeded."
+                else:
+                    state = ProviderHealthState.NO_DATA
+                    detail = "Provider is configured but no bounded probe result is available."
+                observations.append(
+                    ProviderHealthObservation(
+                        provider=provider,
+                        state=state,
+                        configuration_state=configuration_state,
+                        probe_state=probe_state,
+                        detail=detail,
+                        observed_at=observed_at,
+                    )
                 )
-            )
 
         for freshness in delivery_status.sources:
             if freshness.producer not in REQUIRED_DELIVERY_PRODUCERS:
@@ -113,10 +117,19 @@ class ProviderHealthService:
                 DeliveryFreshnessState.STALE: ProviderHealthState.STALE,
                 DeliveryFreshnessState.NO_DATA: ProviderHealthState.NO_DATA,
             }[freshness.state]
+            evidence = freshness.evidence.value
             detail = {
-                ProviderHealthState.HEALTHY: "Signed delivery is within its freshness SLO.",
-                ProviderHealthState.STALE: "Signed delivery exceeded its freshness SLO.",
-                ProviderHealthState.NO_DATA: "No successful signed delivery has been observed.",
+                ProviderHealthState.HEALTHY: (
+                    "Producer heartbeat is within its freshness SLO."
+                    if evidence == "heartbeat"
+                    else "Signed delivery fallback is within its freshness SLO."
+                ),
+                ProviderHealthState.STALE: (
+                    "Producer heartbeat exceeded its freshness SLO."
+                    if evidence == "heartbeat"
+                    else "Signed delivery fallback exceeded its freshness SLO; heartbeat is absent."
+                ),
+                ProviderHealthState.NO_DATA: "No heartbeat or successful signed delivery has been observed.",
             }[state]
             observations.append(
                 ProviderHealthObservation(
@@ -125,8 +138,11 @@ class ProviderHealthService:
                     configuration_state="internal",
                     probe_state="not_applicable",
                     freshness_state=freshness.state.value,
+                    freshness_evidence=evidence,
                     target_minutes=freshness.target_minutes,
                     age_minutes=freshness.age_minutes,
+                    activity_age_minutes=freshness.activity_age_minutes,
+                    heartbeat_age_minutes=freshness.heartbeat_age_minutes,
                     last_success_at=freshness.last_success_at,
                     last_receipt_id=freshness.last_receipt_id,
                     detail=detail,
@@ -134,6 +150,55 @@ class ProviderHealthService:
                 )
             )
         return observations
+
+    def _commit_snapshot(
+        self,
+        *,
+        observations: list[ProviderHealthObservation],
+        delivery_status: AttributionDeliveryStatus,
+        actor: str,
+        now: datetime,
+        event_type: str,
+        detail: str,
+    ) -> ProviderHealthStatus:
+        counts = {state: 0 for state in ProviderHealthState}
+        for item in observations:
+            counts[item.state] += 1
+        snapshot = ProviderHealthSnapshot(
+            snapshot_id=self._digest("phs", f"{now.isoformat()}:{event_type}"),
+            observed_at=now,
+            providers=observations,
+            healthy=counts[ProviderHealthState.HEALTHY],
+            degraded=counts[ProviderHealthState.DEGRADED],
+            failed=counts[ProviderHealthState.FAILED],
+            stale=counts[ProviderHealthState.STALE],
+            no_data=counts[ProviderHealthState.NO_DATA],
+            not_configured=counts[ProviderHealthState.NOT_CONFIGURED],
+        )
+        self.store.save_provider_health_snapshot(snapshot)
+        self._sync_alerts(
+            self._condition_alerts(
+                observations,
+                delivery_status,
+                self._unresolved_retry_count(),
+            ),
+            actor=actor,
+            now=now,
+        )
+        self._audit(
+            event_type=event_type,
+            actor=actor,
+            detail=detail,
+            metadata={
+                "snapshot_id": snapshot.snapshot_id,
+                "healthy": snapshot.healthy,
+                "degraded": snapshot.degraded,
+                "failed": snapshot.failed,
+                "stale": snapshot.stale,
+                "no_data": snapshot.no_data,
+            },
+        )
+        return self.status()
 
     def _unresolved_retry_count(self) -> int:
         """Count deliveries whose latest recorded attempt still needs a retry."""
@@ -291,44 +356,40 @@ class ProviderHealthService:
             delivery_status=delivery_status,
             observed_at=now,
         )
-        counts = {state: 0 for state in ProviderHealthState}
-        for item in observations:
-            counts[item.state] += 1
-        snapshot = ProviderHealthSnapshot(
-            snapshot_id=self._digest("phs", now.isoformat()),
-            observed_at=now,
-            providers=observations,
-            healthy=counts[ProviderHealthState.HEALTHY],
-            degraded=counts[ProviderHealthState.DEGRADED],
-            failed=counts[ProviderHealthState.FAILED],
-            stale=counts[ProviderHealthState.STALE],
-            no_data=counts[ProviderHealthState.NO_DATA],
-            not_configured=counts[ProviderHealthState.NOT_CONFIGURED],
-        )
-        self.store.save_provider_health_snapshot(snapshot)
-        self._sync_alerts(
-            self._condition_alerts(
-                observations,
-                delivery_status,
-                self._unresolved_retry_count(),
-            ),
+        return self._commit_snapshot(
+            observations=observations,
+            delivery_status=delivery_status,
             actor=actor,
             now=now,
-        )
-        self._audit(
             event_type="provider_health_refreshed",
-            actor=actor,
             detail="Bounded read-only provider probes refreshed internal health state.",
-            metadata={
-                "snapshot_id": snapshot.snapshot_id,
-                "healthy": snapshot.healthy,
-                "degraded": snapshot.degraded,
-                "failed": snapshot.failed,
-                "stale": snapshot.stale,
-                "no_data": snapshot.no_data,
-            },
         )
-        return self.status()
+
+    def evaluate_cached(self, *, actor: str) -> ProviderHealthStatus:
+        """Re-evaluate delivery freshness without calling external providers."""
+        now = self.clock()
+        latest = self.store.list_provider_health_snapshots(limit=1)
+        cached = [
+            item.model_copy(deep=True)
+            for item in (latest[0].providers if latest else [])
+            if item.provider not in REQUIRED_DELIVERY_PRODUCERS
+        ]
+        delivery_status = self.delivery.status()
+        observations = self._provider_observations(
+            configuration={},
+            probes={},
+            delivery_status=delivery_status,
+            observed_at=now,
+            cached_provider_observations=cached,
+        )
+        return self._commit_snapshot(
+            observations=observations,
+            delivery_status=delivery_status,
+            actor=actor,
+            now=now,
+            event_type="provider_health_scheduled_evaluation",
+            detail="Cached provider state and producer heartbeat freshness were evaluated internally.",
+        )
 
     def acknowledge(self, alert_id: str, *, actor: str) -> ProviderHealthAlert:
         alert = self.store.get_provider_alert(alert_id)

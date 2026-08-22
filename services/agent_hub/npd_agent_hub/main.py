@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
@@ -40,6 +42,9 @@ from .delivery_models import (
     AttributionDeliveryFailure,
     AttributionDeliveryReceipt,
     AttributionDeliveryStatus,
+    AttributionHeartbeatReceipt,
+    AttributionHeartbeatReceiptVerificationRequest,
+    AttributionProducerHeartbeat,
     AttributionReceiptVerification,
     AttributionReceiptVerificationRequest,
     DeliveryOutcome,
@@ -102,6 +107,7 @@ from .provider_health_models import (
     ProviderAlertSeverity,
     ProviderAlertStatus,
     ProviderHealthAlert,
+    ProviderHealthSchedulerStatus,
     ProviderHealthStatus,
 )
 from .google_login import (
@@ -114,10 +120,20 @@ from .orchestrator import hub
 from .tool_registry import ToolCapability, list_tool_capabilities
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await hub.provider_health_scheduler.start()
+    try:
+        yield
+    finally:
+        await hub.provider_health_scheduler.stop()
+
+
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.12.7",
-    description="Multi-agent control plane with read-only provider health and internal alert routing.",
+    version="0.12.8",
+    description="Multi-agent control plane with PII-free producer heartbeat and scheduled internal health evaluation.",
+    lifespan=lifespan,
 )
 schema_reader = EspoSchemaReader()
 mapping_reader = EspoMappingReader(schema_reader)
@@ -980,11 +996,77 @@ def ingest_attribution_delivery(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@app.get(
+    "/api/v1/attribution/deliveries/heartbeats",
+    response_model=list[AttributionHeartbeatReceipt],
+)
+def list_attribution_heartbeats(
+    producer: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=1000),
+    _principal: Principal = Depends(require_viewer),
+) -> list[AttributionHeartbeatReceipt]:
+    return hub.delivery.list_heartbeats(producer=producer, limit=limit)
+
+
+@app.post(
+    "/api/v1/attribution/deliveries/heartbeats",
+    response_model=AttributionHeartbeatReceipt,
+)
+async def ingest_attribution_heartbeat(
+    request: AttributionProducerHeartbeat,
+    principal: Principal = Depends(require_operator),
+) -> AttributionHeartbeatReceipt:
+    try:
+        receipt = hub.delivery.ingest_heartbeat(request, actor=principal.subject)
+        await hub.provider_health_scheduler.run_once(force=True)
+        return receipt
+    except DeliveryNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except DeliveryIntegrityConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/attribution/deliveries/heartbeats/verify",
+    response_model=AttributionReceiptVerification,
+)
+def verify_attribution_heartbeat_receipt(
+    request: AttributionHeartbeatReceiptVerificationRequest,
+    _principal: Principal = Depends(require_viewer),
+) -> AttributionReceiptVerification:
+    try:
+        return hub.delivery.verify_heartbeat(request.receipt)
+    except DeliveryNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @app.get("/api/v1/provider-health/status", response_model=ProviderHealthStatus)
 def provider_health_status(
     _principal: Principal = Depends(require_viewer),
 ) -> ProviderHealthStatus:
     return hub.provider_health.status()
+
+
+@app.get(
+    "/api/v1/provider-health/scheduler",
+    response_model=ProviderHealthSchedulerStatus,
+)
+def provider_health_scheduler_status(
+    _principal: Principal = Depends(require_viewer),
+) -> ProviderHealthSchedulerStatus:
+    return hub.provider_health_scheduler.status()
+
+
+@app.post(
+    "/api/v1/provider-health/evaluate",
+    response_model=ProviderHealthSchedulerStatus,
+)
+async def evaluate_provider_health_cached(
+    _principal: Principal = Depends(require_operator),
+) -> ProviderHealthSchedulerStatus:
+    return await hub.provider_health_scheduler.run_once(force=True)
 
 
 @app.post("/api/v1/provider-health/refresh", response_model=ProviderHealthStatus)

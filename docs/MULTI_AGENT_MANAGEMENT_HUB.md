@@ -289,3 +289,11 @@ Agent Hub và chỉ route tới Command Center/audit. Operator có thể acknowl
 điều kiện hết lỗi sẽ auto-resolve. Không gửi Zalo/email/PWA, không tự retry provider,
 không sửa Ads/CRM/CMS và không bật n8n executor. Chi tiết nằm trong
 `docs/PHASE_8_7_PROVIDER_HEALTH_ALERT_ROUTING.md`.
+
+## Phase 8.8 Lead Intake Heartbeat & Scheduled Health
+
+Phase 8.8 tách liveness của n8n Lead Intake khỏi số lượng lead bằng heartbeat không PII,
+receipt HMAC và sequence chống replay. Scheduler Agent Hub dùng Redis lease để đánh giá
+cached provider state/heartbeat mỗi chu kỳ mà không gọi provider hoặc gửi thông báo ra
+ngoài. Tuổi lead delivery vẫn hiển thị riêng để không giả lập activity. Chi tiết nằm
+trong `docs/PHASE_8_8_HEARTBEAT_SCHEDULED_HEALTH.md`.
