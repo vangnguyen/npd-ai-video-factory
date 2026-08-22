@@ -343,10 +343,17 @@ def test_n8n_heartbeat_workflow_is_inactive_pii_free_and_internal_only():
     )
     assert str(uuid.UUID(payload["id"])) == payload["id"]
     assert payload["active"] is False
-    assert len(payload["nodes"]) == 2
+    assert len(payload["nodes"]) == 3
     schedule = next(node for node in payload["nodes"] if node["type"].endswith("scheduleTrigger"))
+    acceptance = next(
+        node
+        for node in payload["nodes"]
+        if node["type"].endswith("executeWorkflowTrigger")
+    )
     request = next(node for node in payload["nodes"] if node["type"].endswith("code"))
     assert schedule["parameters"]["rule"]["interval"][0]["minutesInterval"] == 5
+    assert acceptance["name"] == "Internal acceptance trigger"
+    assert payload["connections"][acceptance["name"]]["main"][0][0]["node"] == request["name"]
     code = request["parameters"]["jsCode"]
     assert "NPD_AGENT_HUB_ATTRIBUTION_URL" in code
     assert "NPD_AGENT_HUB_ATTRIBUTION_TOKEN" in code

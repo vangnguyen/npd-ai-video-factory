@@ -107,9 +107,11 @@ contains no credential value. It reuses `NPD_AGENT_HUB_ATTRIBUTION_URL` and
 accepted lead-intake delivery workflow. Activate only after Agent Hub v0.12.8 is healthy
 and the first manual execution returns a signed receipt.
 
-The workflow has only a Schedule Trigger and one internal Code node HTTP request. It does not read
-lead data, contact customers, publish content, mutate Ads/CRM, or call an external alert
-provider. Successful execution payload retention is disabled.
+The workflow has a Schedule Trigger, an internal Execute Workflow Trigger used only for
+pre-activation CLI acceptance, and one internal Code node HTTP request. It has no webhook
+or public trigger. It does not read lead data, contact customers, publish content, mutate
+Ads/CRM, or call an external alert provider. Successful execution payload retention is
+disabled.
 
 ## Configuration
 

@@ -23,6 +23,17 @@
       ]
     },
     {
+      "parameters": {},
+      "id": "620f86c8-14d7-44ac-9ee4-3bca24e8b0bf",
+      "name": "Internal acceptance trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        280,
+        440
+      ]
+    },
+    {
       "parameters": {
         "jsCode": "const baseUrl = String($env.NPD_AGENT_HUB_ATTRIBUTION_URL || '').replace(/\\/$/, '');\nconst token = String($env.NPD_AGENT_HUB_ATTRIBUTION_TOKEN || '');\nif (!baseUrl || !token) throw new Error('Agent Hub attribution environment contract is not configured');\nconst sequence = Date.now();\nconst emittedAt = new Date(sequence).toISOString();\nconst response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: `${baseUrl}/api/v1/attribution/deliveries/heartbeats`,\n  headers: { Authorization: `Bearer ${token}` },\n  body: {\n    heartbeat_id: `heartbeat:n8n-lead-intake:${sequence}`,\n    producer: 'n8n_lead_intake',\n    emitted_at: emittedAt,\n    sequence,\n    metadata: { workflow: 'lead_intake', environment: 'production' },\n    external_writes_enabled: false,\n  },\n  json: true,\n  timeout: 30000,\n});\nreturn [{ json: { receipt_id: response.receipt_id, producer: response.producer, received_at: response.received_at, signed: Boolean(response.signature), external_writes_enabled: false } }];"
       },
@@ -39,6 +50,17 @@
   "pinData": {},
   "connections": {
     "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Send PII-free heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Internal acceptance trigger": {
       "main": [
         [
           {
