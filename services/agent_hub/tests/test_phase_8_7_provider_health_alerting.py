@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+import npd_agent_hub.store as store_module
 from npd_agent_hub.attribution import AttributionService
 from npd_agent_hub.attribution_models import (
     IdentitySource,
@@ -264,6 +265,46 @@ def test_fakeredis_recovers_snapshots_alerts_and_namespace():
     assert any("provider-health:snapshot:" in key for key in keys)
     assert any("provider-health:alert:" in key for key in keys)
     assert not any("npd:video-jobs" in key for key in keys)
+
+
+@pytest.mark.parametrize("backend", ["memory", "redis"])
+def test_provider_health_snapshot_retention_removes_old_payload_and_index(
+    backend, monkeypatch
+):
+    monkeypatch.setattr(store_module, "PROVIDER_HEALTH_SNAPSHOT_RETENTION", 3)
+    client = fakeredis.FakeRedis(decode_responses=True)
+    store = (
+        RedisHubStore(client=client, namespace="test:agent-hub")
+        if backend == "redis"
+        else MemoryHubStore()
+    )
+    now = [datetime(2026, 8, 22, 12, 0, tzinfo=UTC)]
+    _, _, provider_health = services(store, clock=lambda: now[0])
+    created_ids = []
+
+    for _ in range(5):
+        result = provider_health.refresh(
+            configuration=CONFIGURED,
+            probes=AVAILABLE,
+            actor="operator@example.com",
+        )
+        created_ids.append(result.latest_snapshot.snapshot_id)
+        now[0] += timedelta(minutes=5)
+
+    restarted = (
+        RedisHubStore(client=client, namespace="test:agent-hub")
+        if backend == "redis"
+        else store
+    )
+    retained = restarted.list_provider_health_snapshots(limit=10)
+    assert [item.snapshot_id for item in retained] == list(reversed(created_ids[-3:]))
+    if backend == "redis":
+        index_key = "test:agent-hub:provider-health:snapshots"
+        assert client.zcard(index_key) == 3
+        for snapshot_id in created_ids[:2]:
+            assert not client.exists(
+                f"test:agent-hub:provider-health:snapshot:{snapshot_id}"
+            )
 
 
 def test_provider_health_api_rbac_refresh_and_acknowledge(monkeypatch):

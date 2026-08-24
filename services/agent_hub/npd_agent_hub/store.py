@@ -32,6 +32,7 @@ from .provider_health_models import (
 
 
 HEARTBEAT_RECEIPT_RETENTION = 5000
+PROVIDER_HEALTH_SNAPSHOT_RETENTION = 5000
 
 
 class HubStore(Protocol):
@@ -502,6 +503,17 @@ class MemoryHubStore:
         self.provider_health_snapshots[snapshot.snapshot_id] = snapshot.model_copy(
             deep=True
         )
+        overflow = (
+            len(self.provider_health_snapshots)
+            - PROVIDER_HEALTH_SNAPSHOT_RETENTION
+        )
+        if overflow > 0:
+            expired = sorted(
+                self.provider_health_snapshots.values(),
+                key=lambda item: (item.observed_at, item.snapshot_id),
+            )[:overflow]
+            for item in expired:
+                self.provider_health_snapshots.pop(item.snapshot_id, None)
 
     def list_provider_health_snapshots(
         self, limit: int = 50
@@ -1050,16 +1062,42 @@ class RedisHubStore:
         return rows[:limit]
 
     def save_provider_health_snapshot(self, snapshot: ProviderHealthSnapshot) -> None:
-        pipe = self.redis.pipeline()
-        pipe.set(
-            self._key("provider-health", "snapshot", snapshot.snapshot_id),
-            snapshot.model_dump_json(),
+        index_key = self._key("provider-health", "snapshots")
+        snapshot_key = self._key(
+            "provider-health", "snapshot", snapshot.snapshot_id
         )
-        pipe.zadd(
-            self._key("provider-health", "snapshots"),
-            {snapshot.snapshot_id: snapshot.observed_at.timestamp()},
-        )
-        pipe.execute()
+
+        def save_capped(pipe) -> None:
+            already_indexed = pipe.zscore(index_key, snapshot.snapshot_id) is not None
+            future_count = int(pipe.zcard(index_key)) + (0 if already_indexed else 1)
+            overflow = max(
+                0, future_count - PROVIDER_HEALTH_SNAPSHOT_RETENTION
+            )
+            candidates = (
+                pipe.zrange(index_key, 0, overflow)
+                if overflow > 0
+                else []
+            )
+            expired_ids = [
+                str(item)
+                for item in candidates
+                if str(item) != snapshot.snapshot_id
+            ][:overflow]
+
+            pipe.multi()
+            pipe.set(snapshot_key, snapshot.model_dump_json())
+            pipe.zadd(
+                index_key,
+                {snapshot.snapshot_id: snapshot.observed_at.timestamp()},
+            )
+            for expired_id in expired_ids:
+                pipe.delete(
+                    self._key("provider-health", "snapshot", expired_id)
+                )
+            if expired_ids:
+                pipe.zrem(index_key, *expired_ids)
+
+        self.redis.transaction(save_capped, index_key)
 
     def list_provider_health_snapshots(
         self, limit: int = 50
