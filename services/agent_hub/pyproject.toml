@@ -1,6 +1,6 @@
 [project]
 name = "npd-agent-hub"
-version = "0.12.9"
+version = "0.12.10"
 description = "Multi-agent management control plane for NPD AI Video Factory"
 requires-python = ">=3.12"
 dependencies = [
