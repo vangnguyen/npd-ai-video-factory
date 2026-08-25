@@ -51,6 +51,10 @@ Phase 8.5 adds a durable Lead Intake attribution exception queue. Unknown/confli
 events remain privacy-safe and outside the immutable ledger until verified evidence
 resolves exactly one Campaign; operator replay is internal shadow-only and idempotent.
 
+Phase 8.6 wraps read-only attribution delivery with tamper-evident HMAC receipts,
+bounded producer retry/dead-letter evidence and per-source freshness SLOs. It observes
+delivery health but never schedules retries or enables source-system writes.
+
 ## Handoff package
 
 - [Technical handoff](docs/technical-handoff.md)
@@ -63,6 +67,7 @@ resolves exactly one Campaign; operator replay is internal shadow-only and idemp
 - [Phase 8 Experiment & Optimization OS](docs/PHASE_8_EXPERIMENT_OPTIMIZATION_OS.md)
 - [Phase 8.4 Campaign Identity & Attribution Data Quality](docs/PHASE_8_4_CAMPAIGN_IDENTITY_DATA_QUALITY.md)
 - [Phase 8.5 Lead Intake Attribution Operations](docs/PHASE_8_5_LEAD_INTAKE_ATTRIBUTION_OPERATIONS.md)
+- [Phase 8.6 Ingestion Delivery Observability](docs/PHASE_8_6_INGESTION_DELIVERY_OBSERVABILITY.md)
 - [Video manifest JSON Schema](packages/contracts/video-manifest.schema.json)
 - [n8n smoke-test workflow](workflows/n8n/sprint-1-smoke-test.json)
 - [45-second sample request](examples/vinhomes-green-paradise.request.json)

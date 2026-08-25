@@ -38,6 +38,10 @@ class HubSettings:
     social_meta_graph_version: str = ""
     social_insights_url: str = ""
     social_insights_token: str = ""
+    attribution_receipt_signing_key: str = ""
+    attribution_receipt_key_id: str = "npd-attribution-v1"
+    attribution_delivery_max_attempts: int = 4
+    attribution_freshness_slos_json: str = ""
 
     @classmethod
     def from_env(cls) -> "HubSettings":
@@ -85,6 +89,18 @@ class HubSettings:
             social_meta_graph_version=os.getenv("SOCIAL_META_GRAPH_VERSION", "").strip(),
             social_insights_url=os.getenv("SOCIAL_INSIGHTS_URL", "").strip(),
             social_insights_token=os.getenv("SOCIAL_INSIGHTS_TOKEN", "").strip(),
+            attribution_receipt_signing_key=os.getenv(
+                "AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY", ""
+            ).strip(),
+            attribution_receipt_key_id=os.getenv(
+                "AGENT_ATTRIBUTION_RECEIPT_KEY_ID", "npd-attribution-v1"
+            ).strip(),
+            attribution_delivery_max_attempts=int(
+                os.getenv("AGENT_ATTRIBUTION_DELIVERY_MAX_ATTEMPTS", "4")
+            ),
+            attribution_freshness_slos_json=os.getenv(
+                "AGENT_ATTRIBUTION_FRESHNESS_SLOS_JSON", ""
+            ).strip(),
         )
 
 

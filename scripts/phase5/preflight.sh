@@ -61,6 +61,8 @@ require_value AGENT_PUBLIC_BASE_URL
 require_value AGENT_GOOGLE_CLIENT_ID
 require_value AGENT_GOOGLE_CLIENT_SECRET
 require_value AGENT_SESSION_SIGNING_KEY
+require_value AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY
+require_value AGENT_ATTRIBUTION_RECEIPT_KEY_ID
 require_value AGENT_OWNER_EMAILS
 require_value ESPOCRM_URL
 require_value ESPOCRM_API_KEY
@@ -75,6 +77,31 @@ done
 [[ "$AGENT_OPERATOR_TOKEN" != "$AGENT_OWNER_TOKEN" ]] || fail "operator/owner tokens must differ"
 
 [[ ${#AGENT_SESSION_SIGNING_KEY} -ge 32 ]] || fail "AGENT_SESSION_SIGNING_KEY must be at least 32 characters"
+[[ ${#AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY} -ge 32 ]] \
+  || fail "AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY must be at least 32 characters"
+[[ "$AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY" != "$AGENT_SESSION_SIGNING_KEY" ]] \
+  || fail "attribution receipt and browser session signing keys must differ"
+[[ "${AGENT_ATTRIBUTION_DELIVERY_MAX_ATTEMPTS:-4}" =~ ^([1-9]|10)$ ]] \
+  || fail "AGENT_ATTRIBUTION_DELIVERY_MAX_ATTEMPTS must be between 1 and 10"
+python3 - "${AGENT_ATTRIBUTION_FRESHNESS_SLOS_JSON:-}" <<'PY'
+import json, re, sys
+
+raw = sys.argv[1]
+payload = json.loads(raw) if raw else {
+    "n8n_lead_intake": 15,
+    "meta_ads": 1440,
+    "ga4": 1440,
+    "espocrm": 1440,
+    "utm": 60,
+}
+if not isinstance(payload, dict) or not payload:
+    raise SystemExit("freshness SLO config must be a non-empty object")
+for producer, minutes in payload.items():
+    if not isinstance(producer, str) or not re.fullmatch(r"[a-z][a-z0-9_.-]{1,79}", producer):
+        raise SystemExit("freshness SLO producer name is invalid")
+    if isinstance(minutes, bool) or not isinstance(minutes, int) or not 1 <= minutes <= 43200:
+        raise SystemExit("freshness SLO minutes must be integers between 1 and 43200")
+PY
 [[ "$AGENT_PUBLIC_BASE_URL" =~ ^https://[^/]+$ ]] \
   || fail "AGENT_PUBLIC_BASE_URL must be an HTTPS origin without a path or trailing slash"
 [[ "$AGENT_OWNER_EMAILS" == *"@"* ]] || fail "AGENT_OWNER_EMAILS must contain at least one email"
