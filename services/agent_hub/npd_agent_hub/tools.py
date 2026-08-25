@@ -195,6 +195,24 @@ class ToolExecutor:
             "list": sanitized_records,
         }
 
+    async def probe_provider_health(self) -> dict[str, dict[str, str]]:
+        """Run bounded aggregate/read-only probes and retain no provider payloads."""
+        configuration = self.marketing_sources.configuration_status()
+        external = await self.marketing_sources.read_all(period_days=1)
+        probes = {
+            name: str(status)
+            for name, status in dict(external.get("source_status") or {}).items()
+        }
+        if configuration.get("crm") == "configured":
+            try:
+                await self._espo_get("Lead", {"maxSize": 1, "select": "id"})
+                probes["crm"] = "available"
+            except ToolExecutionError:
+                probes["crm"] = "failed"
+        else:
+            probes["crm"] = "not_configured"
+        return {"configuration": configuration, "probes": probes}
+
     async def _audit_crm(self, task: AgentTask) -> dict[str, Any]:
         payload = await self._read_crm_leads(task)
         records = payload.get("list")

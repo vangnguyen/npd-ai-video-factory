@@ -24,6 +24,7 @@ from .models import (
     TaskSummary,
     ToolExecutionResult,
 )
+from .provider_health import ProviderHealthService
 from .store import HubStore, build_store
 from .tools import AUTO_READ_TOOLS, ToolExecutor
 
@@ -39,6 +40,7 @@ class AgentHub:
     campaigns: CampaignService = field(init=False)
     attribution: AttributionService = field(init=False)
     delivery: AttributionDeliveryService = field(init=False)
+    provider_health: ProviderHealthService = field(init=False)
     experiments: ExperimentService = field(init=False)
     opportunity_reader: EspoOpportunityReader = field(init=False)
 
@@ -53,6 +55,7 @@ class AgentHub:
             self.attribution,
             getattr(self.executor, "settings", None),
         )
+        self.provider_health = ProviderHealthService(self.store, self.delivery)
         self.experiments = ExperimentService(
             self.store,
             source_status_provider=getattr(
