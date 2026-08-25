@@ -102,15 +102,6 @@ from .models import (
     PlannedAction,
     ToolExecutionResult,
 )
-from .provider_health_models import (
-    ProviderAlertAcknowledgeRequest,
-    ProviderAlertRoutingPreview,
-    ProviderAlertSeverity,
-    ProviderAlertStatus,
-    ProviderHealthAlert,
-    ProviderHealthSchedulerStatus,
-    ProviderHealthStatus,
-)
 from .google_login import (
     begin_google_login,
     complete_google_login,
@@ -118,6 +109,7 @@ from .google_login import (
     logout_response,
 )
 from .orchestrator import hub
+from .routers.provider_health import router as provider_health_router
 from .tool_registry import ToolCapability, list_tool_capabilities
 
 
@@ -136,6 +128,7 @@ app = FastAPI(
     description="Multi-agent control plane with PII-free producer heartbeat and scheduled internal health evaluation.",
     lifespan=lifespan,
 )
+app.include_router(provider_health_router)
 schema_reader = EspoSchemaReader()
 mapping_reader = EspoMappingReader(schema_reader)
 
@@ -1041,95 +1034,6 @@ def verify_attribution_heartbeat_receipt(
         return hub.delivery.verify_heartbeat(request.receipt)
     except DeliveryNotConfigured as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@app.get("/api/v1/provider-health/status", response_model=ProviderHealthStatus)
-def provider_health_status(
-    _principal: Principal = Depends(require_viewer),
-) -> ProviderHealthStatus:
-    return hub.provider_health.status()
-
-
-@app.get(
-    "/api/v1/provider-health/scheduler",
-    response_model=ProviderHealthSchedulerStatus,
-)
-def provider_health_scheduler_status(
-    _principal: Principal = Depends(require_viewer),
-) -> ProviderHealthSchedulerStatus:
-    return hub.provider_health_scheduler.status()
-
-
-@app.post(
-    "/api/v1/provider-health/evaluate",
-    response_model=ProviderHealthSchedulerStatus,
-)
-async def evaluate_provider_health_cached(
-    _principal: Principal = Depends(require_operator),
-) -> ProviderHealthSchedulerStatus:
-    return await hub.provider_health_scheduler.run_once(force=True)
-
-
-@app.post("/api/v1/provider-health/refresh", response_model=ProviderHealthStatus)
-async def refresh_provider_health(
-    principal: Principal = Depends(require_operator),
-) -> ProviderHealthStatus:
-    probe = await hub.executor.probe_provider_health()
-    return hub.provider_health.refresh(
-        configuration=probe["configuration"],
-        probes=probe["probes"],
-        actor=principal.subject,
-    )
-
-
-@app.get("/api/v1/provider-health/alerts", response_model=list[ProviderHealthAlert])
-def list_provider_health_alerts(
-    status: ProviderAlertStatus | None = Query(default=None),
-    severity: ProviderAlertSeverity | None = Query(default=None),
-    provider: str | None = Query(default=None, min_length=2, max_length=80),
-    limit: int = Query(default=100, ge=1, le=1000),
-    _principal: Principal = Depends(require_viewer),
-) -> list[ProviderHealthAlert]:
-    return hub.provider_health.list_alerts(
-        status=status,
-        severity=severity,
-        provider=provider,
-        limit=limit,
-    )
-
-
-@app.get(
-    "/api/v1/provider-health/alerts/{alert_id}/routing-preview",
-    response_model=ProviderAlertRoutingPreview,
-)
-def preview_provider_alert_routing(
-    alert_id: str,
-    _principal: Principal = Depends(require_viewer),
-) -> ProviderAlertRoutingPreview:
-    try:
-        return hub.provider_health.routing_preview(alert_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="provider-health alert not found") from exc
-
-
-@app.post(
-    "/api/v1/provider-health/alerts/{alert_id}/acknowledge",
-    response_model=ProviderHealthAlert,
-)
-def acknowledge_provider_health_alert(
-    alert_id: str,
-    request: ProviderAlertAcknowledgeRequest,
-    principal: Principal = Depends(require_operator),
-) -> ProviderHealthAlert:
-    current = hub.store.get_provider_alert(alert_id)
-    if current is None:
-        raise HTTPException(status_code=404, detail="provider-health alert not found")
-    if current.status != request.expected_status:
-        raise HTTPException(status_code=409, detail="provider-health alert status changed")
-    try:
-        return hub.provider_health.acknowledge(alert_id, actor=principal.subject)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get("/api/v1/attribution/touchpoints", response_model=list[TouchpointEvent])
