@@ -18,6 +18,8 @@ from .attribution_models import (
     AttributionAuditEvent,
     AttributionDataQualitySnapshot,
     AttributionIdentityStatus,
+    AttributionIntakeIssue,
+    AttributionIntakePreview,
     AttributionModel,
     AttributionReconciliation,
     AttributionReport,
@@ -96,7 +98,7 @@ from .tool_registry import ToolCapability, list_tool_capabilities
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.12.4",
+    version="0.12.5",
     description="Multi-agent control plane with verified Campaign identity and read-only attribution data-quality gates.",
 )
 schema_reader = EspoSchemaReader()
@@ -824,6 +826,53 @@ def list_attribution_data_quality(
     _principal: Principal = Depends(require_viewer),
 ) -> list[AttributionDataQualitySnapshot]:
     return hub.attribution.list_data_quality_snapshots(limit=limit)
+
+
+@app.get(
+    "/api/v1/attribution/intake/issues",
+    response_model=list[AttributionIntakeIssue],
+)
+def list_attribution_intake_issues(
+    status: str | None = Query(default="pending"),
+    limit: int = Query(default=100, ge=1, le=1000),
+    _principal: Principal = Depends(require_viewer),
+) -> list[AttributionIntakeIssue]:
+    try:
+        return hub.attribution.list_intake_issues(status=status, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get(
+    "/api/v1/attribution/intake/issues/{issue_id}/preview",
+    response_model=AttributionIntakePreview,
+)
+def preview_attribution_intake_issue(
+    issue_id: str,
+    _principal: Principal = Depends(require_viewer),
+) -> AttributionIntakePreview:
+    try:
+        return hub.attribution.preview_intake_issue(issue_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="intake issue not found") from exc
+
+
+@app.post(
+    "/api/v1/attribution/intake/issues/{issue_id}/replay",
+    response_model=AttributionDataQualitySnapshot,
+)
+def replay_attribution_intake_issue(
+    issue_id: str,
+    principal: Principal = Depends(require_operator),
+) -> AttributionDataQualitySnapshot:
+    try:
+        return hub.attribution.replay_intake_issue(
+            issue_id, actor=principal.subject
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="intake issue not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get("/api/v1/attribution/touchpoints", response_model=list[TouchpointEvent])

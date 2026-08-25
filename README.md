@@ -47,6 +47,10 @@ read-only touchpoint-ingestion quality gate. It reports mapping coverage, freshn
 unknown identities and conflicts; it never infers projects from Ads names or enables
 external writes.
 
+Phase 8.5 adds a durable Lead Intake attribution exception queue. Unknown/conflicting
+events remain privacy-safe and outside the immutable ledger until verified evidence
+resolves exactly one Campaign; operator replay is internal shadow-only and idempotent.
+
 ## Handoff package
 
 - [Technical handoff](docs/technical-handoff.md)
@@ -58,6 +62,7 @@ external writes.
 - [Phase 7 Attribution & Revenue OS](docs/PHASE_7_ATTRIBUTION_REVENUE_OS.md)
 - [Phase 8 Experiment & Optimization OS](docs/PHASE_8_EXPERIMENT_OPTIMIZATION_OS.md)
 - [Phase 8.4 Campaign Identity & Attribution Data Quality](docs/PHASE_8_4_CAMPAIGN_IDENTITY_DATA_QUALITY.md)
+- [Phase 8.5 Lead Intake Attribution Operations](docs/PHASE_8_5_LEAD_INTAKE_ATTRIBUTION_OPERATIONS.md)
 - [Video manifest JSON Schema](packages/contracts/video-manifest.schema.json)
 - [n8n smoke-test workflow](workflows/n8n/sprint-1-smoke-test.json)
 - [45-second sample request](examples/vinhomes-green-paradise.request.json)
