@@ -84,4 +84,3 @@ def acknowledge_provider_health_alert(
         return hub.provider_health.acknowledge(alert_id, actor=principal.subject)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-
