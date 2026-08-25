@@ -147,7 +147,11 @@ Before deployment, initialize the dedicated receipt-signing key with a recoverab
 sudo bash scripts/phase5/configure-attribution-delivery.sh --apply
 ```
 
-Use `--rotate` only during an intentional key rotation. Prior receipts remain tagged with their original `key_id` and should be retained for audit.
+Use `--rotate --new-key-id <unused-id>` only during an intentional key rotation. Prior
+receipts remain tagged with their original `key_id`; the old active key moves into the
+verify-only keyring so they remain verifiable. Follow
+[`HMAC_RECEIPT_KEY_ROTATION.md`](HMAC_RECEIPT_KEY_ROTATION.md) for backup, dual-generation
+verification and rollback.
 
 1. Keep Phase 8.6 stacked on draft PR #16 until the owner independently decides merges.
 2. Pass Agent Hub CI, Phase 5 Deployment Bundle CI and Sprint 1 Docker E2E.

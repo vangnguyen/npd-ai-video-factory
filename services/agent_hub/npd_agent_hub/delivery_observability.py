@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Callable
 
 from pydantic import BaseModel
@@ -69,6 +70,44 @@ class AttributionDeliveryService:
         self.freshness_slos = self._parse_slos(
             self.settings.attribution_freshness_slos_json
         )
+        self._verification_keys = self._build_verification_keyring()
+
+    @staticmethod
+    def _load_historical_verification_keys(path: str) -> dict[str, str]:
+        if not path:
+            return {}
+        try:
+            raw = Path(path).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValueError("historical verification key file could not be read") from exc
+        if len(raw.encode("utf-8")) > 64 * 1024:
+            raise ValueError("historical verification key file exceeds 64 KiB")
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("historical verification key file must be valid JSON") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("historical verification key file must contain a JSON object")
+        result: dict[str, str] = {}
+        for key_id, verification_key in payload.items():
+            if not isinstance(key_id, str) or not 3 <= len(key_id) <= 80:
+                raise ValueError("historical verification key_id is invalid")
+            if not isinstance(verification_key, str) or len(verification_key) < 32:
+                raise ValueError("historical verification key is invalid")
+            result[key_id] = verification_key
+        return result
+
+    def _build_verification_keyring(self) -> dict[str, str]:
+        historical = self._load_historical_verification_keys(
+            self.settings.attribution_verification_keys_file
+        )
+        active_id = self.settings.attribution_receipt_key_id
+        active_key = self.settings.attribution_receipt_signing_key
+        if active_id in historical:
+            raise ValueError("active key_id must not appear in the historical keyring")
+        if active_id and len(active_key) >= 32:
+            historical[active_id] = active_key
+        return historical
 
     @staticmethod
     def _parse_slos(raw: str) -> dict[str, int]:
@@ -94,11 +133,11 @@ class AttributionDeliveryService:
     def _require_configured(self) -> None:
         if len(self.settings.attribution_receipt_signing_key) < 32:
             raise DeliveryNotConfigured(
-                "AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY must be at least 32 characters"
+                "active attribution receipt signing key must be at least 32 characters"
             )
         if not self.settings.attribution_receipt_key_id:
             raise DeliveryNotConfigured(
-                "AGENT_ATTRIBUTION_RECEIPT_KEY_ID is required"
+                "active attribution receipt key_id is required"
             )
 
     @staticmethod
@@ -132,10 +171,10 @@ class AttributionDeliveryService:
         ).hexdigest()[:24]
         return f"adl_{digest}"
 
-    def _signature(self, receipt: BaseModel) -> str:
+    def _signature(self, receipt: BaseModel, signing_key: str | None = None) -> str:
         payload = receipt.model_dump(mode="json", exclude={"signature"})
         digest = hmac.new(
-            self.settings.attribution_receipt_signing_key.encode("utf-8"),
+            (signing_key or self.settings.attribution_receipt_signing_key).encode("utf-8"),
             self._canonical(payload),
             hashlib.sha256,
         ).hexdigest()
@@ -498,15 +537,17 @@ class AttributionDeliveryService:
     def verify(
         self, receipt: AttributionDeliveryReceipt
     ) -> AttributionReceiptVerification:
-        self._require_configured()
-        if receipt.key_id != self.settings.attribution_receipt_key_id:
+        verification_key = self._verification_keys.get(receipt.key_id)
+        if verification_key is None:
             return AttributionReceiptVerification(
                 receipt_id=receipt.receipt_id,
                 valid=False,
                 key_id=receipt.key_id,
-                detail="Receipt key_id is not active.",
+                detail="Receipt key_id is unknown.",
             )
-        valid = hmac.compare_digest(receipt.signature, self._signature(receipt))
+        valid = hmac.compare_digest(
+            receipt.signature, self._signature(receipt, verification_key)
+        )
         return AttributionReceiptVerification(
             receipt_id=receipt.receipt_id,
             valid=valid,
@@ -517,15 +558,17 @@ class AttributionDeliveryService:
     def verify_heartbeat(
         self, receipt: AttributionHeartbeatReceipt
     ) -> AttributionReceiptVerification:
-        self._require_configured()
-        if receipt.key_id != self.settings.attribution_receipt_key_id:
+        verification_key = self._verification_keys.get(receipt.key_id)
+        if verification_key is None:
             return AttributionReceiptVerification(
                 receipt_id=receipt.receipt_id,
                 valid=False,
                 key_id=receipt.key_id,
-                detail="Heartbeat receipt key_id is not active.",
+                detail="Heartbeat receipt key_id is unknown.",
             )
-        valid = hmac.compare_digest(receipt.signature, self._signature(receipt))
+        valid = hmac.compare_digest(
+            receipt.signature, self._signature(receipt, verification_key)
+        )
         return AttributionReceiptVerification(
             receipt_id=receipt.receipt_id,
             valid=valid,

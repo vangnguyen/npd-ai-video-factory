@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -23,7 +23,7 @@ class HubSettings:
     public_base_url: str = ""
     google_client_id: str = ""
     google_client_secret: str = ""
-    session_signing_key: str = ""
+    session_signing_key: str = field(default="", repr=False)
     session_ttl_seconds: int = 28800
     owner_emails: tuple[str, ...] = ()
     operator_emails: tuple[str, ...] = ()
@@ -38,8 +38,9 @@ class HubSettings:
     social_meta_graph_version: str = ""
     social_insights_url: str = ""
     social_insights_token: str = ""
-    attribution_receipt_signing_key: str = ""
+    attribution_receipt_signing_key: str = field(default="", repr=False)
     attribution_receipt_key_id: str = "npd-attribution-v1"
+    attribution_verification_keys_file: str = ""
     attribution_delivery_max_attempts: int = 4
     attribution_freshness_slos_json: str = ""
     provider_health_scheduler_enabled: bool = False
@@ -97,11 +98,18 @@ class HubSettings:
             social_meta_graph_version=os.getenv("SOCIAL_META_GRAPH_VERSION", "").strip(),
             social_insights_url=os.getenv("SOCIAL_INSIGHTS_URL", "").strip(),
             social_insights_token=os.getenv("SOCIAL_INSIGHTS_TOKEN", "").strip(),
-            attribution_receipt_signing_key=os.getenv(
-                "AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY", ""
-            ).strip(),
-            attribution_receipt_key_id=os.getenv(
-                "AGENT_ATTRIBUTION_RECEIPT_KEY_ID", "npd-attribution-v1"
+            attribution_receipt_signing_key=(
+                os.getenv("AGENT_ATTRIBUTION_ACTIVE_SIGNING_KEY", "").strip()
+                or os.getenv("AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY", "").strip()
+            ),
+            attribution_receipt_key_id=(
+                os.getenv("AGENT_ATTRIBUTION_ACTIVE_KEY_ID", "").strip()
+                or os.getenv(
+                    "AGENT_ATTRIBUTION_RECEIPT_KEY_ID", "npd-attribution-v1"
+                ).strip()
+            ),
+            attribution_verification_keys_file=os.getenv(
+                "AGENT_ATTRIBUTION_VERIFICATION_KEYS_FILE", ""
             ).strip(),
             attribution_delivery_max_attempts=int(
                 os.getenv("AGENT_ATTRIBUTION_DELIVERY_MAX_ATTEMPTS", "4")
