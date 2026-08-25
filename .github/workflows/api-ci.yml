@@ -6,6 +6,7 @@ on:
     branches:
       - codex/sprint-1-vertical-slice
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
     branches:
       - main
 
