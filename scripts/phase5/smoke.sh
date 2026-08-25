@@ -115,6 +115,26 @@ if any(item.get('external_writes_enabled') is not False for item in dead):
     raise SystemExit('dead-letter response exposed external write')
 PY
 
+code="$(http_code GET "$BASE_URL/api/v1/attribution/deliveries/heartbeats?limit=10" "$AGENT_VIEWER_TOKEN" '' "$workdir/heartbeats.json")"
+[[ "$code" == "200" ]] || fail "viewer heartbeat receipts returned HTTP $code"
+code="$(http_code GET "$BASE_URL/api/v1/provider-health/scheduler" "$AGENT_VIEWER_TOKEN" '' "$workdir/provider-scheduler.json")"
+[[ "$code" == "200" ]] || fail "viewer provider-health scheduler returned HTTP $code"
+python3 - "$workdir/heartbeats.json" "$workdir/provider-scheduler.json" <<'PY'
+import json, sys
+
+heartbeats = json.load(open(sys.argv[1], encoding='utf-8'))
+scheduler = json.load(open(sys.argv[2], encoding='utf-8'))
+if not isinstance(heartbeats, list):
+    raise SystemExit('heartbeat response is not a list')
+if any(item.get('external_writes_enabled') is not False for item in heartbeats):
+    raise SystemExit('heartbeat receipt exposed external write')
+for key in ('external_provider_probes_enabled', 'external_notifications_enabled', 'production_write_enabled'):
+    if scheduler.get(key) is not False:
+        raise SystemExit(f'provider-health scheduler exposed unsafe flag: {key}')
+if scheduler.get('evaluates_cached_state_only') is not True:
+    raise SystemExit('provider-health scheduler is not cached-state-only')
+PY
+
 code="$(http_code GET "$BASE_URL/api/v1/whoami" "$AGENT_OWNER_TOKEN" '' "$workdir/whoami.json")"
 [[ "$code" == "200" ]] || fail "owner whoami returned HTTP $code"
 owner_role="$(python3 - "$workdir/whoami.json" <<'PY'

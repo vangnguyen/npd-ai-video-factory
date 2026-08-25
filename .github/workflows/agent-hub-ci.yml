@@ -6,6 +6,8 @@ on:
       - "services/agent_hub/**"
       - "deploy/phase5/**"
       - "scripts/phase5/**"
+      - "scripts/ci/**"
+      - "workflows/n8n/**"
       - ".github/workflows/agent-hub-ci.yml"
       - "docker-compose.yml"
   push:
@@ -13,10 +15,19 @@ on:
       - main
     paths:
       - "services/agent_hub/**"
+      - "scripts/ci/**"
+      - "workflows/n8n/**"
       - ".github/workflows/agent-hub-ci.yml"
       - "docker-compose.yml"
 
 jobs:
+  validate-n8n-workflows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate import with production n8n version
+        run: bash scripts/ci/validate-n8n-workflows.sh
+
   test:
     runs-on: ubuntu-latest
     defaults:

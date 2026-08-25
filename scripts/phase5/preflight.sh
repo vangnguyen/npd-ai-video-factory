@@ -102,6 +102,13 @@ for producer, minutes in payload.items():
     if isinstance(minutes, bool) or not isinstance(minutes, int) or not 1 <= minutes <= 43200:
         raise SystemExit("freshness SLO minutes must be integers between 1 and 43200")
 PY
+[[ "${AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED:-false}" =~ ^(true|false)$ ]] \
+  || fail "AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED must be true or false"
+[[ "${AGENT_PROVIDER_HEALTH_SCHEDULER_INTERVAL_SECONDS:-300}" =~ ^[0-9]+$ ]] \
+  || fail "AGENT_PROVIDER_HEALTH_SCHEDULER_INTERVAL_SECONDS must be an integer"
+(( ${AGENT_PROVIDER_HEALTH_SCHEDULER_INTERVAL_SECONDS:-300} >= 60 \
+  && ${AGENT_PROVIDER_HEALTH_SCHEDULER_INTERVAL_SECONDS:-300} <= 86400 )) \
+  || fail "AGENT_PROVIDER_HEALTH_SCHEDULER_INTERVAL_SECONDS must be between 60 and 86400"
 [[ "$AGENT_PUBLIC_BASE_URL" =~ ^https://[^/]+$ ]] \
   || fail "AGENT_PUBLIC_BASE_URL must be an HTTPS origin without a path or trailing slash"
 [[ "$AGENT_OWNER_EMAILS" == *"@"* ]] || fail "AGENT_OWNER_EMAILS must contain at least one email"

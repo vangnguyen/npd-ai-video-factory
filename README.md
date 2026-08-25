@@ -60,6 +60,10 @@ routing. Health/alert state persists in a dedicated Agent Hub Redis subnamespace
 acknowledgement is an internal audit action only. No Zalo/email/PWA notification,
 provider retry, source mutation or production write is enabled.
 
+Phase 8.8 separates n8n Lead Intake liveness from lead volume with signed, PII-free
+heartbeat receipts. A Redis-lease scheduler evaluates cached state internally; it does
+not poll providers, send notifications, retry delivery or enable production writes.
+
 ## Handoff package
 
 - [Technical handoff](docs/technical-handoff.md)
@@ -74,6 +78,7 @@ provider retry, source mutation or production write is enabled.
 - [Phase 8.5 Lead Intake Attribution Operations](docs/PHASE_8_5_LEAD_INTAKE_ATTRIBUTION_OPERATIONS.md)
 - [Phase 8.6 Ingestion Delivery Observability](docs/PHASE_8_6_INGESTION_DELIVERY_OBSERVABILITY.md)
 - [Phase 8.7 Provider Health & Internal Alert Routing](docs/PHASE_8_7_PROVIDER_HEALTH_ALERT_ROUTING.md)
+- [Phase 8.8 Lead Intake Heartbeat & Scheduled Health](docs/PHASE_8_8_HEARTBEAT_SCHEDULED_HEALTH.md)
 - [Video manifest JSON Schema](packages/contracts/video-manifest.schema.json)
 - [n8n smoke-test workflow](workflows/n8n/sprint-1-smoke-test.json)
 - [45-second sample request](examples/vinhomes-green-paradise.request.json)

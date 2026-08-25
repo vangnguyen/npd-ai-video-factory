@@ -1,0 +1,93 @@
+{
+  "id": "fd262c48-24c0-4ee3-a20a-09f2a417de88",
+  "name": "NPD Phase 8.8 - Lead Intake Heartbeat",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "a1edb8ee-98b3-4eb4-bd3a-4c4bdf1f2e58",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        280,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "620f86c8-14d7-44ac-9ee4-3bca24e8b0bf",
+      "name": "Internal acceptance trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        280,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseUrl = String($env.NPD_AGENT_HUB_ATTRIBUTION_URL || '').replace(/\\/$/, '');\nconst token = String($env.NPD_AGENT_HUB_ATTRIBUTION_TOKEN || '');\nif (!baseUrl || !token) throw new Error('Agent Hub attribution environment contract is not configured');\nconst sequence = Date.now();\nconst emittedAt = new Date(sequence).toISOString();\nconst response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: `${baseUrl}/api/v1/attribution/deliveries/heartbeats`,\n  headers: { Authorization: `Bearer ${token}` },\n  body: {\n    heartbeat_id: `heartbeat:n8n-lead-intake:${sequence}`,\n    producer: 'n8n_lead_intake',\n    emitted_at: emittedAt,\n    sequence,\n    metadata: { workflow: 'lead_intake', environment: 'production' },\n    external_writes_enabled: false,\n  },\n  json: true,\n  timeout: 30000,\n});\nreturn [{ json: { receipt_id: response.receipt_id, producer: response.producer, received_at: response.received_at, signed: Boolean(response.signature), external_writes_enabled: false } }];"
+      },
+      "id": "e57515c4-504e-46c3-b9dd-e06768831a83",
+      "name": "Send PII-free heartbeat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        300
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Send PII-free heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Internal acceptance trigger": {
+      "main": [
+        [
+          {
+            "node": "Send PII-free heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false
+  },
+  "versionId": "5c66c0e0-a1f3-43f2-ac0b-8b9beea183df",
+  "meta": {
+    "phase": "8.8",
+    "production_write": false,
+    "external_notifications": false,
+    "successful_execution_retention": "n8n pruning policy",
+    "credential_contract": "reuse NPD_AGENT_HUB_ATTRIBUTION_URL and NPD_AGENT_HUB_ATTRIBUTION_TOKEN; never commit their values"
+  },
+  "tags": []
+}

@@ -24,7 +24,10 @@ def assert_no_raw_pii(value: Any, *, path: str = "attribution") -> None:
     assert_no_secrets(value, path=path)
     if isinstance(value, dict):
         for key, item in value.items():
-            if PII_KEY_PATTERN.search(str(key)):
+            normalized_key = re.sub(
+                r"(?<=[a-z0-9])(?=[A-Z])", "_", str(key)
+            )
+            if PII_KEY_PATTERN.search(normalized_key):
                 raise ValueError(f"Attribution object cannot store raw PII: {path}.{key}")
             assert_no_raw_pii(item, path=f"{path}.{key}")
     elif isinstance(value, list):

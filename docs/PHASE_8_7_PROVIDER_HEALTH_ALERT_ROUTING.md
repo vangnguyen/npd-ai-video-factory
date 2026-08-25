@@ -135,7 +135,6 @@ Phase 8.7 acceptance requires:
 
 Phase 8.7 is manual/on-demand provider probing and internal alert handling. It does not
 run a scheduler, deliver notifications, retry failed providers, open tickets, change
-credentials or remediate incidents. A later phase may add owner-approved scheduling
-and notification-provider contracts, but only after alert-volume and false-positive
-evidence is reviewed. External delivery must remain disabled by default and require a
+credentials or remediate incidents. Phase 8.8 adds only PII-free n8n heartbeat and
+cached-state scheduled evaluation; external delivery remains disabled and requires a
 separate approval/security design.
