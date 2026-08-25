@@ -327,6 +327,32 @@ The backup contains only keys under the configured Agent Hub namespace. It does 
 
 Backup files are written with mode `0600` because task context and audit data are internal operational data.
 
+### Existing n8n stack backup
+
+`scripts/phase5/n8n-stack-backup.sh` is the source-controlled replacement for
+`/opt/n8n/backup.sh`. It backs up the existing `n8n-marketing` PostgreSQL database,
+the n8n data volume, EspoCRM database/volumes when present, and protected stack
+configuration. It does not start another n8n, Caddy, Redis or database service.
+
+The script intentionally does **not** `source /opt/n8n/.env`. Docker Compose env files
+may contain valid values such as an unquoted authorization header with spaces that are
+not safe Bash syntax. Database credentials are consumed only inside their existing
+containers, are never printed, and are not copied into process arguments on the host.
+
+Deploy the helper only after backing up the prior script:
+
+```bash
+install -m 0755 scripts/phase5/n8n-stack-backup.sh /opt/n8n/backup.sh.candidate
+bash -n /opt/n8n/backup.sh.candidate
+cp -a /opt/n8n/backup.sh /opt/n8n/backup.sh.before-<timestamp>
+mv /opt/n8n/backup.sh.candidate /opt/n8n/backup.sh
+cd /opt/n8n && bash backup.sh
+```
+
+The backup is built in a private partial directory, validated, checksummed, and then
+renamed atomically. A non-blocking lock prevents overlapping cron/manual runs. The
+existing cron contract remains `15 2 * * * cd /opt/n8n && bash backup.sh ...`.
+
 ## Rollback
 
 Every upgrade receipt records the rollback image tag and backup path.

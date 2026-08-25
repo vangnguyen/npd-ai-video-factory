@@ -368,3 +368,9 @@ def test_n8n_heartbeat_workflow_is_inactive_pii_free_and_internal_only():
     assert "zalo" not in raw
     assert payload["meta"]["production_write"] is False
     assert payload["meta"]["external_notifications"] is False
+    assert payload["settings"]["saveDataSuccessExecution"] == "all"
+    assert payload["settings"]["saveManualExecutions"] is False
+    assert (
+        payload["meta"]["successful_execution_retention"]
+        == "n8n pruning policy"
+    )

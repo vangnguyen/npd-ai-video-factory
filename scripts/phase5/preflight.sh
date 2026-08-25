@@ -61,8 +61,6 @@ require_value AGENT_PUBLIC_BASE_URL
 require_value AGENT_GOOGLE_CLIENT_ID
 require_value AGENT_GOOGLE_CLIENT_SECRET
 require_value AGENT_SESSION_SIGNING_KEY
-require_value AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY
-require_value AGENT_ATTRIBUTION_RECEIPT_KEY_ID
 require_value AGENT_OWNER_EMAILS
 require_value ESPOCRM_URL
 require_value ESPOCRM_API_KEY
@@ -77,10 +75,45 @@ done
 [[ "$AGENT_OPERATOR_TOKEN" != "$AGENT_OWNER_TOKEN" ]] || fail "operator/owner tokens must differ"
 
 [[ ${#AGENT_SESSION_SIGNING_KEY} -ge 32 ]] || fail "AGENT_SESSION_SIGNING_KEY must be at least 32 characters"
-[[ ${#AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY} -ge 32 ]] \
-  || fail "AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY must be at least 32 characters"
-[[ "$AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY" != "$AGENT_SESSION_SIGNING_KEY" ]] \
+attribution_active_key="${AGENT_ATTRIBUTION_ACTIVE_SIGNING_KEY:-${AGENT_ATTRIBUTION_RECEIPT_SIGNING_KEY:-}}"
+attribution_active_key_id="${AGENT_ATTRIBUTION_ACTIVE_KEY_ID:-${AGENT_ATTRIBUTION_RECEIPT_KEY_ID:-}}"
+[[ ${#attribution_active_key} -ge 32 ]] \
+  || fail "active attribution signing key must be at least 32 characters"
+[[ "$attribution_active_key" != *REPLACE_WITH* ]] \
+  || fail "active attribution signing key still contains the example placeholder"
+[[ -n "$attribution_active_key_id" ]] \
+  || fail "active attribution key_id is required"
+[[ "$attribution_active_key_id" != *REPLACE_WITH* ]] \
+  || fail "active attribution key_id still contains the example placeholder"
+[[ "$attribution_active_key" != "$AGENT_SESSION_SIGNING_KEY" ]] \
   || fail "attribution receipt and browser session signing keys must differ"
+if [[ -n "${AGENT_ATTRIBUTION_VERIFICATION_KEYS_FILE:-}" ]]; then
+  require_value AGENT_ATTRIBUTION_VERIFICATION_KEYS_HOST_FILE
+  [[ -f "$AGENT_ATTRIBUTION_VERIFICATION_KEYS_HOST_FILE" ]] \
+    || fail "historical verification key file not found"
+  if stat -c '%a' "$AGENT_ATTRIBUTION_VERIFICATION_KEYS_HOST_FILE" >/dev/null 2>&1; then
+    verification_mode="$(stat -c '%a' "$AGENT_ATTRIBUTION_VERIFICATION_KEYS_HOST_FILE")"
+    case "$verification_mode" in
+      600|640) ;;
+      *) fail "historical verification key file permissions must be 600 or 640" ;;
+    esac
+  fi
+  python3 - "$AGENT_ATTRIBUTION_VERIFICATION_KEYS_HOST_FILE" "$attribution_active_key_id" <<'PY'
+import json, sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+if not isinstance(payload, dict):
+    raise SystemExit("historical verification key file must contain a JSON object")
+if sys.argv[2] in payload:
+    raise SystemExit("active key_id must not appear in the historical keyring")
+for key_id, key in payload.items():
+    if not isinstance(key_id, str) or not 3 <= len(key_id) <= 80:
+        raise SystemExit("historical verification key_id is invalid")
+    if not isinstance(key, str) or len(key) < 32:
+        raise SystemExit("historical verification key is invalid")
+PY
+fi
 [[ "${AGENT_ATTRIBUTION_DELIVERY_MAX_ATTEMPTS:-4}" =~ ^([1-9]|10)$ ]] \
   || fail "AGENT_ATTRIBUTION_DELIVERY_MAX_ATTEMPTS must be between 1 and 10"
 python3 - "${AGENT_ATTRIBUTION_FRESHNESS_SLOS_JSON:-}" <<'PY'

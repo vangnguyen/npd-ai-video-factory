@@ -77,7 +77,7 @@
   "active": false,
   "settings": {
     "executionOrder": "v1",
-    "saveDataSuccessExecution": "none",
+    "saveDataSuccessExecution": "all",
     "saveManualExecutions": false,
     "saveExecutionProgress": false
   },
@@ -86,6 +86,7 @@
     "phase": "8.8",
     "production_write": false,
     "external_notifications": false,
+    "successful_execution_retention": "n8n pruning policy",
     "credential_contract": "reuse NPD_AGENT_HUB_ATTRIBUTION_URL and NPD_AGENT_HUB_ATTRIBUTION_TOKEN; never commit their values"
   },
   "tags": []

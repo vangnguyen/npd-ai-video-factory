@@ -199,6 +199,12 @@ ORDER BY "startedAt" DESC;
 Do not delete or rewrite execution rows during diagnosis. Correlate any returned ID with
 n8n logs and workflow state before deciding that an execution is stuck.
 
+After the stabilization workflow is imported, new successful heartbeat executions must
+reach terminal `success` state and become eligible for the normal n8n pruning policy.
+Check rows created after the deployment timestamp for at least two heartbeat intervals.
+Historical non-terminal rows require a fresh PostgreSQL backup and a separately approved,
+n8n-supported cleanup; never delete them directly as part of workflow import or deploy.
+
 ## Command Center operational signals
 
 Command Center deliberately renders four different facts:
@@ -246,6 +252,19 @@ Redis byte values are optional report inputs because the API intentionally does 
 Redis internals. Capture namespace-only baseline/current values on the host, then provide
 them with `--redis-baseline-bytes` and `--redis-current-bytes`. Do not scan or modify video
 job keys or Redis DB 0.
+
+### Stabilization retention contract
+
+Agent Hub retains at most 5,000 signed heartbeat receipts and 5,000 provider-health
+snapshots. Redis removes the oldest snapshot payload and its sorted-set index member in
+one watched transaction, so restart recovery cannot retain an orphaned index or payload.
+
+The n8n heartbeat workflow intentionally sets `saveDataSuccessExecution` to `all` even
+though its output contains only a PII-free receipt summary. n8n must persist the terminal
+status before its normal execution-data pruning policy can remove the row. Production must
+keep `EXECUTIONS_DATA_PRUNE=true` and a bounded `EXECUTIONS_DATA_MAX_AGE`; the current
+contract is 336 hours. This changes internal execution retention only and does not enable
+an external notification, customer contact or production write.
 
 ## Next staged scope
 
