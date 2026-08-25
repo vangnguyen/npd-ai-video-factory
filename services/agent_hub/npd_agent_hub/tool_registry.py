@@ -82,6 +82,7 @@ TOOL_REGISTRY: dict[str, ToolCapability] = {
         _tool("attribution.heartbeat.ingest", CapabilityMode.DRAFT, "n8n/Attribution OS", "Accept a PII-free producer heartbeat and issue an immutable signed receipt.", state=ExecutionState.PLANNING_ONLY, dry_run=True),
         _tool("attribution.heartbeat.read", CapabilityMode.READ, "Attribution OS", "Read signed producer heartbeat receipts and freshness evidence."),
         _tool("provider.alert.acknowledge", CapabilityMode.DRAFT, "Agent Hub internal audit", "Acknowledge a deduplicated internal alert without contacting external systems.", state=ExecutionState.PLANNING_ONLY, dry_run=True),
+        _tool("provider.alert.routing.preview", CapabilityMode.DRAFT, "Agent Hub internal audit", "Preview severity routing, dedupe, cooldown and escalation without delivering an external notification.", state=ExecutionState.PLANNING_ONLY, dry_run=True),
         _tool("attribution.reconcile.preview", CapabilityMode.DRAFT, "Attribution OS/EspoCRM", "Reconcile read-only Opportunity and revenue snapshots without source-system writes.", state=ExecutionState.PLANNING_ONLY, dry_run=True),
         _tool("revenue.report.read", CapabilityMode.DRAFT, "Attribution OS", "Prepare an owner-accepted pipeline and closed-revenue shadow report.", state=ExecutionState.PLANNING_ONLY, dry_run=True),
         _tool("attribution.quality.accept", CapabilityMode.DRAFT, "Attribution OS", "Record an owner quality-gate decision without external effects.", approval=True, state=ExecutionState.PLANNING_ONLY, dry_run=True),

@@ -6,6 +6,7 @@ from ..auth import Principal, require_operator, require_viewer
 from ..orchestrator import hub
 from ..provider_health_models import (
     ProviderAlertAcknowledgeRequest,
+    ProviderAlertRoutingPreview,
     ProviderAlertSeverity,
     ProviderAlertStatus,
     ProviderHealthAlert,
@@ -64,6 +65,20 @@ def list_provider_health_alerts(
         provider=provider,
         limit=limit,
     )
+
+
+@router.get(
+    "/alerts/{alert_id}/routing-preview",
+    response_model=ProviderAlertRoutingPreview,
+)
+def preview_provider_alert_routing(
+    alert_id: str,
+    _principal: Principal = Depends(require_viewer),
+) -> ProviderAlertRoutingPreview:
+    try:
+        return hub.provider_health.routing_preview(alert_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="provider-health alert not found") from exc
 
 
 @router.post(

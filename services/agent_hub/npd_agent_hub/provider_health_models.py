@@ -27,6 +27,13 @@ class ProviderAlertStatus(str, Enum):
     RESOLVED = "resolved"
 
 
+class ProviderNotificationSuppression(str, Enum):
+    PREVIEW_ELIGIBLE = "preview_eligible"
+    COOLDOWN = "cooldown"
+    ACKNOWLEDGED = "acknowledged"
+    RESOLVED = "resolved"
+
+
 class ProviderHealthSchedulerState(str, Enum):
     DISABLED = "disabled"
     IDLE = "idle"
@@ -129,6 +136,53 @@ class ProviderHealthStatus(BaseModel):
     routing_targets: list[str] = Field(default_factory=lambda: ["command_center", "audit"])
     external_notifications_enabled: bool = False
     production_write_enabled: bool = False
+
+
+class ProviderAlertRoutePolicy(BaseModel):
+    severity: ProviderAlertSeverity
+    internal_targets: list[str] = Field(default_factory=lambda: ["command_center", "audit"])
+    candidate_external_channels: list[str] = Field(default_factory=list)
+    dedupe_window_minutes: int = Field(ge=1, le=10080)
+    cooldown_minutes: int = Field(ge=1, le=10080)
+    escalate_after_minutes: int | None = Field(default=None, ge=1, le=10080)
+    escalate_after_occurrences: int | None = Field(default=None, ge=2, le=100)
+    escalation_target: str | None = Field(default=None, max_length=80)
+    execution_state: str = Field(default="preview_only", pattern=r"^preview_only$")
+    external_provider_state: str = Field(default="not_configured", pattern=r"^not_configured$")
+    external_notifications_enabled: bool = False
+
+    @model_validator(mode="after")
+    def preview_only(self) -> "ProviderAlertRoutePolicy":
+        if set(self.internal_targets) - {"command_center", "audit"}:
+            raise ValueError("routing policy may execute only internal targets")
+        if self.external_notifications_enabled:
+            raise ValueError("routing policy cannot enable external notifications")
+        return self
+
+
+class ProviderAlertRoutingPreview(BaseModel):
+    alert_id: str = Field(pattern=r"^pha_[0-9a-f]{24}$")
+    dedupe_key: str
+    provider: str
+    alert_type: str
+    severity: ProviderAlertSeverity
+    status: ProviderAlertStatus
+    policy: ProviderAlertRoutePolicy
+    suppression: ProviderNotificationSuppression
+    cooldown_remaining_minutes: float = Field(ge=0)
+    incident_age_minutes: float = Field(ge=0)
+    escalation_would_apply: bool = False
+    preview_title: str = Field(max_length=160)
+    preview_message: str = Field(max_length=500)
+    would_send: bool = False
+    external_notifications_enabled: bool = False
+    production_write_enabled: bool = False
+
+    @model_validator(mode="after")
+    def no_delivery(self) -> "ProviderAlertRoutingPreview":
+        if self.would_send or self.external_notifications_enabled or self.production_write_enabled:
+            raise ValueError("routing preview cannot deliver or mutate production")
+        return self
 
 
 class ProviderHealthSchedulerStatus(BaseModel):

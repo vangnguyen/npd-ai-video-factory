@@ -8,6 +8,10 @@ EXPECTED_PROVIDER_HEALTH_ROUTES = {
     ("post", "/api/v1/provider-health/refresh"),
     ("get", "/api/v1/provider-health/alerts"),
     (
+        "get",
+        "/api/v1/provider-health/alerts/{alert_id}/routing-preview",
+    ),
+    (
         "post",
         "/api/v1/provider-health/alerts/{alert_id}/acknowledge",
     ),
@@ -37,6 +41,13 @@ def test_provider_health_router_preserves_method_path_and_response_contracts():
     ]["200"]["content"]["application/json"]["schema"]["$ref"].endswith(
         "/ProviderHealthAlert"
     )
+    assert paths[
+        "/api/v1/provider-health/alerts/{alert_id}/routing-preview"
+    ]["get"]["responses"]["200"]["content"]["application/json"]["schema"][
+        "$ref"
+    ].endswith(
+        "/ProviderAlertRoutingPreview"
+    )
 
 
 def test_provider_health_operation_ids_remain_stable_after_extraction():
@@ -51,4 +62,9 @@ def test_provider_health_operation_ids_remain_stable_after_extraction():
         "operationId"
     ] == (
         "acknowledge_provider_health_alert_api_v1_provider_health_alerts__alert_id__acknowledge_post"
+    )
+    assert paths[
+        "/api/v1/provider-health/alerts/{alert_id}/routing-preview"
+    ]["get"]["operationId"] == (
+        "preview_provider_alert_routing_api_v1_provider_health_alerts__alert_id__routing_preview_get"
     )

@@ -124,7 +124,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="NPD Agent Hub",
-    version="0.12.10",
+    version="0.13.0",
     description="Multi-agent control plane with PII-free producer heartbeat and scheduled internal health evaluation.",
     lifespan=lifespan,
 )
