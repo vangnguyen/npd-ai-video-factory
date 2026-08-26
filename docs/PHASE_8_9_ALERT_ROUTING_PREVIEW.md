@@ -7,9 +7,10 @@ escalation rules. It only produces a deterministic preview in Command Center. It
 not configure or contact email, PWA, Zalo or ticket providers and does not mutate a
 source system.
 
-This branch is stacked on draft Phase 8.8 PR #19. It must remain a separate draft PR and
-must not be deployed to production until the Phase 8.8 48-hour acceptance evidence is
-reviewed by the owner.
+The implementation was originally developed as a stacked branch after Phase 8.8. Its
+current authoritative state supersedes that historical note: PR #20 is merged into
+`main` at `400899ba82501beeea469f4a33dc169a9a09bb8e` and is live as Agent Hub
+`0.13.0`. The external-delivery behavior remains preview-only.
 
 ## Policy matrix
 
@@ -49,10 +50,16 @@ acknowledge the alert, append a delivery, create a credential or trigger a webho
 5. Viewer can inspect preview; no role can send externally.
 6. Email/PWA/Zalo/ticket remain `not_configured`; `would_send=false`.
 7. Existing Phase 1–8.8 tests, Agent Hub CI, Phase 5 bundle and Sprint 1 Docker E2E pass.
+8. The fixed 24-hour production window from `2026-08-25T05:11:00Z` through
+   `2026-08-26T05:11:00Z` passed with 288/288 heartbeats, zero gaps above 330 seconds,
+   zero lease skips, zero overlapping incidents, five healthy providers and no safety
+   violation.
 
 ## Intentional limits
 
 No external provider adapter, credential onboarding, notification queue, subscription,
-send retry, incident ticket, auto-remediation or production deployment is included.
-Owner approval after the Phase 8.8 observation window is required before proposing any
-least-privilege external notification provider.
+send retry, incident ticket or auto-remediation is included. Production deployment of
+the internal preview does not enable external notification delivery: candidate providers
+remain `not_configured`, `would_send=false`, external notifications remain disabled and
+production write remains disabled. A separate owner-approved phase is required before
+proposing any least-privilege external notification provider.
