@@ -263,7 +263,7 @@ class _FakeTTSProvider:
             wav.setnchannels(1)
             wav.setsampwidth(2)
             wav.setframerate(8_000)
-            wav.writeframes(b"\x01\x00" * round(self.duration_seconds * 8_000))
+            wav.writeframes(b"\xe8\x03" * round(self.duration_seconds * 8_000))
 
 
 @pytest.mark.asyncio
@@ -331,6 +331,35 @@ async def test_storyboard_voice_rejects_excessive_speedup(tmp_path: Path) -> Non
         )
 
     assert not (tmp_path / "voice-scenes").exists()
+
+
+@pytest.mark.asyncio
+async def test_active_timed_narration_rejects_excessive_speedup(tmp_path: Path) -> None:
+    storyboard = StoryboardResult(
+        scenes=[
+            StoryboardScene(
+                id="scene_01",
+                order=1,
+                start_seconds=0,
+                duration_seconds=2,
+                role="hook",
+                narration="Nội dung quá dài",
+                visual_query="project hook",
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="production limit"):
+        await synthesize_timed_narration(
+            _FakeTTSProvider(duration_seconds=3),
+            storyboard=storyboard,
+            language="vi",
+            output_path=tmp_path / "narration.wav",
+            timing_path=tmp_path / "narration-timing.json",
+            duration_seconds=2,
+        )
+
+    assert not (tmp_path / "narration-timing.json").exists()
 
 
 def test_logo_placeholder_is_created_inside_job_dir(tmp_path: Path) -> None:

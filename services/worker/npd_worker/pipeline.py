@@ -212,6 +212,73 @@ def _trim_pcm_activity(samples: array, sample_rate: int) -> array:
     return samples[start:end]
 
 
+def _write_pcm16_samples(path: Path, samples: array, sample_rate: int) -> None:
+    frames = array("h", samples)
+    if sys.byteorder == "big":
+        frames.byteswap()
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(frames.tobytes())
+
+
+async def _fit_narration_samples(
+    samples: array,
+    sample_rate: int,
+    *,
+    scene_id: str,
+    voice_slot_seconds: float,
+    work_path: Path,
+    max_speedup: float,
+) -> array:
+    clip_duration = len(samples) / float(sample_rate)
+    if clip_duration <= voice_slot_seconds:
+        return samples
+
+    target_duration = max(0.1, voice_slot_seconds - 0.04)
+    speedup = clip_duration / target_duration
+    if speedup > max_speedup:
+        raise ValueError(
+            f"scene {scene_id} narration requires {speedup:.3f}x speed, "
+            f"above the {max_speedup:.3f}x production limit"
+        )
+
+    trim_path = work_path.with_suffix(".trim.wav")
+    fitted_path = work_path.with_suffix(".fit.wav")
+    _write_pcm16_samples(trim_path, samples, sample_rate)
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(trim_path),
+            "-filter:a",
+            f"atempo={speedup:.6f}",
+            str(fitted_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            detail = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(f"ffmpeg voice timing failed: {detail or process.returncode}")
+        fitted, fitted_rate = _pcm16_samples(fitted_path)
+        if fitted_rate != sample_rate:
+            raise ValueError("ffmpeg changed the TTS sample rate")
+        fitted = _trim_pcm_activity(fitted, fitted_rate)
+        if len(fitted) / float(sample_rate) > voice_slot_seconds + 0.001:
+            raise ValueError(f"fitted narration for scene {scene_id} still exceeds its voice slot")
+        logger.info("voice_scene_fitted scene_id=%s speedup=%.3f", scene_id, speedup)
+        return fitted
+    finally:
+        trim_path.unlink(missing_ok=True)
+        fitted_path.unlink(missing_ok=True)
+
+
 async def synthesize_timed_narration(
     provider: Any,
     *,
@@ -220,6 +287,7 @@ async def synthesize_timed_narration(
     output_path: Path,
     timing_path: Path,
     duration_seconds: float,
+    max_speedup: float = 1.4,
 ) -> NarrationTiming:
     chunks: list[tuple[Any, array, int]] = []
     sample_rate: int | None = None
@@ -231,7 +299,21 @@ async def synthesize_timed_narration(
             sample_rate = chunk_rate
         elif sample_rate != chunk_rate:
             raise ValueError("TTS chunks use inconsistent sample rates")
-        chunks.append((scene, _trim_pcm_activity(samples, chunk_rate), chunk_rate))
+        trimmed = _trim_pcm_activity(samples, chunk_rate)
+        voice_slot = (
+            scene.duration_seconds
+            - NARRATION_START_PADDING_SECONDS
+            - NARRATION_END_PADDING_SECONDS
+        )
+        fitted = await _fit_narration_samples(
+            trimmed,
+            chunk_rate,
+            scene_id=scene.id,
+            voice_slot_seconds=voice_slot,
+            work_path=chunk_path,
+            max_speedup=max_speedup,
+        )
+        chunks.append((scene, fitted, chunk_rate))
 
     if sample_rate is None:
         raise ValueError("storyboard has no narration scenes")
