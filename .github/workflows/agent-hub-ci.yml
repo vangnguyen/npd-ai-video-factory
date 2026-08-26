@@ -3,14 +3,6 @@ name: Agent Hub CI
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, edited]
-    paths:
-      - "services/agent_hub/**"
-      - "deploy/phase5/**"
-      - "scripts/phase5/**"
-      - "scripts/ci/**"
-      - "workflows/n8n/**"
-      - ".github/workflows/agent-hub-ci.yml"
-      - "docker-compose.yml"
   push:
     branches:
       - main
