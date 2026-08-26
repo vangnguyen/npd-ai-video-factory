@@ -146,7 +146,7 @@ assert qc["video_codec"] == "h264", qc
 assert qc["audio_codec"], qc
 assert abs(float(qc["duration_seconds"]) - expected_duration) <= 3.0, qc
 assert int(qc["size_bytes"]) > 100_000, qc
-assert int(qc["visual_sample_count"]) >= 40, qc
+assert int(qc["visual_sample_count"]) >= max(1, int(expected_duration) - 1), qc
 assert float(qc["dark_visual_sample_ratio"]) <= 0.10, qc
 assert float(qc["visual_luma_min"]) >= 8.0, qc
 assert float(qc["audio_peak_db"]) >= -35.0, qc
