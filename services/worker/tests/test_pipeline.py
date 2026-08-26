@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 import httpx
 
+from app.assets import AssetResolutionError
 from app.models import Artifact, JobError, JobRecord, JobStage, JobStatus, VideoJobCreate
 from app.providers import StoryboardResult, StoryboardScene, VoiceResult
 from npd_worker.pipeline import (
@@ -18,14 +19,35 @@ from npd_worker.pipeline import (
     build_subtitles,
     call_renderer,
     ensure_brand_logo,
+    get_tts_provider,
     parse_volume_output,
     safe_job_dir,
+    synthesize_storyboard_voice,
     synthesize_timed_narration,
     validate_narration_audio,
+    validate_wav,
     validate_probe_payload,
     validate_visual_luma_values,
     run_job,
 )
+from npd_worker.preflight import validate_pilot_assets
+
+
+def _config(tmp_path: Path, **overrides) -> WorkerConfig:
+    values = dict(
+        job_root=tmp_path / "jobs",
+        asset_root=tmp_path / "assets",
+        schema_path=tmp_path / "schema.json",
+        renderer_url="http://renderer:3001",
+        brand_name="Ngọc Phương Đông",
+        logo_path=tmp_path / "missing-logo.png",
+        tts_provider="espeak",
+        espeak_voice="vi",
+        espeak_rate=145,
+        renderer_timeout_seconds=600,
+    )
+    values.update(overrides)
+    return WorkerConfig(**values)
 
 
 class MemoryStore:
@@ -228,19 +250,120 @@ def test_validate_probe_payload_rejects_missing_audio() -> None:
         validate_probe_payload(payload, expected_duration=45, require_audio=True)
 
 
-def test_logo_placeholder_is_created_inside_job_dir(tmp_path: Path) -> None:
-    config = WorkerConfig(
-        job_root=tmp_path / "jobs",
-        asset_root=tmp_path / "assets",
-        schema_path=tmp_path / "schema.json",
-        renderer_url="http://renderer:3001",
-        brand_name="Ngọc Phương Đông",
-        logo_path=tmp_path / "missing-logo.png",
-        tts_provider="espeak",
-        espeak_voice="vi",
-        espeak_rate=145,
-        renderer_timeout_seconds=600,
+class _FakeTTSProvider:
+    def __init__(self, duration_seconds: float = 0.5) -> None:
+        self.calls: list[str] = []
+        self.duration_seconds = duration_seconds
+
+    async def synthesize(self, *, text: str, language: str, output_path: Path) -> None:
+        assert language == "vi"
+        self.calls.append(text)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(output_path), "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(8_000)
+            wav.writeframes(b"\xe8\x03" * round(self.duration_seconds * 8_000))
+
+
+@pytest.mark.asyncio
+async def test_storyboard_voice_is_aligned_and_padded_to_timeline(tmp_path: Path) -> None:
+    storyboard = StoryboardResult(
+        scenes=[
+            StoryboardScene(
+                id="scene_01",
+                order=1,
+                start_seconds=0,
+                duration_seconds=2,
+                role="hook",
+                narration="Mở đầu",
+                visual_query="project hook",
+            ),
+            StoryboardScene(
+                id="scene_02",
+                order=2,
+                start_seconds=2,
+                duration_seconds=2,
+                role="cta",
+                narration="Mở đầu",
+                visual_query="project cta",
+            ),
+        ]
     )
+    provider = _FakeTTSProvider()
+    output = tmp_path / "narration.wav"
+
+    duration = await synthesize_storyboard_voice(
+        provider,
+        storyboard=storyboard,
+        language="vi",
+        output_path=output,
+    )
+
+    assert duration == pytest.approx(4.0)
+    assert validate_wav(output, expected_duration=4.0) == pytest.approx(4.0)
+    assert provider.calls == ["Mở đầu"]
+    assert not (tmp_path / "voice-scenes").exists()
+
+
+@pytest.mark.asyncio
+async def test_storyboard_voice_rejects_excessive_speedup(tmp_path: Path) -> None:
+    storyboard = StoryboardResult(
+        scenes=[
+            StoryboardScene(
+                id="scene_01",
+                order=1,
+                start_seconds=0,
+                duration_seconds=2,
+                role="hook",
+                narration="Nội dung quá dài",
+                visual_query="project hook",
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="production limit"):
+        await synthesize_storyboard_voice(
+            _FakeTTSProvider(duration_seconds=3),
+            storyboard=storyboard,
+            language="vi",
+            output_path=tmp_path / "narration.wav",
+        )
+
+    assert not (tmp_path / "voice-scenes").exists()
+
+
+@pytest.mark.asyncio
+async def test_active_timed_narration_rejects_excessive_speedup(tmp_path: Path) -> None:
+    storyboard = StoryboardResult(
+        scenes=[
+            StoryboardScene(
+                id="scene_01",
+                order=1,
+                start_seconds=0,
+                duration_seconds=2,
+                role="hook",
+                narration="Nội dung quá dài",
+                visual_query="project hook",
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="production limit"):
+        await synthesize_timed_narration(
+            _FakeTTSProvider(duration_seconds=3),
+            storyboard=storyboard,
+            language="vi",
+            output_path=tmp_path / "narration.wav",
+            timing_path=tmp_path / "narration-timing.json",
+            duration_seconds=2,
+        )
+
+    assert not (tmp_path / "narration-timing.json").exists()
+
+
+def test_logo_placeholder_is_created_inside_job_dir(tmp_path: Path) -> None:
+    config = _config(tmp_path)
     job_dir = tmp_path / "jobs" / "vid_12345678"
     job_dir.mkdir(parents=True)
     logo = ensure_brand_logo(config, job_dir)
@@ -458,3 +581,51 @@ async def test_renderer_network_failure_is_retried_once(tmp_path: Path, monkeypa
 
     assert result["status"] == "success"
     assert FakeClient.attempts == 2
+
+
+def test_strict_pilot_requires_real_logo(tmp_path: Path) -> None:
+    config = _config(tmp_path, pilot_strict_assets=True)
+    job_dir = tmp_path / "jobs" / "vid_12345678"
+    job_dir.mkdir(parents=True)
+    with pytest.raises(AssetResolutionError, match="required brand logo"):
+        ensure_brand_logo(config, job_dir)
+
+
+def test_openai_provider_selection_requires_key(tmp_path: Path) -> None:
+    config = _config(tmp_path, tts_provider="openai", openai_api_key="")
+    with pytest.raises(Exception, match="OPENAI_API_KEY"):
+        get_tts_provider(config)
+
+
+def test_preflight_accepts_real_logo_and_media(tmp_path: Path) -> None:
+    asset_root = tmp_path / "assets"
+    project = asset_root / "vinhomes-green-paradise"
+    project.mkdir(parents=True)
+    for index in range(5):
+        (project / f"clip-{index}.jpg").write_bytes(b"fixture")
+    logo = asset_root / "brand" / "npd-logo.png"
+    logo.parent.mkdir(parents=True)
+    logo.write_bytes(b"logo")
+
+    config = _config(tmp_path, asset_root=asset_root, logo_path=logo, pilot_strict_assets=True)
+    result = validate_pilot_assets(
+        config,
+        project_folder="vinhomes-green-paradise",
+        minimum_clips=5,
+    )
+    assert result.asset_count == 5
+    assert result.logo_path == str(logo)
+
+
+def test_preflight_rejects_empty_media(tmp_path: Path) -> None:
+    asset_root = tmp_path / "assets"
+    project = asset_root / "project"
+    project.mkdir(parents=True)
+    (project / "clip.jpg").write_bytes(b"")
+    logo = asset_root / "brand" / "npd-logo.png"
+    logo.parent.mkdir(parents=True)
+    logo.write_bytes(b"logo")
+    config = _config(tmp_path, asset_root=asset_root, logo_path=logo)
+
+    with pytest.raises(AssetResolutionError, match="empty media"):
+        validate_pilot_assets(config, project_folder="project", minimum_clips=1)

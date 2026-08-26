@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import sys
 import wave
 from array import array
@@ -22,8 +23,10 @@ from app.models import Artifact, JobError, JobRecord, JobStage, JobStatus, STAGE
 from app.providers import (
     DeterministicContentProvider,
     EspeakVietnameseTTSProvider,
+    OpenAIVietnameseTTSProvider,
     ScriptResult,
     StoryboardResult,
+    TTSProvider,
     TTSNotConfiguredError,
     UnconfiguredVietnameseTTSProvider,
 )
@@ -33,6 +36,14 @@ from app.state import RedisJobStore
 logger = logging.getLogger("npd-video-worker.pipeline")
 T = TypeVar("T", bound=BaseModel)
 JOB_ID_PATTERN = re.compile(r"^vid_[A-Za-z0-9_-]{4,76}$")
+SUPPORTED_LOGO_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass(frozen=True)
@@ -47,6 +58,13 @@ class WorkerConfig:
     espeak_voice: str
     espeak_rate: int
     renderer_timeout_seconds: float
+    openai_api_key: str = ""
+    openai_tts_model: str = "gpt-4o-mini-tts"
+    openai_tts_voice: str = "marin"
+    openai_tts_instructions: str = ""
+    openai_base_url: str = "https://api.openai.com"
+    openai_tts_timeout_seconds: float = 120.0
+    pilot_strict_assets: bool = False
 
     @classmethod
     def from_env(cls) -> "WorkerConfig":
@@ -71,6 +89,18 @@ class WorkerConfig:
             espeak_voice=os.getenv("ESPEAK_VOICE", "vi"),
             espeak_rate=int(os.getenv("ESPEAK_RATE", "145")),
             renderer_timeout_seconds=float(os.getenv("RENDERER_TIMEOUT_SECONDS", "600")),
+            openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
+            openai_tts_model=os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts").strip(),
+            openai_tts_voice=os.getenv("OPENAI_TTS_VOICE", "marin").strip(),
+            openai_tts_instructions=os.getenv(
+                "OPENAI_TTS_INSTRUCTIONS",
+                "Đọc tiếng Việt tự nhiên, rõ ràng, nhịp nhanh gọn và dứt khoát; "
+                "phong cách tư vấn bất động sản chuyên nghiệp, giàu năng lượng "
+                "nhưng không cường điệu; ngắt nghỉ ngắn giữa các ý.",
+            ).strip(),
+            openai_base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com").rstrip("/"),
+            openai_tts_timeout_seconds=float(os.getenv("OPENAI_TTS_TIMEOUT_SECONDS", "120")),
+            pilot_strict_assets=_env_flag("PILOT_STRICT_ASSETS", False),
         )
 
 
@@ -182,6 +212,73 @@ def _trim_pcm_activity(samples: array, sample_rate: int) -> array:
     return samples[start:end]
 
 
+def _write_pcm16_samples(path: Path, samples: array, sample_rate: int) -> None:
+    frames = array("h", samples)
+    if sys.byteorder == "big":
+        frames.byteswap()
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(frames.tobytes())
+
+
+async def _fit_narration_samples(
+    samples: array,
+    sample_rate: int,
+    *,
+    scene_id: str,
+    voice_slot_seconds: float,
+    work_path: Path,
+    max_speedup: float,
+) -> array:
+    clip_duration = len(samples) / float(sample_rate)
+    if clip_duration <= voice_slot_seconds:
+        return samples
+
+    target_duration = max(0.1, voice_slot_seconds - 0.04)
+    speedup = clip_duration / target_duration
+    if speedup > max_speedup:
+        raise ValueError(
+            f"scene {scene_id} narration requires {speedup:.3f}x speed, "
+            f"above the {max_speedup:.3f}x production limit"
+        )
+
+    trim_path = work_path.with_suffix(".trim.wav")
+    fitted_path = work_path.with_suffix(".fit.wav")
+    _write_pcm16_samples(trim_path, samples, sample_rate)
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(trim_path),
+            "-filter:a",
+            f"atempo={speedup:.6f}",
+            str(fitted_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            detail = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(f"ffmpeg voice timing failed: {detail or process.returncode}")
+        fitted, fitted_rate = _pcm16_samples(fitted_path)
+        if fitted_rate != sample_rate:
+            raise ValueError("ffmpeg changed the TTS sample rate")
+        fitted = _trim_pcm_activity(fitted, fitted_rate)
+        if len(fitted) / float(sample_rate) > voice_slot_seconds + 0.001:
+            raise ValueError(f"fitted narration for scene {scene_id} still exceeds its voice slot")
+        logger.info("voice_scene_fitted scene_id=%s speedup=%.3f", scene_id, speedup)
+        return fitted
+    finally:
+        trim_path.unlink(missing_ok=True)
+        fitted_path.unlink(missing_ok=True)
+
+
 async def synthesize_timed_narration(
     provider: Any,
     *,
@@ -190,6 +287,7 @@ async def synthesize_timed_narration(
     output_path: Path,
     timing_path: Path,
     duration_seconds: float,
+    max_speedup: float = 1.4,
 ) -> NarrationTiming:
     chunks: list[tuple[Any, array, int]] = []
     sample_rate: int | None = None
@@ -201,7 +299,21 @@ async def synthesize_timed_narration(
             sample_rate = chunk_rate
         elif sample_rate != chunk_rate:
             raise ValueError("TTS chunks use inconsistent sample rates")
-        chunks.append((scene, _trim_pcm_activity(samples, chunk_rate), chunk_rate))
+        trimmed = _trim_pcm_activity(samples, chunk_rate)
+        voice_slot = (
+            scene.duration_seconds
+            - NARRATION_START_PADDING_SECONDS
+            - NARRATION_END_PADDING_SECONDS
+        )
+        fitted = await _fit_narration_samples(
+            trimmed,
+            chunk_rate,
+            scene_id=scene.id,
+            voice_slot_seconds=voice_slot,
+            work_path=chunk_path,
+            max_speedup=max_speedup,
+        )
+        chunks.append((scene, fitted, chunk_rate))
 
     if sample_rate is None:
         raise ValueError("storyboard has no narration scenes")
@@ -295,19 +407,164 @@ def write_srt(path: Path, subtitles: list[dict[str, Any]]) -> None:
     path.write_text("\n\n".join(blocks) + ("\n" if blocks else ""), encoding="utf-8")
 
 
-def validate_wav(path: Path) -> float:
+def _read_wav_pcm(path: Path) -> tuple[tuple[int, int, int], bytes]:
     if not path.is_file() or path.stat().st_size <= 44:
         raise ValueError("audio artifact is missing or empty")
     with wave.open(str(path), "rb") as wav:
-        duration = wav.getnframes() / float(wav.getframerate())
+        channels = wav.getnchannels()
+        sample_width = wav.getsampwidth()
+        frame_rate = wav.getframerate()
+        if wav.getcomptype() != "NONE":
+            raise ValueError("compressed WAV audio is not supported")
+        chunks: list[bytes] = []
+        while chunk := wav.readframes(65_536):
+            chunks.append(chunk)
+        frames = b"".join(chunks)
+    frame_width = channels * sample_width
+    if channels <= 0 or sample_width <= 0 or frame_rate <= 0 or len(frames) % frame_width:
+        raise ValueError("audio artifact has invalid WAV framing")
+    return (channels, sample_width, frame_rate), frames
+
+
+def validate_wav(path: Path, *, expected_duration: float | None = None) -> float:
+    (channels, sample_width, frame_rate), frames = _read_wav_pcm(path)
+    duration = (len(frames) // (channels * sample_width)) / float(frame_rate)
     if duration <= 0:
         raise ValueError("audio duration is zero")
+    if expected_duration is not None and abs(duration - expected_duration) > 0.1:
+        raise ValueError(
+            f"audio duration {duration:.3f}s does not match timeline {expected_duration:.3f}s"
+        )
     return duration
 
 
+async def synthesize_storyboard_voice(
+    tts_provider: TTSProvider,
+    *,
+    storyboard: StoryboardResult,
+    language: str,
+    output_path: Path,
+    lead_in_seconds: float = 0.15,
+    max_speedup: float = 1.4,
+) -> float:
+    """Synthesize each unique scene and place it on the storyboard timeline."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    parts_dir = output_path.parent / "voice-scenes"
+    parts_dir.mkdir(parents=True, exist_ok=True)
+    cached: dict[tuple[str, int], tuple[tuple[int, int, int], bytes]] = {}
+    scene_audio: list[tuple[Any, tuple[int, int, int], bytes]] = []
+    try:
+        for scene in storyboard.scenes:
+            text = scene.narration.strip()
+            if not text:
+                continue
+            voice_slot_ms = round((scene.duration_seconds - lead_in_seconds) * 1_000)
+            cache_key = (text, voice_slot_ms)
+            audio = cached.get(cache_key)
+            if audio is None:
+                part_path = parts_dir / f"{scene.id}.wav"
+                await tts_provider.synthesize(
+                    text=text,
+                    language=language,
+                    output_path=part_path,
+                )
+                audio = _read_wav_pcm(part_path)
+                (channels, sample_width, frame_rate), frames = audio
+                frame_width = channels * sample_width
+                clip_duration = (len(frames) // frame_width) / float(frame_rate)
+                voice_slot = scene.duration_seconds - lead_in_seconds
+                if clip_duration > voice_slot:
+                    target_duration = max(0.1, voice_slot - 0.04)
+                    speedup = clip_duration / target_duration
+                    if speedup > max_speedup:
+                        raise ValueError(
+                            f"scene {scene.id} narration requires {speedup:.3f}x speed, "
+                            f"above the {max_speedup:.3f}x production limit"
+                        )
+                    fitted_path = parts_dir / f"{scene.id}.fit.wav"
+                    process = await asyncio.create_subprocess_exec(
+                        "ffmpeg",
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-y",
+                        "-i",
+                        str(part_path),
+                        "-filter:a",
+                        f"atempo={speedup:.6f}",
+                        str(fitted_path),
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    _stdout, stderr = await process.communicate()
+                    if process.returncode != 0:
+                        detail = stderr.decode("utf-8", errors="replace").strip()
+                        raise RuntimeError(
+                            f"ffmpeg voice timing failed: {detail or process.returncode}"
+                        )
+                    audio = _read_wav_pcm(fitted_path)
+                    logger.info(
+                        "voice_scene_fitted scene_id=%s speedup=%.3f",
+                        scene.id,
+                        speedup,
+                    )
+                cached[cache_key] = audio
+            scene_audio.append((scene, *audio))
+
+        if not scene_audio:
+            raise ValueError("storyboard has no narration to synthesize")
+
+        channels, sample_width, frame_rate = scene_audio[0][1]
+        for _scene, audio_format, _frames in scene_audio[1:]:
+            if audio_format != (channels, sample_width, frame_rate):
+                raise ValueError("TTS provider returned inconsistent WAV formats")
+
+        total_seconds = max(
+            scene.start_seconds + scene.duration_seconds for scene in storyboard.scenes
+        )
+        total_frames = round(total_seconds * frame_rate)
+        silence_sample = b"\x80" if sample_width == 1 else b"\x00" * sample_width
+        silence_frame = silence_sample * channels
+        timeline = bytearray(silence_frame * total_frames)
+
+        for scene, _audio_format, frames in scene_audio:
+            frame_width = channels * sample_width
+            clip_frames = len(frames) // frame_width
+            slot_start = round((scene.start_seconds + lead_in_seconds) * frame_rate)
+            slot_end = round((scene.start_seconds + scene.duration_seconds) * frame_rate)
+            if clip_frames > slot_end - slot_start:
+                clip_duration = clip_frames / float(frame_rate)
+                raise ValueError(
+                    f"scene {scene.id} narration is {clip_duration:.3f}s, longer than its "
+                    f"{scene.duration_seconds - lead_in_seconds:.3f}s voice slot"
+                )
+            byte_start = slot_start * frame_width
+            timeline[byte_start : byte_start + len(frames)] = frames
+
+        temp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        with wave.open(str(temp_path), "wb") as wav:
+            wav.setnchannels(channels)
+            wav.setsampwidth(sample_width)
+            wav.setframerate(frame_rate)
+            wav.writeframes(timeline)
+        temp_path.replace(output_path)
+        return validate_wav(output_path, expected_duration=total_seconds)
+    finally:
+        shutil.rmtree(parts_dir, ignore_errors=True)
+
+
 def ensure_brand_logo(config: WorkerConfig, job_dir: Path) -> Path:
-    if config.logo_path.is_file():
-        return config.logo_path
+    if config.logo_path.is_file() and config.logo_path.stat().st_size > 0:
+        if config.logo_path.suffix.lower() in SUPPORTED_LOGO_SUFFIXES:
+            return config.logo_path
+        if config.pilot_strict_assets:
+            raise AssetResolutionError(
+                f"brand logo has unsupported format: {config.logo_path.suffix or '<none>'}"
+            )
+    elif config.pilot_strict_assets:
+        raise AssetResolutionError(f"required brand logo is missing: {config.logo_path}")
+
     placeholder = job_dir / "npd-logo-placeholder.svg"
     label = html.escape(config.brand_name)
     placeholder.write_text(
@@ -484,6 +741,15 @@ def get_tts_provider(config: WorkerConfig):
         return EspeakVietnameseTTSProvider(
             voice=config.espeak_voice,
             rate=config.espeak_rate,
+        )
+    if config.tts_provider == "openai":
+        return OpenAIVietnameseTTSProvider(
+            api_key=config.openai_api_key,
+            model=config.openai_tts_model,
+            voice=config.openai_tts_voice,
+            instructions=config.openai_tts_instructions,
+            base_url=config.openai_base_url,
+            timeout_seconds=config.openai_tts_timeout_seconds,
         )
     if config.tts_provider in {"none", "unconfigured"}:
         return UnconfiguredVietnameseTTSProvider()
@@ -717,7 +983,14 @@ async def run_job(
             except Exception:
                 manifest = None
         if manifest is None:
-            logo_path = ensure_brand_logo(config, job_dir)
+            try:
+                logo_path = ensure_brand_logo(config, job_dir)
+            except AssetResolutionError as exc:
+                raise PipelineFailure(
+                    code="ASSET_NOT_FOUND",
+                    message=str(exc),
+                    stage=current_stage,
+                ) from exc
             try:
                 manifest = build_manifest(
                     request=request,

@@ -26,6 +26,7 @@ export class RemotionRenderEngine implements RenderEngine {
       serveUrl,
       codec: "h264",
       audioCodec: "aac",
+      crf: 23,
       outputLocation: outputPath,
       inputProps,
       onProgress: ({progress}) => onProgress(progress),

@@ -13,6 +13,7 @@ import {
 import type {RendererInputProps, VideoManifest} from "./types";
 
 const dbToAmplitude = (db = 0): number => Math.pow(10, db / 20);
+const fontFamily = '"Noto Sans", "Liberation Sans", sans-serif';
 
 export const SUBTITLE_SAFE_AREA = {
   left: 74,
@@ -34,7 +35,21 @@ export const secondsToFrameRange = (startSeconds: number, endSeconds: number, fp
 const SceneLayer: React.FC<{scene: VideoManifest["scenes"][number]}> = ({scene}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
+  const durationInFrames = Math.max(1, Math.round(scene.duration_seconds * fps));
   const fade = interpolate(frame, [0, Math.max(1, Math.round(0.2 * fps))], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const variant = scene.id.charCodeAt(scene.id.length - 1) % 2 === 0 ? 1 : -1;
+  const zoom = interpolate(frame, [0, durationInFrames], [1.025, 1.1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const panX = interpolate(frame, [0, durationInFrames], [-18 * variant, 18 * variant], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const headlineY = interpolate(frame, [0, Math.max(1, Math.round(0.28 * fps))], [34, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -42,6 +57,8 @@ const SceneLayer: React.FC<{scene: VideoManifest["scenes"][number]}> = ({scene})
     width: "100%",
     height: "100%",
     objectFit: scene.visual.fit ?? "cover",
+    transform: scene.visual.type === "image" ? `translateX(${panX}px) scale(${zoom})` : undefined,
+    willChange: scene.visual.type === "image" ? "transform" : undefined,
   };
 
   return (
@@ -75,11 +92,13 @@ const SceneLayer: React.FC<{scene: VideoManifest["scenes"][number]}> = ({scene})
             right: 72,
             top: scene.role === "hook" ? 220 : 150,
             color: "white",
-            fontFamily: "Noto Sans, Arial, sans-serif",
+            fontFamily,
             fontSize: scene.role === "hook" ? 82 : 60,
             fontWeight: 800,
             lineHeight: 1.05,
             textShadow: "0 4px 18px rgba(0,0,0,0.55)",
+            transform: `translateY(${headlineY}px)`,
+            opacity: fade,
           }}
         >
           {scene.overlay.headline}
@@ -95,7 +114,7 @@ const SceneLayer: React.FC<{scene: VideoManifest["scenes"][number]}> = ({scene})
             borderRadius: 14,
             backgroundColor: "rgba(0,0,0,0.62)",
             color: "white",
-            fontFamily: "Noto Sans, Arial, sans-serif",
+            fontFamily,
             fontSize: 32,
             fontWeight: 700,
           }}
@@ -135,7 +154,7 @@ const SubtitleCue: React.FC<{text: string}> = ({text}) => (
         bottom: SUBTITLE_SAFE_AREA.bottom,
         textAlign: "center",
         color: "white",
-        fontFamily: "Noto Sans, Arial, sans-serif",
+        fontFamily,
         fontSize: 48,
         fontWeight: 750,
         lineHeight: 1.2,
@@ -239,7 +258,7 @@ export const RealEstateShort: React.FC<RendererInputProps> = ({manifest}) => {
             color: "white",
             padding: "28px 34px",
             textAlign: "center",
-            fontFamily: "Noto Sans, Arial, sans-serif",
+            fontFamily,
             fontSize: 42,
             fontWeight: 800,
           }}
