@@ -78,7 +78,18 @@ STAGE_ORDER: dict[JobStage, int] = {
 
 
 class Artifact(StrictModel):
-    kind: Literal["script", "storyboard", "audio", "subtitle", "manifest", "video", "metadata"]
+    kind: Literal[
+        "request",
+        "script",
+        "storyboard",
+        "audio",
+        "subtitle",
+        "assets",
+        "manifest",
+        "video",
+        "qc",
+        "metadata",
+    ]
     name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     url: str
 

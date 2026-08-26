@@ -21,9 +21,13 @@ RUN apt-get update \
       libxrandr2 \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
-COPY package.json tsconfig.json ./
-RUN npm install
+COPY package.json package-lock.json tsconfig.json ./
+RUN npm ci
 COPY src ./src
 RUN npm run typecheck && npm run bundle:check && npx remotion browser ensure
 

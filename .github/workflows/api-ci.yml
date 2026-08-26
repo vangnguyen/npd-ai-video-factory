@@ -51,7 +51,9 @@ jobs:
         with:
           node-version: '22'
       - name: Install renderer dependencies
-        run: npm install
+        run: npm ci
+      - name: Run renderer tests
+        run: npm test
       - name: Typecheck renderer
         run: npm run typecheck
       - name: Bundle Remotion composition

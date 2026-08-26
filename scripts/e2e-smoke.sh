@@ -3,8 +3,13 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
-
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+  echo "Python interpreter not found: $PYTHON_BIN" >&2
+  exit 1
+fi
+
 if [[ -n "${DOCKER_BIN:-}" ]]; then
   docker_bin="$DOCKER_BIN"
 elif grep -qi microsoft /proc/version 2>/dev/null && command -v docker.exe >/dev/null 2>&1; then
@@ -133,6 +138,7 @@ from pathlib import Path
 qc = json.loads(Path("e2e-artifacts/qc.json").read_text(encoding="utf-8"))
 assert qc["width"] == 1080, qc
 assert qc["height"] == 1920, qc
+assert abs(float(qc["fps"]) - 30.0) <= 0.01, qc
 assert qc["video_codec"] == "h264", qc
 assert qc["audio_codec"], qc
 assert abs(float(qc["duration_seconds"]) - 45.0) <= 3.0, qc
