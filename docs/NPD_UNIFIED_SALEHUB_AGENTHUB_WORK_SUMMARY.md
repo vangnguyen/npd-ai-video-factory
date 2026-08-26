@@ -64,7 +64,13 @@ owner gate or an intentional limitation.
 The detailed phase contracts remain in [Campaign Operating System](./PHASE_6B_CAMPAIGN_OPERATING_SYSTEM.md),
 [Attribution & Revenue OS](./PHASE_7_ATTRIBUTION_REVENUE_OS.md),
 [Experiment & Optimization OS](./PHASE_8_EXPERIMENT_OPTIMIZATION_OS.md) and the
-[Phase 8.9 routing document](./PHASE_8_9_ALERT_ROUTING_PREVIEW.md).
+[Phase 8.9 routing document](./PHASE_8_9_ALERT_ROUTING_PREVIEW.md). The corrected
+[architecture roadmap](./ARCHITECTURE_ROADMAP.md),
+[Phase 9 proposal](./NEXT_PHASE_CUSTOMER_JOURNEY_SALES_INTELLIGENCE.md),
+[branch-protection contract](./GITHUB_BRANCH_PROTECTION.md),
+[incremental refactor plan](./AGENT_HUB_INCREMENTAL_REFACTOR_PLAN.md) and
+[legacy Video Factory audit](./VIDEO_FACTORY_LEGACY_PR_AUDIT.md) were clean-ported from
+the useful documentation in PR #22 without carrying its obsolete workflow changes.
 
 ## GitHub and release evidence
 
@@ -80,6 +86,7 @@ The detailed phase contracts remain in [Campaign Operating System](./PHASE_6B_CA
 | [#23](https://github.com/vangnguyen/npd-ai-video-factory/pull/23) | First provider-health router extraction | Merged as an API-preserving refactor |
 | [#25](https://github.com/vangnguyen/npd-ai-video-factory/pull/25) | Full CI triggers after PR retarget/ready events | Merged before the final Phase 8.9 gate |
 | [#20](https://github.com/vangnguyen/npd-ai-video-factory/pull/20) | Phase 8.9 routing preview | Merged as `400899b` and deployed as Agent Hub 0.13.0 |
+| [#22](https://github.com/vangnguyen/npd-ai-video-factory/pull/22) | Historical stabilization/governance bundle | Superseded; useful docs clean-ported through #26, obsolete workflow diff not merged |
 | [#27](https://github.com/vangnguyen/npd-ai-video-factory/pull/27) | Run protected-branch CI gates for every PR | Merged as `084ce84`; governance-only, no runtime change |
 | [#26](https://github.com/vangnguyen/npd-ai-video-factory/pull/26) | Unified SaleHub–AgentHub summary and handoff | This documentation milestone; no runtime change |
 
@@ -214,24 +221,21 @@ or customer-system writes and was not expanded by this stabilization.
 
 ## Technical debt and remaining work
 
-Remaining work count at this handoff: **7 tracked items**.
+Remaining work count at this handoff: **6 tracked items**.
 
-1. PR [#22](https://github.com/vangnguyen/npd-ai-video-factory/pull/22) remains a
-   draft historical governance/roadmap bundle. Useful material should be reconciled
-   cleanly; its stale status snapshot should not be merged unchanged.
-2. Legacy Video Factory PRs [#6](https://github.com/vangnguyen/npd-ai-video-factory/pull/6)
+1. Legacy Video Factory PRs [#6](https://github.com/vangnguyen/npd-ai-video-factory/pull/6)
    and [#8](https://github.com/vangnguyen/npd-ai-video-factory/pull/8) remain draft and
    divergent. Clean-port #8 media QC before #6 production TTS; human Vietnamese voice
    listening remains a hard acceptance gate.
-3. Continue incremental extraction from `main.py`, `store.py` and dashboard code in
+2. Continue incremental extraction from `main.py`, `store.py` and dashboard code in
    small API-parity PRs. Do not perform a rewrite or change Redis key formats.
-4. Exercise the documented HMAC rotation procedure under an owner-approved maintenance
+3. Exercise the documented HMAC rotation procedure under an owner-approved maintenance
    window. The accepted production deployment was not rotated by this milestone.
-5. Preserve the known currency limitation: do not aggregate USD/VND executive revenue
+4. Preserve the known currency limitation: do not aggregate USD/VND executive revenue
    totals without a defined exchange-rate policy.
-6. Re-check the historical SEO automation warning through execution evidence; an active
+5. Re-check the historical SEO automation warning through execution evidence; an active
    workflow alone is not proof of health.
-7. Complete issue [#28](https://github.com/vangnguyen/npd-ai-video-factory/issues/28):
+6. Complete issue [#28](https://github.com/vangnguyen/npd-ai-video-factory/issues/28):
    whitelist the VPS automation IP for the WordPress pricing-sync route in Imunify360,
    or move that single writer behind an explicitly approved machine-to-machine origin
    contract. Until then, policy sync remains fail-closed and reports
