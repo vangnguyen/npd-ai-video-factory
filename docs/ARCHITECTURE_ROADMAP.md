@@ -35,9 +35,10 @@ external delivery remains disabled.
 - sales SLA and funnel evidence;
 - no automatic customer contact.
 
-Phase 9 begins only after the stabilization handoff is merged, full CI is green and the
-WordPress/Imunify360 pricing-sync blocker in issue #28 is either resolved or explicitly
-accepted as a separately tracked SaleHub dependency. Phase 9A remains read-only.
+Issue #28 is closed after one successful pricing refresh and the owner's explicit
+acceptance of the current WAF exception scope. Phase 9 begins only after the remaining
+stabilization PR review, the next natural SEO execution evidence and the Video Factory
+human-voice gate are dispositioned. Phase 9A remains read-only.
 
 ## Phase 10 — Controlled Channel Execution
 

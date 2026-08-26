@@ -79,13 +79,16 @@ The cross-component join contract uses canonical CRM identifiers:
 - `opportunity_id`;
 - project or project slug/reference;
 - Opportunity stage and won/lost state;
-- authoritative Opportunity amount, currency and converted-value metadata;
+- authoritative Opportunity amount and currency metadata;
 - appointment/site-visit/negotiation evidence;
 - source and campaign references;
 - timestamps, owner and audit correlation identifiers.
 
-Do not copy credentials into these objects. Do not infer a cross-currency executive total
-without an approved exchange-rate contract.
+Do not copy credentials into these objects. The approved default/new-business contract is
+**VND only**: explicit non-VND data must fail closed and must never be silently relabeled
+or converted. Historical USD records remain immutable audit evidence, not inputs to a new
+mixed-currency executive total. The VND-only implementation is isolated in draft PR #33
+and is not yet claimed as AgentHub 0.13.0 production behavior.
 
 ### Customer-journey contract
 
@@ -197,6 +200,15 @@ Host contract:
 - local SSH key `work/n8n-vps/codex_n8n_vps_ed25519` and project-scoped
   `work/n8n-vps/known_hosts_test`; never copy their contents into chat or Git.
 
+Current production receipt-signing state after the owner-gated 2026-08-26 drill:
+
+- active signing generation: `npd-attribution-v2`;
+- historical verify-only generation retained: `npd-attribution-v1`;
+- historical verification file:
+  `/etc/npd-ai/agent-attribution-verification-keys.json`, mounted read-only;
+- old v1 delivery and heartbeat receipts plus a new v2 heartbeat were all verified;
+- no key value is stored in Redis, Git, issue comments or this handoff.
+
 ## Deployment procedure
 
 ### AgentHub guarded deploy
@@ -234,6 +246,12 @@ rendered the matching position image. The timer-backed index reported 104 images
 four projects with zero warnings and readonly Drive authentication. Exact unit-code
 matching remains mandatory; never infer a nearby image for a missing current code.
 
+The VPS-to-WordPress pricing-sync writer also completed one authorized, non-retried run:
+the last-result envelope reported `ok=true`, no 403/500 response, four updated projects
+and a valid public VSP pricing contract. Issue #28 is closed. The owner chose to retain
+the hosting provider's current WAF exception rather than narrow it in this milestone;
+this is an explicit accepted boundary, not evidence that the exception is route-scoped.
+
 ## Backup and rollback
 
 ### Accepted AgentHub 0.13.0 artifacts
@@ -243,6 +261,16 @@ matching remains mandatory; never infer a nearby image for a missing current cod
 - Image: `npd-agent-hub:rollback-20260825T050536Z`.
 - Stable tag: `agent-hub-v0.13.0` ->
   `400899ba82501beeea469f4a33dc169a9a09bb8e`.
+- HMAC drill Redis backup:
+  `/var/backups/npd-agent-hub/hmac-rotation-20260826T100000Z/agent-hub-before-rotation.json`.
+- HMAC drill configuration backup:
+  `/var/backups/npd-agent-hub/hmac-rotation-20260826T100000Z/config/agent-hub.env-20260826T095854Z`.
+- Post-rotation receipt:
+  `/var/lib/npd-ai/agent-hub-deployments/deploy-20260826T095855Z.json`.
+- Post-rotation rollback image: `npd-agent-hub:rollback-20260826T095855Z`.
+- SEO publisher backup:
+  `/var/backups/npd-content-publisher/seo-json-retry-20260826T102459Z`; rollback image
+  `n8n-marketing-content-publisher:rollback-20260826T102459Z`.
 
 Rollback sequence: confirm exact target, preserve the incident evidence, restore the
 previous image/config, run local and public smoke, and leave Redis untouched unless an
@@ -317,28 +345,27 @@ final Caddy `StartedAt`/configuration digest, SaleHub symlink and cross-system s
   HTTP 200 alone must still never be used as future image-correctness evidence.
 - Historical Green City/VSP position-image mappings may be incomplete or tied to an old
   release. Validate project/unit identity before reuse.
-- The WordPress pricing writer is currently rejected by Imunify360 for VPS automation.
-  `/usr/local/sbin/salehub-pricing-sync-post` records the failure as
-  `blocked_by_imunify360` and remains fail-closed; backup/rollback artifacts are under
-  `/opt/salehub/backups/pricing-sync-observability-20260826T071500Z`. Whitelist only the
-  required VPS automation IP for the exact pricing-sync route, then verify an authorized
-  sync and the public read contract, tracked in issue
-  [#28](https://github.com/vangnguyen/npd-ai-video-factory/issues/28). Do not disable
-  Imunify360 globally and do not infer pricing health from the independent image-sync
-  service result.
+- The WordPress pricing writer passed one authorized VPS run and issue #28 is closed.
+  The owner accepted the hosting provider's existing WAF exception scope and explicitly
+  skipped further rule narrowing. Do not describe the rule as route-scoped. Continue to
+  treat unexpected callers or a changed public contract as a security incident; do not
+  disable Imunify360 globally.
 - Historical one-off VSP policy migration, staging and correction scripts are audit
   evidence. **Do not rerun them against current production.** Clean-port required logic
   into a reviewed release instead. Do not delete the old evidence.
 - The old VSP release `releases/20260825-vsp-policy-v07-v01` is a rollback/audit artifact,
   not the current application source of truth after the position-image release.
-- Avoid cross-currency revenue totals until an approved FX/time-basis policy exists.
-- An n8n workflow being active or published is not health proof. Check recent executions,
-  errors, output contracts and downstream effects.
+- New business contracts are VND-only. Reject explicit non-VND input rather than
+  relabeling or performing an implicit conversion; retain historical USD as audit-only.
+- The SEO workflow had repeated structured-output failures. `content-publisher` now has
+  fence-tolerant parsing and one bounded retry and passed a real no-publish dry-run. An
+  n8n workflow being active or published is still not health proof: record the next
+  natural scheduled execution and downstream contract before closing that evidence gate.
 - `new.ngocphuongdong.com` is not assumed to be an independent safe staging boundary.
-- Legacy Video Factory PRs #6/#8 must not be merged with their divergent history. Port
-  media QC first and TTS second; human Vietnamese voice listening remains required.
-- Continue god-file extraction incrementally while preserving API responses, Redis keys
-  and production behavior.
+- Legacy Video Factory PRs #8/#6 were closed without merge after clean replacements #34
+  and #35 were created in that order. Human Vietnamese voice listening remains required.
+- God-file extraction continues in separate draft PRs #30–#32 while preserving API
+  responses, Redis keys and production behavior.
 
 ## Unified roadmap
 
@@ -382,8 +409,14 @@ have been accepted and each target provider has a least-privilege, audited contr
 - [x] Representative SaleHub position-image auto-sync behavior accepted on live VSP data.
 - [x] Unified documentation delivered through PR #26 with required checks enforced.
 - [x] Stable `agent-hub-v0.13.0` tag created on the exact production runtime commit.
-- [ ] Hosting owner whitelists the scoped pricing-sync automation request in Imunify360
-  and verifies one successful policy refresh.
-- [ ] Owner authorizes a later HMAC rotation drill if required.
-- [ ] Start Phase 9 only after this stabilization/handoff review and the pricing-sync
-  disposition are closed.
+- [x] One authorized pricing-sync run succeeded; issue #28 closed under the owner's
+  accepted WAF scope decision.
+- [x] HMAC rotation drill completed with active v2, verify-only v1 and dual-generation
+  receipt verification.
+- [x] Separate refactor PRs #30–#32 and VND-only PR #33 prepared with green checks.
+- [x] Legacy PR #8 then #6 clean-ported to #34/#35 and closed without merge.
+- [x] Issue #7 closed as not planned under the unified NPD roadmap.
+- [ ] Record the next natural SEO workflow execution after the bounded retry fix.
+- [ ] Owner accepts/rejects the Vietnamese production-pilot voice and disposes issue #5.
+- [ ] Start Phase 9 only after the remaining review/evidence gates above are explicitly
+  dispositioned; no channel execution is implied.

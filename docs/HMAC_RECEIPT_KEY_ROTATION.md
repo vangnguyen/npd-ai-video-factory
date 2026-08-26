@@ -89,6 +89,32 @@ If deploy or dual-generation verification fails:
 Redis restore is never automatic. Rotating or rolling back a key does not mutate existing
 receipts.
 
+## Accepted production drill — 2026-08-26
+
+The owner-gated production drill completed without changing the AgentHub application
+version or enabling a side effect:
+
+- old active generation: `npd-attribution-v1`;
+- new active generation: `npd-attribution-v2`;
+- v1 retained in the historical verify-only file;
+- pre-rotation namespace backup:
+  `/var/backups/npd-agent-hub/hmac-rotation-20260826T100000Z/agent-hub-before-rotation.json`;
+- configuration backup:
+  `/var/backups/npd-agent-hub/hmac-rotation-20260826T100000Z/config/agent-hub.env-20260826T095854Z`;
+- deployment receipt:
+  `/var/lib/npd-ai/agent-hub-deployments/deploy-20260826T095855Z.json`;
+- rollback image: `npd-agent-hub:rollback-20260826T095855Z`;
+- retained v1 delivery and heartbeat receipts verified valid;
+- new v2 heartbeat receipt `ahr_e7a10db514c10c02bc7e908b` verified valid;
+- only the AgentHub container was recreated; it returned healthy with restart count `0`;
+- public readiness returned 200, OpenAPI remained `0.13.0`, and the Command Center kept
+  its authentication redirect;
+- external notifications and production writes remained false, and the n8n Agent
+  executor URL remained blank.
+
+No key value is included in this evidence. The drill proves configuration and historical
+verification behavior; it is not permission to retire v1.
+
 ## Historical key retirement
 
 Removing a historical key intentionally makes receipts carrying that `key_id` invalid

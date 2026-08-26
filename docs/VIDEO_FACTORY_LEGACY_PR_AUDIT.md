@@ -2,86 +2,107 @@
 
 ## Decision
 
-Do not merge PR #6 or PR #8 directly, and do not close either one yet. Both are draft,
-conflicting and strongly diverged from `main`, but the blob-level audit found code that is
-not present on current `main`. The safe disposition is a clean port from future stabilized
-`main`, not a merge or a 100-plus-commit history transplant.
+Legacy PR #8 and PR #6 have now been clean-ported in the required order and closed as
+superseded **without merge**. Their divergent histories were not reintroduced.
 
-The 2026-08-26 status recheck confirmed both PRs remain open and draft. Their disposition
-is unchanged; Phase 9 work must not absorb or merge their divergent histories.
+- PR #8 was replaced by draft PR
+  [#34](https://github.com/vangnguyen/npd-ai-video-factory/pull/34), based on current
+  `main` and limited to the useful Sprint 1/media-QC improvements.
+- PR #6 was replaced by stacked draft PR
+  [#35](https://github.com/vangnguyen/npd-ai-video-factory/pull/35), based on #34 and
+  limited to the useful production-pilot/TTS work.
 
-## Evidence summary
+Both replacement PRs remain unmerged and undeployed pending owner review. Closing the
+legacy PRs was repository cleanup, not production authorization.
 
-| PR | Scope files | Identical on main | Changed from main | Missing from main | Disposition |
+## Historical audit result
+
+| Legacy PR | Scope files | Identical on historical main | Changed | Missing | Final disposition |
 |---|---:|---:|---:|---:|---|
-| #6 `codex/production-pilot` | 17 | 0 | 12 | 5 | keep draft; selectively port production-provider work |
-| #8 `agent/complete-sprint-1-vertical-slice` | 36 | 0 | 22 | 14 | keep draft; selectively port QC/renderer hardening |
+| #6 `codex/production-pilot` | 17 | 0 | 12 | 5 | Closed; useful work reimplemented in #35 |
+| #8 `agent/complete-sprint-1-vertical-slice` | 36 | 0 | 22 | 14 | Closed; useful work reimplemented in #34 |
 
-Ten paths overlap between the PRs, including worker pipeline, renderer, E2E smoke and the
-n8n Sprint 1 workflow. PR #8 is the later implementation for those overlapping paths and
-should be the comparison source; PR #6 must not overwrite it.
+Ten paths overlapped between the two old branches. PR #8 was used as the later QC
+baseline; the production-pilot port was then layered on top so PR #6 could not overwrite
+its renderer, narration, n8n or E2E hardening.
 
-## PR #6 disposition
+## PR #8 replacement — PR #34
 
-Still useful and absent from `main`:
-
-- OpenAI Vietnamese TTS adapter and provider tests;
-- guarded one-shot production pilot runner with an explicit enable flag;
-- asset/provider preflight;
-- production TTS smoke helper;
-- production-pilot runbook;
-- request-driven duration check.
-
-Superseded or unsafe to port wholesale:
-
-- overlapping worker, renderer, n8n and E2E files predate PR #8 hardening;
-- its branch omits all newer Agent Hub/Phase 5–8 architecture;
-- its current merge result would delete newer production code.
-
-Recommended action after stabilization: create a new video-provider branch from current
-`main`, reimplement the OpenAI TTS adapter and guarded provider preflight with current
-interfaces, run secret-free unit tests, then require owner approval and human listening.
-
-## PR #8 disposition
-
-Still useful and absent or materially stronger than `main`:
+The clean port retains:
 
 - per-scene PCM narration assembly and measured subtitle cues;
-- exact narration master duration and audible-sample validation;
-- decoded luminance and audio-peak QC that prevents black/silent false passes;
-- visible E2E fixtures;
-- renderer request/contract/engine tests and package lock;
-- API/n8n contract regression tests;
+- exact narration duration and audible-sample validation;
+- decoded luminance and audio-peak checks that reject black/silent false passes;
+- visible deterministic E2E fixtures;
+- renderer contract/engine tests and API/n8n regression coverage;
 - cross-platform E2E interpreter handling.
 
-Current `main` already has a working FastAPI/Redis/worker/Remotion vertical slice and
-offline Vietnamese eSpeak, so porting must be a focused parity patch rather than replacing
-the full pipeline. The recommended clean-port order is tests/fixtures, narration timing,
-decoded-media QC, then renderer contract decomposition.
+Evidence on the clean branch:
+
+- API: `12 passed`;
+- worker: `17 passed`;
+- renderer: `8 passed`, typecheck and bundle PASS;
+- local Docker Compose E2E media contract PASS;
+- all seven GitHub checks, including Docker Compose E2E, green.
+
+No real production media or credential was added to Git.
+
+## PR #6 replacement — PR #35
+
+The clean port retains:
+
+- OpenAI Vietnamese TTS adapter with deterministic/offline CI fallback;
+- guarded, explicitly enabled one-shot production-pilot runner;
+- asset and provider preflight;
+- request-driven duration checks;
+- bounded production-TTS speed fit connected to the active narration path;
+- production-pilot operator documentation.
+
+Evidence on the clean branch:
+
+- API: `18 passed`;
+- worker: `24 passed`;
+- renderer: `8 passed`, typecheck and bundle PASS;
+- Docker Compose E2E job `vid_1787741618152_a19ae99d0d` reached
+  `awaiting_review` with 30.059 seconds, 1080x1920, 30 fps, H.264/AAC, 30 visual
+  samples, dark-frame ratio `0` and audio peak `-3 dB`;
+- all GitHub checks applicable to the stacked branch are green. Full protected-branch
+  gates must run again after #35 is retargeted to updated `main`.
+
+No publishing or production deployment was performed.
 
 ## Human voice acceptance requirement
 
-Technical CI evidence from PR #8 passed container rendering, visual sampling and audio
-integrity after its blocker fixes. That does not establish acceptable Vietnamese voice
-quality. Offline eSpeak is deterministic test infrastructure, not an approved production
-voice. A human must listen to the final artifact and explicitly accept pronunciation,
-fluency, pacing, subtitle alignment and tail silence before any production TTS merge or
-publishing work.
+Technical checks establish decodability, audible audio, timing, subtitle alignment and
+absence of black/silent output. They do **not** establish acceptable Vietnamese voice
+quality. Issue [#5](https://github.com/vangnguyen/npd-ai-video-factory/issues/5) therefore
+remains open for the owner to listen and explicitly accept pronunciation, fluency,
+pacing and tail silence.
+
+Review artefacts are kept outside Git:
+
+- `outputs/video-production-pilot-v2/production-pilot-v2-owner-review.mp4`;
+- `outputs/video-production-pilot-v2/production-pilot-v2-narration-owner-review.wav`.
+
+The MP4 SHA-256 recorded at handoff is
+`8880671615269C0246767735EE3083DA9860928A01BE2DE5BE81D7EC4C3AFAD9`.
 
 ## Current production TTS status
 
-Current `main` defaults to `TTS_PROVIDER=espeak` and contains eSpeak plus an explicit
-unconfigured provider. It does not contain PR #6's OpenAI production TTS adapter. No
-production TTS credential or automatic publishing capability is enabled by this audit.
+Current `main` and the live production baseline are unchanged by this audit. The clean
+production TTS adapter exists only in draft PR #35. Offline eSpeak remains deterministic
+test infrastructure, not an approved production voice. No publishing capability was
+enabled.
 
-## Video Factory work still missing
+## Remaining Video Factory work
 
-- clean-port of PR #8 media-QC and measured-cue improvements;
-- clean-port and security review of the production TTS adapter;
-- human Vietnamese voice acceptance;
-- production asset rights/provenance acceptance;
-- current-main Docker Compose E2E after each port;
-- owner-gated publication design; automatic publish remains disabled.
+1. Owner reviews and merges #34 before #35, with protected-branch CI on each final head.
+2. Owner performs the human Vietnamese voice acceptance and closes issue #5 only after
+   an explicit decision.
+3. Production asset rights/provenance remains an owner gate for any real campaign.
+4. Any later publication design remains separately owner-gated; automatic publish is
+   still disabled.
 
-Close #6/#8 only after every retained item has a traceable clean replacement PR or the
-owner explicitly decides it is no longer needed.
+Issue [#7](https://github.com/vangnguyen/npd-ai-video-factory/issues/7) was closed as
+`not planned`: a generic multi-niche AI Content Network Factory conflicts with the
+accepted Ngọc Phương Đông real-estate roadmap and is not being carried into Phase 9.

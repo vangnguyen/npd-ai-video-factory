@@ -3,10 +3,11 @@
 ## Status
 
 Architecture proposal only. It does not implement scoring, recommendations, CRM writes or
-customer contact. Phase 8.8 and Agent Hub 0.13.0 acceptance are complete. Phase 9A may
-start only after the unified stabilization handoff is on `main` and the SaleHub pricing
-sync blocker in issue #28 is resolved or explicitly accepted as a separately tracked
-dependency.
+customer contact. Phase 8.8 and Agent Hub 0.13.0 acceptance are complete. Issue #28 is
+closed after one successful pricing refresh under the owner's accepted WAF scope. Phase
+9A may start only after the unified stabilization closeout PRs are reviewed, the next
+natural SEO execution evidence is recorded and the remaining Video Factory human-voice
+gate is explicitly dispositioned.
 
 ## Customer Journey Engine
 
