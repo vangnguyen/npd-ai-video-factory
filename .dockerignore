@@ -7,4 +7,3 @@
 e2e-artifacts
 storage/jobs/*
 !storage/jobs/.gitkeep
-

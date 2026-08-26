@@ -19,7 +19,10 @@ const fixture = async () => {
   const assetPath = join(root, "fixture.png");
   const manifestPath = join(root, "video-manifest.json");
   await writeFile(assetPath, Buffer.from("png fixture"));
-  await writeFile(manifestPath, JSON.stringify(makeManifest(assetPath)));
+  const manifest = makeManifest(assetPath);
+  manifest.brand.logo_uri = assetPath;
+  manifest.voice = {audio_uri: assetPath, gain_db: 0};
+  await writeFile(manifestPath, JSON.stringify(manifest));
   return {assetPath, manifestPath, root};
 };
 
@@ -53,6 +56,12 @@ describe("renderer HTTP service", () => {
     });
     expect(progresses).toEqual([70, 83, 95]);
     expect(engine.render).toHaveBeenCalledOnce();
+    const renderInput = vi.mocked(engine.render).mock.calls[0][0];
+    expect(renderInput.manifest.scenes[0].visual.uri).toMatch(
+      /^http:\/\/127\.0\.0\.1:3001\/media\/fixture\.png$/,
+    );
+    expect(renderInput.manifest.brand.logo_uri).toMatch(/^http:\/\/127\.0\.0\.1:3001\/media\//);
+    expect(renderInput.manifest.voice?.audio_uri).toMatch(/^http:\/\/127\.0\.0\.1:3001\/media\//);
   });
 
   it("returns a stable error for a missing local scene asset", async () => {
@@ -92,4 +101,3 @@ describe("renderer HTTP service", () => {
     expect(JSON.stringify(response.body)).not.toContain("secret internal path");
   });
 });
-

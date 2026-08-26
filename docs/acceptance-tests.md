@@ -31,13 +31,16 @@ These API/contract tests are executed by `.github/workflows/api-ci.yml`.
 - [x] Output video stream is 45.000 seconds; MP4 container is 45.056 seconds.
 - [x] Subtitles remain inside mobile-safe margins with three-line clamping and Vietnamese Noto Sans glyph coverage.
 - [x] Logo and CTA appear during the expected timeline ranges.
+- [x] Subtitle frame ranges derive from measured per-scene narration cues instead of whole-scene placeholders.
+- [x] Central-frame luminance QC rejects black-background regressions and proves visible scene media.
+- [x] Rendered audio is decoded and checked for a non-silent peak in addition to stream metadata.
 
 ## End-to-end test
 
-1. [x] Place five copyright-safe local image fixtures under the configured project asset folder.
+1. [x] Place five copyright-safe, visibly distinct local image fixtures under the configured project asset folder.
 2. [x] Start the Compose stack.
 3. [x] Import the inactive n8n smoke workflow with the n8n CLI and validate bounded terminal branches.
 4. [x] Submit the committed Vinhomes Green Paradise request.
 5. [x] Observe bounded polling until `awaiting_review`.
-6. [x] Verify the final MP4 exists, is playable, and passes FFprobe metadata assertions.
+6. [x] Verify the final MP4 exists, is playable, passes FFprobe metadata assertions, and passes visual/audio content QC.
 7. [x] Record the job ID, manifest validation result, video metadata, and test results in the acceptance evidence.

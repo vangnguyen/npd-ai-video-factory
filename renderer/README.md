@@ -41,7 +41,7 @@ The service:
 5. selects `real-estate-short-v1` with manifest input props;
 6. renders H.264 + AAC to the requested output path.
 
-The template supports timeline scenes, local video/image media, narration/music, mobile-safe subtitles, Vietnamese Noto Sans glyph coverage, brand logo, headline/body/emphasis overlays, and a final CTA card. Renderer progress events map 0-100% render completion into overall job progress 70-95.
+The template supports timeline scenes, local video/image media, narration/music, mobile-safe subtitles, Vietnamese Noto Sans glyph coverage, brand logo, headline/body/emphasis overlays, and a final CTA card. Subtitle seconds are converted into explicit global frame ranges at the composition FPS. Renderer progress events map 0-100% render completion into overall job progress 70-95.
 
 ## Development checks
 

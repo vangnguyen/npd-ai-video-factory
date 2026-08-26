@@ -45,20 +45,9 @@ trap cleanup EXIT
 mkdir -p e2e-artifacts storage/assets/vinhomes-green-paradise storage/jobs
 cp .env.example .env
 
-"$PYTHON_BIN" - <<'PY'
-import base64
-from pathlib import Path
-
-# Valid 1x1 PNG. Multiple named fixtures exercise deterministic local asset resolution
-# while keeping the CI render lightweight and copyright-safe.
-png = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-)
-folder = Path("storage/assets/vinhomes-green-paradise")
-folder.mkdir(parents=True, exist_ok=True)
-for index in range(1, 6):
-    (folder / f"fixture-{index:02d}.png").write_bytes(png)
-PY
+# Copyright-safe, visibly distinct PNG fixtures. A previous 1x1 fixture encoded
+# an opaque black pixel, which let a black video pass metadata-only QC.
+"$PYTHON_BIN" scripts/generate-e2e-fixtures.py
 
 echo "[e2e] building and starting stack"
 "$docker_bin" compose up -d --build
@@ -120,7 +109,7 @@ if [[ "$terminal" != "1" ]]; then
 fi
 
 job_dir="storage/jobs/$job_id"
-for required in script.json storyboard.json narration.wav subtitles.srt video-manifest.json final.mp4 qc.json; do
+for required in script.json storyboard.json narration.wav narration-timing.json subtitles.srt video-manifest.json final.mp4 qc.json; do
   if [[ ! -f "$job_dir/$required" ]]; then
     echo "Missing required artifact: $required" >&2
     exit 1
@@ -130,6 +119,15 @@ done
 cp "$job_dir/final.mp4" e2e-artifacts/final.mp4
 cp "$job_dir/qc.json" e2e-artifacts/qc.json
 cp "$job_dir/video-manifest.json" e2e-artifacts/video-manifest.json
+cp "$job_dir/narration.wav" e2e-artifacts/narration.wav
+cp "$job_dir/narration-timing.json" e2e-artifacts/narration-timing.json
+cp "$job_dir/subtitles.srt" e2e-artifacts/subtitles.srt
+
+docker compose exec -T worker ffmpeg -hide_banner -loglevel error -y \
+  -i "/workspace/storage/jobs/$job_id/final.mp4" \
+  -vf "fps=1/5,scale=360:640,tile=3x3:padding=8:margin=8:color=white" \
+  -frames:v 1 "/workspace/storage/jobs/$job_id/contact-sheet.jpg"
+cp "$job_dir/contact-sheet.jpg" e2e-artifacts/contact-sheet.jpg
 
 "$PYTHON_BIN" - <<'PY'
 import json
@@ -143,6 +141,26 @@ assert qc["video_codec"] == "h264", qc
 assert qc["audio_codec"], qc
 assert abs(float(qc["duration_seconds"]) - 45.0) <= 3.0, qc
 assert int(qc["size_bytes"]) > 100_000, qc
+assert int(qc["visual_sample_count"]) >= 40, qc
+assert float(qc["dark_visual_sample_ratio"]) <= 0.10, qc
+assert float(qc["visual_luma_min"]) >= 8.0, qc
+assert float(qc["audio_peak_db"]) >= -35.0, qc
+
+timing = json.loads(Path("e2e-artifacts/narration-timing.json").read_text(encoding="utf-8"))
+manifest = json.loads(Path("e2e-artifacts/video-manifest.json").read_text(encoding="utf-8"))
+assert len(timing["cues"]) == len(manifest["scenes"]), timing
+assert manifest["subtitles"] == [
+    {
+        "start_seconds": cue["start_seconds"],
+        "end_seconds": cue["end_seconds"],
+        "text": cue["text"][:160],
+    }
+    for cue in timing["cues"]
+], (timing, manifest["subtitles"])
+for cue, scene in zip(timing["cues"], manifest["scenes"], strict=True):
+    assert cue["scene_id"] == scene["id"]
+    assert scene["start_seconds"] <= cue["start_seconds"] < cue["end_seconds"]
+    assert cue["end_seconds"] <= scene["start_seconds"] + scene["duration_seconds"]
 print("[e2e] QC verified", json.dumps(qc, ensure_ascii=False))
 PY
 

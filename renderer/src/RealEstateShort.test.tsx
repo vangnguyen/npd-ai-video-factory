@@ -17,7 +17,12 @@ vi.mock("remotion", async () => {
   };
 });
 
-import {RealEstateShort, SUBTITLE_SAFE_AREA, activeSubtitleAt} from "./RealEstateShort";
+import {
+  RealEstateShort,
+  SUBTITLE_SAFE_AREA,
+  activeSubtitleAt,
+  secondsToFrameRange,
+} from "./RealEstateShort";
 import {makeManifest} from "./test-fixtures";
 
 describe("real-estate-short-v1 composition", () => {
@@ -38,5 +43,7 @@ describe("real-estate-short-v1 composition", () => {
     const manifest = makeManifest("data:image/png;base64,AA==");
     expect(activeSubtitleAt(manifest, 0.5)?.text).toBe("Phu de thu nghiem");
     expect(activeSubtitleAt(manifest, 1)).toBeUndefined();
+    expect(secondsToFrameRange(7.533, 10.067, 30)).toEqual({from: 226, durationInFrames: 76});
+    expect(secondsToFrameRange(0.15, 0.151, 30)).toEqual({from: 5, durationInFrames: 1});
   });
 });
