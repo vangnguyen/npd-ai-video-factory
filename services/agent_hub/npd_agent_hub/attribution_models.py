@@ -9,6 +9,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .campaign_models import CAMPAIGN_ID_PATTERN, assert_no_secrets
+from .currency import DEFAULT_CURRENCY, VndCurrency
 
 
 PII_KEY_PATTERN = re.compile(
@@ -351,7 +352,7 @@ class OpportunityObservation(BaseModel):
     stage: str = Field(min_length=1, max_length=120)
     status: OpportunityStatus
     amount: float = Field(ge=0)
-    currency: str = Field(default="VND", pattern=r"^[A-Z]{3}$")
+    currency: VndCurrency = DEFAULT_CURRENCY
     observed_at: datetime
     closed_at: datetime | None = None
     source_system: str = "EspoCRM"
@@ -439,7 +440,7 @@ class CampaignAttributionRow(BaseModel):
     opportunity_credit: float
     attributed_pipeline: float
     attributed_revenue: float
-    currency: str
+    currency: VndCurrency = DEFAULT_CURRENCY
 
 
 class AttributionReport(BaseModel):
@@ -451,7 +452,7 @@ class AttributionReport(BaseModel):
     attributed_opportunities: float | None = None
     attributed_pipeline: float | None = None
     attributed_revenue: float | None = None
-    currency: str | None = None
+    currency: VndCurrency | None = None
     campaigns: list[CampaignAttributionRow] = Field(default_factory=list)
     caveats: list[str] = Field(default_factory=list)
 

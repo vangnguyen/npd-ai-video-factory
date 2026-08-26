@@ -246,6 +246,8 @@ At initial creation EspoCRM permitted only `USD`, so the record started at `0 US
 A follow-up audit confirmed that `VND` had subsequently been enabled and set as the
 CRM default. After another full database and Agent Hub namespace backup, the acceptance
 record was aligned to `0 VND`; no positive pipeline or revenue value was introduced.
+The USD event is retained only as historical audit evidence and is excluded from
+current business calculations.
 The alignment evidence and rollback assets are stored under
 `/var/backups/npd-agent-hub/opportunity-vnd-alignment-20260821T100411Z`.
 
@@ -257,7 +259,8 @@ newer CRM records.
 
 Local and public source reads then reported `available`, one reported/one read
 Opportunity, the correct Campaign ID, currency `VND`, no raw PII and no external
-writes. The original USD snapshot is retained in audit history. Reconciliation
+writes. The original USD snapshot is retained in audit history but is not accepted
+by the current runtime contract. Reconciliation
 `rec_5c00f1d5d75540759da4` matched the Opportunity to the Campaign at 100 percent but
 remained `blocked_by_data_quality`: there was no real closed-won Opportunity with
 covered revenue. No owner quality acceptance was recorded at that point, and the
@@ -302,6 +305,15 @@ Reconciliation `rec_1218e8a9db744c3a9720` then passed the owner gate:
 The existing-customer Campaign is explicitly not Ads-attributed and is ineligible for
 ROAS. CAC/ROAS remain unavailable until reconciled paid-media spend exists for the same
 Campaign, currency and period.
+
+### Currency policy
+
+The operating currency is **VND only**. Campaign budgets, Meta Ads spend and
+EspoCRM Opportunity amounts must be VND before entering Campaign OS or the
+Attribution & Revenue OS. Explicit non-VND values fail closed; the system never
+converts them and never relabels USD as VND. Missing currency values use the VND
+default. Historical non-VND audit records remain immutable evidence but are not
+eligible for reconciliation, KPI aggregation, CAC or ROAS.
 
 ## Acceptance example
 
