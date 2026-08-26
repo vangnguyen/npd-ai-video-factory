@@ -71,7 +71,7 @@ if ! curl --fail --silent http://localhost:3001/healthz >/dev/null; then
   exit 1
 fi
 
-expected_duration="$(python -c 'import json; print(json.load(open("examples/vinhomes-green-paradise.request.json", encoding="utf-8"))["video"]["duration_seconds"])')"
+expected_duration="$("$PYTHON_BIN" -c 'import json; print(json.load(open("examples/vinhomes-green-paradise.request.json", encoding="utf-8"))["video"]["duration_seconds"])')"
 echo "[e2e] creating ${expected_duration}-second video job"
 create_response="$(
   curl --fail --silent --show-error \
@@ -124,7 +124,7 @@ cp "$job_dir/narration.wav" e2e-artifacts/narration.wav
 cp "$job_dir/narration-timing.json" e2e-artifacts/narration-timing.json
 cp "$job_dir/subtitles.srt" e2e-artifacts/subtitles.srt
 
-docker compose exec -T worker ffmpeg -hide_banner -loglevel error -y \
+"$docker_bin" compose exec -T worker ffmpeg -hide_banner -loglevel error -y \
   -i "/workspace/storage/jobs/$job_id/final.mp4" \
   -vf "fps=1/5,scale=360:640,tile=3x3:padding=8:margin=8:color=white" \
   -frames:v 1 "/workspace/storage/jobs/$job_id/contact-sheet.jpg"
