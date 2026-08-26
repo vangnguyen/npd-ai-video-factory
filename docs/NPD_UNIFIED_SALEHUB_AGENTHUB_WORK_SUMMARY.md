@@ -59,7 +59,7 @@ owner gate or an intentional limitation.
 | Phase 8B — 8.8 | Heartbeat and scheduled health evaluation | Live and accepted |
 | Phase 8B — 8.9 | Deterministic alert-routing preview | Live in Agent Hub 0.13.0; external delivery remains disabled |
 | SaleHub VSP policy | V07 giãn xây and V01 HĐCN thô/hoàn thiện policy release | Promoted on 2026-08-25; post-change shared-route smoke passed |
-| SaleHub position-image maintenance | Automatic unit-position image synchronization fix | Release `releases/20260826-position-image-autosync-v1` observed live; visual/business acceptance remains an owner gate |
+| SaleHub position-image maintenance | Automatic unit-position image synchronization fix | Release `releases/20260826-position-image-autosync-v1` accepted on representative live inventory; timer and first-party image index verified |
 
 The detailed phase contracts remain in [Campaign Operating System](./PHASE_6B_CAMPAIGN_OPERATING_SYSTEM.md),
 [Attribution & Revenue OS](./PHASE_7_ATTRIBUTION_REVENUE_OS.md),
@@ -80,13 +80,17 @@ The detailed phase contracts remain in [Campaign Operating System](./PHASE_6B_CA
 | [#23](https://github.com/vangnguyen/npd-ai-video-factory/pull/23) | First provider-health router extraction | Merged as an API-preserving refactor |
 | [#25](https://github.com/vangnguyen/npd-ai-video-factory/pull/25) | Full CI triggers after PR retarget/ready events | Merged before the final Phase 8.9 gate |
 | [#20](https://github.com/vangnguyen/npd-ai-video-factory/pull/20) | Phase 8.9 routing preview | Merged as `400899b` and deployed as Agent Hub 0.13.0 |
+| [#27](https://github.com/vangnguyen/npd-ai-video-factory/pull/27) | Run protected-branch CI gates for every PR | Merged as `084ce84`; governance-only, no runtime change |
+| [#26](https://github.com/vangnguyen/npd-ai-video-factory/pull/26) | Unified SaleHub–AgentHub summary and handoff | This documentation milestone; no runtime change |
 
-Current `origin/main`, the production deployment receipt and the live runtime resolve to
-`400899ba82501beeea469f4a33dc169a9a09bb8e`. This restores GitHub `main` as the
-production source of truth.
+The production deployment receipt and live AgentHub runtime resolve to
+`400899ba82501beeea469f4a33dc169a9a09bb8e`. The annotated tag
+`agent-hub-v0.13.0` resolves to that exact accepted runtime commit. GitHub `main`
+also contains the later CI-governance commit `084ce84`; it changes workflow triggers
+only, so `main` remains runtime-equivalent to production and is the source of truth.
 
-The latest stable tag predates 0.13.0. No new tag was created by this documentation
-milestone; tagging the accepted baseline is a separate owner action.
+The stable release tag is `agent-hub-v0.13.0`; it must not be moved to a later docs or
+governance commit because the tag identifies the deployed binary source exactly.
 
 ### CI on the exact production/main revision
 
@@ -142,9 +146,16 @@ created for this acceptance.
 
 For both maintenance periods, Caddy configuration validation passed and the shared
 Agent Hub, n8n, CRM and SaleHub routes remained healthy. These planned changes did not
-reset the Agent Hub observation window. The position-image feature itself still needs
-owner visual/business acceptance; route health is not evidence that every unit image is
-correct.
+reset the Agent Hub observation window.
+
+Representative browser acceptance on 2026-08-26 confirmed all four current Vinhomes
+Saigon Park inventory cards used first-party, versioned position images matching their
+unit codes (`TL12-37`, `TL14-39`, `AS47-30`, `AS77-36`). The `TL12-37` detail modal
+rendered the corresponding image at its natural size. The timer-backed index independently
+confirmed `104` unit images across four projects, `warnings=0`, Drive
+`authMode=oauth_readonly`, and a successful image/knowledge refresh. This accepts the
+mechanism and the representative VSP business sample; it does not authorize fuzzy unit
+matching where an exact current unit code is absent.
 
 The final read-only recheck at `2026-08-26T06:06:47Z` confirmed the same SaleHub
 release, a valid Caddy configuration, Agent Hub healthy with zero restarts, OpenAPI
@@ -216,12 +227,16 @@ Remaining work count at this handoff: **7 tracked items**.
    small API-parity PRs. Do not perform a rewrite or change Redis key formats.
 4. Exercise the documented HMAC rotation procedure under an owner-approved maintenance
    window. The accepted production deployment was not rotated by this milestone.
-5. Visually validate the SaleHub automatic position-image update on representative
-   inventory records before calling that business fix accepted.
-6. Preserve the known currency limitation: do not aggregate USD/VND executive revenue
+5. Preserve the known currency limitation: do not aggregate USD/VND executive revenue
    totals without a defined exchange-rate policy.
-7. Re-check the historical SEO automation warning through execution evidence; an active
+6. Re-check the historical SEO automation warning through execution evidence; an active
    workflow alone is not proof of health.
+7. Complete issue [#28](https://github.com/vangnguyen/npd-ai-video-factory/issues/28):
+   whitelist the VPS automation IP for the WordPress pricing-sync route in Imunify360,
+   or move that single writer behind an explicitly approved machine-to-machine origin
+   contract. Until then, policy sync remains fail-closed and reports
+   `blocked_by_imunify360`; do not treat the successful image timer as proof that pricing
+   refresh succeeded.
 
 ## Evidence versus inference
 
@@ -229,15 +244,18 @@ Remaining work count at this handoff: **7 tracked items**.
   receipt verification, provider state, CI runs and PR state are confirmed evidence.
 - “The two applications operate as one platform” is the target operating model, not a
   claim that their repositories or runtimes have been physically merged.
-- SaleHub position-image release promotion and shared-route health are confirmed; image
-  correctness across inventory remains an owner acceptance gate.
+- SaleHub position-image release promotion, timer execution and the representative 4/4
+  VSP image sample are confirmed. Coverage for units whose current code has no exact
+  source image remains a data-availability limitation, not an inferred match.
 - Phase 9 business value is a roadmap decision; no Phase 9 engine was implemented in
   this stabilization milestone.
 
 ## Exact next milestone
 
-After the owner reviews this handoff, the next business milestone is **Phase 9 —
-Customer Journey & Sales Intelligence**, delivered in three owner-reviewable increments:
+After this handoff is merged and the WordPress/Imunify360 pricing-sync gate is either
+resolved or explicitly accepted as a separately tracked SaleHub dependency, the next
+business milestone is **Phase 9 — Customer Journey & Sales Intelligence**, delivered in
+three owner-reviewable increments:
 
 1. read-only Customer Journey Projection;
 2. deterministic, explainable Lead Scoring;

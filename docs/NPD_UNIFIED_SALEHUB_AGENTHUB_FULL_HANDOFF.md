@@ -227,8 +227,12 @@ Do not create a second n8n, Caddy or Redis service.
 8. run the cross-system smoke for SaleHub, AgentHub, n8n and CRM;
 9. record the release, actor/scope, timestamps and rollback target.
 
-For `releases/20260826-position-image-autosync-v1`, shared-route health has passed.
-Representative automatic image updates still require owner visual/business acceptance.
+For `releases/20260826-position-image-autosync-v1`, shared-route health and representative
+business acceptance passed. Browser QA confirmed 4/4 current Vinhomes Saigon Park cards
+used first-party versioned images matching their unit codes, and the `TL12-37` modal
+rendered the matching position image. The timer-backed index reported 104 images across
+four projects with zero warnings and readonly Drive authentication. Exact unit-code
+matching remains mandatory; never infer a nearby image for a missing current code.
 
 ## Backup and rollback
 
@@ -237,6 +241,8 @@ Representative automatic image updates still require owner visual/business accep
 - Receipt: `/var/lib/npd-ai/agent-hub-deployments/deploy-20260825T050536Z.json`.
 - Backup: `/var/backups/npd-agent-hub/agent-hub-20260825T050536Z.json`.
 - Image: `npd-agent-hub:rollback-20260825T050536Z`.
+- Stable tag: `agent-hub-v0.13.0` ->
+  `400899ba82501beeea469f4a33dc169a9a09bb8e`.
 
 Rollback sequence: confirm exact target, preserve the incident evidence, restore the
 previous image/config, run local and public smoke, and leave Redis untouched unless an
@@ -307,10 +313,19 @@ final Caddy `StartedAt`/configuration digest, SaleHub symlink and cross-system s
 
 ## Known risks and do-not-run guidance
 
-- The current SaleHub position-image auto-sync release needs representative visual
-  acceptance; HTTP 200 is insufficient.
+- The SaleHub position-image auto-sync release passed representative visual acceptance;
+  HTTP 200 alone must still never be used as future image-correctness evidence.
 - Historical Green City/VSP position-image mappings may be incomplete or tied to an old
   release. Validate project/unit identity before reuse.
+- The WordPress pricing writer is currently rejected by Imunify360 for VPS automation.
+  `/usr/local/sbin/salehub-pricing-sync-post` records the failure as
+  `blocked_by_imunify360` and remains fail-closed; backup/rollback artifacts are under
+  `/opt/salehub/backups/pricing-sync-observability-20260826T071500Z`. Whitelist only the
+  required VPS automation IP for the exact pricing-sync route, then verify an authorized
+  sync and the public read contract, tracked in issue
+  [#28](https://github.com/vangnguyen/npd-ai-video-factory/issues/28). Do not disable
+  Imunify360 globally and do not infer pricing health from the independent image-sync
+  service result.
 - Historical one-off VSP policy migration, staging and correction scripts are audit
   evidence. **Do not rerun them against current production.** Clean-port required logic
   into a reviewed release instead. Do not delete the old evidence.
@@ -364,8 +379,11 @@ have been accepted and each target provider has a least-privilege, audited contr
 - [x] Backups and rollback image retained.
 - [x] Marketing/customer production writes remain disabled.
 - [x] SaleHub concurrent maintenance separated from AgentHub incidents.
-- [ ] Owner visually accepts SaleHub position-image auto-sync behavior.
-- [ ] Owner reviews and merges this documentation-only handoff PR.
-- [ ] Owner decides whether to create a stable 0.13.0 tag.
+- [x] Representative SaleHub position-image auto-sync behavior accepted on live VSP data.
+- [x] Unified documentation delivered through PR #26 with required checks enforced.
+- [x] Stable `agent-hub-v0.13.0` tag created on the exact production runtime commit.
+- [ ] Hosting owner whitelists the scoped pricing-sync automation request in Imunify360
+  and verifies one successful policy refresh.
 - [ ] Owner authorizes a later HMAC rotation drill if required.
-- [ ] Start Phase 9 only after the stabilization/handoff review is closed.
+- [ ] Start Phase 9 only after this stabilization/handoff review and the pricing-sync
+  disposition are closed.
