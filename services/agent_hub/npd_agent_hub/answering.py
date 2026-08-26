@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from .currency import DEFAULT_CURRENCY, normalize_vnd_currency
 from .models import (
     AnswerStatus,
     BusinessAnswer,
@@ -392,7 +393,7 @@ def _analytics_answer(
         if isinstance(meta_ads, dict) and isinstance(meta_ads.get("metrics"), dict)
         else {}
     )
-    currency = str(ad_metrics.get("currency") or "")
+    currency = normalize_vnd_currency(ad_metrics.get("currency") or DEFAULT_CURRENCY)
     if (
         isinstance(meta_ads, dict)
         and any(

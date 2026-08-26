@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 import httpx
 
 from .config import HubSettings
+from .currency import DEFAULT_CURRENCY, normalize_vnd_currency
 
 
 ANALYTICS_READONLY_SCOPE = "https://www.googleapis.com/auth/analytics.readonly"
@@ -273,7 +274,18 @@ class MarketingSourceReader:
         impressions = _sum_metric(campaigns, "impressions")
         clicks = _sum_metric(campaigns, "clicks")
         leads = _sum_metric(campaigns, "reported_leads")
-        currency = next(iter(currencies)) if len(currencies) == 1 else ""
+        if len(currencies) > 1:
+            raise MarketingSourceError(
+                "Meta Ads returned multiple account currencies; only VND is accepted"
+            )
+        try:
+            currency = normalize_vnd_currency(
+                next(iter(currencies)) if currencies else DEFAULT_CURRENCY
+            )
+        except ValueError as exc:
+            raise MarketingSourceError(
+                "Meta Ads account currency is unsupported; only VND is accepted"
+            ) from exc
         return {
             "source": "Meta Ads Insights read-only",
             "period_start": since,
