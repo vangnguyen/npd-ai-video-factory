@@ -84,8 +84,8 @@ Path traversal and arbitrary host filesystem access are rejected as `404 ARTIFAC
 ```json
 {
   "error": {
-    "code": "MANIFEST_INVALID",
-    "message": "Generated video manifest did not pass validation.",
+    "code": "MANIFEST_VALIDATION_FAILED",
+    "message": "Video manifest validation failed.",
     "failed_stage": "building_manifest",
     "retryable": false,
     "details": []
@@ -96,15 +96,16 @@ Path traversal and arbitrary host filesystem access are rejected as `404 ARTIFAC
 Stable Sprint 1 codes:
 
 - `REQUEST_INVALID`
-- `ASSET_PATH_INVALID`
-- `ASSET_NOT_FOUND`
 - `CONTENT_PROVIDER_FAILED`
 - `TTS_PROVIDER_FAILED`
-- `MANIFEST_INVALID`
+- `ASSET_RESOLUTION_FAILED`
+- `MANIFEST_VALIDATION_FAILED`
 - `RENDERER_UNAVAILABLE`
 - `RENDER_FAILED`
-- `VIDEO_QC_FAILED`
+- `QC_FAILED`
 - `ARTIFACT_NOT_FOUND`
 - `INTERNAL_ERROR`
 
 Validation errors use HTTP 422; missing jobs/artifacts use 404; dependency unavailability uses 503; unexpected failures use 500. Job-stage failures remain queryable through the job status resource.
+
+Registered artifact kinds are `request`, `script`, `storyboard`, `audio`, `subtitle`, `assets`, `manifest`, `video`, and `qc`. The older `metadata` value remains accepted for backward compatibility.
