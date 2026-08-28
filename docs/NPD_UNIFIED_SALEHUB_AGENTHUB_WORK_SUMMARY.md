@@ -2,7 +2,7 @@
 
 ## Document status
 
-- Snapshot: `2026-08-26 18:00 Asia/Ho_Chi_Minh`.
+- Snapshot: `2026-08-29 00:05 Asia/Ho_Chi_Minh`.
 - Repository: `vangnguyen/npd-ai-video-factory`.
 - Documentation branch: `docs/stabilization-closeout-20260826`.
 - Stable source revision: `400899ba82501beeea469f4a33dc169a9a09bb8e`.
@@ -37,8 +37,9 @@ The 2026-08-26 closeout also completed the owner-gated HMAC rotation drill, the 
 WordPress pricing synchronization accepted under the owner's existing WAF-rule decision,
 three separate AgentHub god-file extraction PRs, the VND-only contract PR, and clean
 replacement PRs for both divergent Video Factory branches. The SEO publisher received a
-bounded structured-output retry and passed a real dry-run; its next natural scheduled
-execution remains a separate evidence gate.
+bounded structured-output retry and passed a real dry-run. The next eight natural
+scheduled executions on 2026-08-27 and 2026-08-28 completed successfully and their
+WordPress publication contract was independently verified.
 
 ## Evidence vocabulary
 
@@ -70,7 +71,7 @@ owner gate or an intentional limitation.
 | SaleHub position-image maintenance | Automatic unit-position image synchronization fix | Release `releases/20260826-position-image-autosync-v1` accepted on representative live inventory; timer and first-party image index verified |
 | SaleHub pricing sync | One-shot VPS-to-WordPress policy synchronization | PASS; issue #28 closed after the owner accepted the current WAF exception scope |
 | Reliability closeout | HMAC active-key rotation from v1 to v2 | Live; v1 retained as verify-only and both receipt generations verified |
-| SEO publisher | Structured-output parse recovery | Live in `content-publisher`; direct `force=true,dry_run=true` acceptance passed, natural scheduled execution pending |
+| SEO publisher | Structured-output parse recovery | Live in `content-publisher`; direct `force=true,dry_run=true` acceptance plus eight natural scheduled executions on 2026-08-27 and 2026-08-28 passed |
 | Video Factory legacy cleanup | Clean ports for PR #8 and then PR #6 | Draft PRs #34 and #35; legacy PRs closed without merge |
 
 The detailed phase contracts remain in [Campaign Operating System](./PHASE_6B_CAMPAIGN_OPERATING_SYSTEM.md),
@@ -243,7 +244,9 @@ or customer-system writes and was not expanded by this stabilization.
   exception scope and chose not to pursue a narrower rule in this milestone.
 - The SEO publisher's repeated structured-output failures were traced through n8n
   execution records. A fence-tolerant parser plus one bounded retry was deployed only to
-  `content-publisher`; a real dry-run passed without a WordPress post side effect.
+  `content-publisher`; a real dry-run passed without a WordPress post side effect. The
+  next eight natural scheduled calls returned HTTP 200 and produced eight independently
+  verified published WordPress posts with featured media.
 - Legacy PR #8 and PR #6 were replaced in order by clean draft PRs #34 and #35, then
   closed without merge. Issue #7 was closed as not planned because its generic content
   network conflicts with the accepted NPD real-estate roadmap.
@@ -274,21 +277,45 @@ or customer-system writes and was not expanded by this stabilization.
   `n8n-marketing-caddy-1`; configuration must be backed up and validated in that
   container before any owner-approved reload/recreation.
 
+## Natural SEO schedule acceptance follow-up
+
+The remaining scheduled-execution evidence gate is **PASS**. No workflow, container,
+credential, publication setting or execution-retention setting was changed during this
+read-only follow-up.
+
+- n8n kept `BDS - 08 Biên tập và đăng bài SEO tự động` active with cron
+  `0 8,10,12,14 * * *`; the n8n startup log recorded activation of workflow
+  `c18ac267-3f70-49e0-8e0c-d216df31ae8c`.
+- `content-publisher` received four natural `POST /run` calls on 2026-08-27 at
+  `08:01`, `10:01`, `12:01` and `14:01` Asia/Ho_Chi_Minh, then the same four slots on
+  2026-08-28. All eight returned HTTP 200.
+- Persisted `/data/content-state.json` advanced to 54 runs, `last_error=null`; the eight
+  new entries were `ok=true`, used two to eight cited sources, and recorded WordPress
+  post IDs `28068`, `28070`, `28072`, `28074`, `28076`, `28078`, `28080` and `28082`.
+- WordPress REST independently returned `status=publish` plus a non-zero
+  `featured_media` for all eight IDs. The first 2026-08-27 page and the latest
+  2026-08-28 page also returned public HTTPS 200 with valid TLS.
+- n8n intentionally has `EXECUTIONS_DATA_SAVE_ON_SUCCESS=none`, so successful execution
+  rows and IDs are not retained in `execution_entity`. The acceptance evidence is the
+  registered schedule and activation log, timestamped downstream access log, durable
+  publisher state and independently queried WordPress contract. The absence of a
+  retained n8n success row is not represented as an execution failure.
+
+This is evidence for the pre-existing authorized SEO publication workflow. It does not
+enable an AgentHub write, external-notification or WordPress landing-page publication
+capability and does not widen any accepted safety boundary.
+
 ## Technical debt and remaining work
 
-Remaining closeout work count: **4 tracked owner/evidence gates**.
+Remaining closeout work count: **3 tracked review/owner/monitoring gates**.
 
 1. Review and merge the isolated PRs in dependency-safe order. #30, #31 and #32 are
    independent refactors; #33 is the VND-only behavior change; #34 must precede stacked
    #35. Re-run the required protected-branch checks after any rebase/retarget.
-2. Observe the next natural execution of `BDS - 08 Biên tập và đăng bài SEO tự động`
-   (scheduled for `2026-08-27 08:00 Asia/Ho_Chi_Minh`) and record the n8n execution plus
-   downstream contract. The production fix and direct dry-run passed, but that is not a
-   substitute for scheduled execution evidence.
-3. Keep issue [#5](https://github.com/vangnguyen/npd-ai-video-factory/issues/5) open until
+2. Keep issue [#5](https://github.com/vangnguyen/npd-ai-video-factory/issues/5) open until
    the owner listens to and explicitly accepts the Vietnamese production-pilot voice.
    Automated media QC cannot satisfy this human gate.
-4. Treat the current pricing-sync WAF exception as an owner-accepted security decision.
+3. Treat the current pricing-sync WAF exception as an owner-accepted security decision.
    Do not claim it was narrowed; monitor the route and revisit only if the owner changes
    that decision or new evidence shows collateral exposure.
 
@@ -301,8 +328,10 @@ Remaining closeout work count: **4 tracked owner/evidence gates**.
 - SaleHub position-image release promotion, timer execution and the representative 4/4
   VSP image sample are confirmed. Coverage for units whose current code has no exact
   source image remains a data-availability limitation, not an inferred match.
-- The SEO production change and direct dry-run are confirmed. A successful natural
-  scheduled run after the fix is pending and is not inferred from service health.
+- The SEO production change, direct dry-run and eight natural scheduled publications are
+  confirmed. Because n8n does not retain successful executions, the scheduled result is
+  established by correlated trigger/access timestamps, durable publisher state and the
+  live WordPress REST/public contract rather than inferred from service health.
 - VND-only behavior is confirmed in PR #33 tests and CI, but remains draft/unmerged and
   is not claimed as production behavior.
 - Phase 9 business value is a roadmap decision; no Phase 9 engine was implemented in
@@ -310,9 +339,9 @@ Remaining closeout work count: **4 tracked owner/evidence gates**.
 
 ## Exact next milestone
 
-After the owner reviews the isolated closeout PRs, the scheduled SEO evidence is recorded
-and the remaining Video Factory voice gate is dispositioned, the next business milestone
-is **Phase 9 — Customer Journey & Sales Intelligence**, delivered in three
+After the owner reviews the isolated closeout PRs and dispositions the remaining Video
+Factory voice gate, the next business milestone is **Phase 9 — Customer Journey & Sales
+Intelligence**, delivered in three
 owner-reviewable increments:
 
 1. read-only Customer Journey Projection;

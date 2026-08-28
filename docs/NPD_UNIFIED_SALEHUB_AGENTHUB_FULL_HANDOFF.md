@@ -309,6 +309,24 @@ incidents, five healthy providers, valid latest delivery/heartbeat receipts, per
 Redis state and zero AgentHub restarts. See the
 [work summary](./NPD_UNIFIED_SALEHUB_AGENTHUB_WORK_SUMMARY.md) for the evidence table.
 
+### Accepted natural SEO schedule follow-up
+
+The bounded structured-output retry is now accepted on the natural schedule as well as
+the direct dry-run. The active n8n workflow kept cron `0 8,10,12,14 * * *` and
+`content-publisher` received all four expected calls on both 2026-08-27 and 2026-08-28.
+All eight returned HTTP 200. Durable publisher state recorded `ok=true`,
+`last_error=null` and WordPress post IDs `28068` through `28082` on the applicable even
+IDs; WordPress REST independently returned `status=publish` and non-zero featured-media
+IDs for every post.
+
+Successful n8n executions are intentionally not persisted because production is set to
+`EXECUTIONS_DATA_SAVE_ON_SUCCESS=none`. Evidence therefore correlates the registered
+schedule and startup activation log, timestamped `POST /run` access log, durable
+`/data/content-state.json` entries and live WordPress REST/public HTTPS results. No
+workflow or production configuration was changed for this read-only acceptance. This
+existing SEO writer remains separate from AgentHub, whose WordPress landing-page publish
+and other customer/marketing write capabilities remain disabled.
+
 ## Incident response and change coordination
 
 1. Freeze new feature work when production evidence becomes ambiguous.
@@ -358,9 +376,10 @@ final Caddy `StartedAt`/configuration digest, SaleHub symlink and cross-system s
 - New business contracts are VND-only. Reject explicit non-VND input rather than
   relabeling or performing an implicit conversion; retain historical USD as audit-only.
 - The SEO workflow had repeated structured-output failures. `content-publisher` now has
-  fence-tolerant parsing and one bounded retry and passed a real no-publish dry-run. An
-  n8n workflow being active or published is still not health proof: record the next
-  natural scheduled execution and downstream contract before closing that evidence gate.
+  fence-tolerant parsing and one bounded retry, passed a real no-publish dry-run and then
+  passed eight natural scheduled publications on 2026-08-27 and 2026-08-28. An active
+  workflow or HTTP 200 alone is still not health proof; retain the correlated durable
+  publisher-state and WordPress-contract evidence in future reviews.
 - `new.ngocphuongdong.com` is not assumed to be an independent safe staging boundary.
 - Legacy Video Factory PRs #8/#6 were closed without merge after clean replacements #34
   and #35 were created in that order. Human Vietnamese voice listening remains required.
@@ -416,7 +435,8 @@ have been accepted and each target provider has a least-privilege, audited contr
 - [x] Separate refactor PRs #30–#32 and VND-only PR #33 prepared with green checks.
 - [x] Legacy PR #8 then #6 clean-ported to #34/#35 and closed without merge.
 - [x] Issue #7 closed as not planned under the unified NPD roadmap.
-- [ ] Record the next natural SEO workflow execution after the bounded retry fix.
+- [x] Record natural SEO workflow executions after the bounded retry fix; eight scheduled
+  publications across 2026-08-27 and 2026-08-28 passed the downstream contract.
 - [ ] Owner accepts/rejects the Vietnamese production-pilot voice and disposes issue #5.
-- [ ] Start Phase 9 only after the remaining review/evidence gates above are explicitly
-  dispositioned; no channel execution is implied.
+- [ ] Start Phase 9 only after the remaining PR-review and owner-voice gates above are
+  explicitly dispositioned; no channel execution is implied.
