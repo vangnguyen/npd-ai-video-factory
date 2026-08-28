@@ -437,6 +437,17 @@ have been accepted and each target provider has a least-privilege, audited contr
 - [x] Issue #7 closed as not planned under the unified NPD roadmap.
 - [x] Record natural SEO workflow executions after the bounded retry fix; eight scheduled
   publications across 2026-08-27 and 2026-08-28 passed the downstream contract.
-- [ ] Owner accepts/rejects the Vietnamese production-pilot voice and disposes issue #5.
+- [x] Owner rejected production-pilot V2 on 2026-08-29 because “Ngọc” still sounded like
+  “nọc”; V2 remains preserved and must not be represented as accepted.
+- [x] A separate V3 owner-review render was created with OpenAI `gpt-4o-mini-tts` voice
+  `nova`, a female 25–30/soft/warm/professional instruction profile, and the synchronized
+  CTA “Liên hệ với Ngọc Phương Đông để đặt lịch xem mô hình dự án.” Technical QC passed:
+  30.059 seconds, 1080x1920, H.264/AAC, no black interval, audio in all six scenes,
+  -18.42 LUFS, and exact “Ngọc Phương Đông” recognition by both `gpt-4o-transcribe` and
+  `whisper-1` from the muxed MP4. Video SHA-256 is
+  `9add7bf1b94b1d0a34eddb3a3acd6392d627c4342a3e67c14251f268094bddaf`.
+- [ ] Owner listens to and accepts/rejects V3; keep issue #5 open until that explicit
+  decision. Automated pronunciation/QC evidence does not accept timbre on the owner's
+  behalf.
 - [ ] Start Phase 9 only after the remaining PR-review and owner-voice gates above are
   explicitly dispositioned; no channel execution is implied.

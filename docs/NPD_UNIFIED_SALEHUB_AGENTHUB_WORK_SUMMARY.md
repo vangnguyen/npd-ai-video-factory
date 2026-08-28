@@ -2,7 +2,7 @@
 
 ## Document status
 
-- Snapshot: `2026-08-29 00:05 Asia/Ho_Chi_Minh`.
+- Snapshot: `2026-08-29 00:49 Asia/Ho_Chi_Minh`.
 - Repository: `vangnguyen/npd-ai-video-factory`.
 - Documentation branch: `docs/stabilization-closeout-20260826`.
 - Stable source revision: `400899ba82501beeea469f4a33dc169a9a09bb8e`.
@@ -73,6 +73,7 @@ owner gate or an intentional limitation.
 | Reliability closeout | HMAC active-key rotation from v1 to v2 | Live; v1 retained as verify-only and both receipt generations verified |
 | SEO publisher | Structured-output parse recovery | Live in `content-publisher`; direct `force=true,dry_run=true` acceptance plus eight natural scheduled executions on 2026-08-27 and 2026-08-28 passed |
 | Video Factory legacy cleanup | Clean ports for PR #8 and then PR #6 | Draft PRs #34 and #35; legacy PRs closed without merge |
+| Video Factory owner voice | V2 rejected; V3 regenerated without overwriting V2 | V3 technical QC passed; issue #5 remains open for explicit human listening acceptance |
 
 The detailed phase contracts remain in [Campaign Operating System](./PHASE_6B_CAMPAIGN_OPERATING_SYSTEM.md),
 [Attribution & Revenue OS](./PHASE_7_ATTRIBUTION_REVENUE_OS.md),
@@ -314,7 +315,17 @@ Remaining closeout work count: **3 tracked review/owner/monitoring gates**.
    #35. Re-run the required protected-branch checks after any rebase/retarget.
 2. Keep issue [#5](https://github.com/vangnguyen/npd-ai-video-factory/issues/5) open until
    the owner listens to and explicitly accepts the Vietnamese production-pilot voice.
-   Automated media QC cannot satisfy this human gate.
+   The owner rejected V2 on 2026-08-29 because “Ngọc” still sounded like “nọc”. A new,
+   versioned V3 was generated with OpenAI `gpt-4o-mini-tts` voice `nova`, targeting a
+   female Vietnamese voice around 25–30 with a soft, warm and professional delivery.
+   To remove the nasal coarticulation in “Nhắn Ngọc”, the CTA was changed without changing
+   intent to “Liên hệ với Ngọc Phương Đông để đặt lịch xem mô hình dự án.” Narration,
+   headline and subtitle use the same text. The 30.059-second 1080x1920 H.264/AAC render
+   passed black-frame, six-scene audio, loudness and manifest-sync checks; both
+   `gpt-4o-transcribe` and `whisper-1` recognized “Ngọc Phương Đông” from the muxed MP4.
+   Video SHA-256 is
+   `9add7bf1b94b1d0a34eddb3a3acd6392d627c4342a3e67c14251f268094bddaf`.
+   Automated media QC still cannot satisfy the human timbre/quality gate.
 3. Treat the current pricing-sync WAF exception as an owner-accepted security decision.
    Do not claim it was narrowed; monitor the route and revisit only if the owner changes
    that decision or new evidence shows collateral exposure.
