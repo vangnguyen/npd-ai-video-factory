@@ -10,6 +10,7 @@ on:
       - "services/agent_hub/**"
       - "scripts/ci/**"
       - "workflows/n8n/**"
+      - "docs/video-factory-v1-decommission/**"
       - ".github/workflows/agent-hub-ci.yml"
       - "docker-compose.yml"
 
@@ -18,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate V1 decommission inventory
+        run: python scripts/ci/validate-v1-decommission-inventory.py
       - name: Validate import with production n8n version
         run: bash scripts/ci/validate-n8n-workflows.sh
 
