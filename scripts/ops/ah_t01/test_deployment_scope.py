@@ -71,3 +71,23 @@ def test_immutable_runtime_evidence_is_fail_closed() -> None:
         "docker network disconnect",
     ):
         assert forbidden_action not in DEPLOY.casefold()
+
+
+def test_deploy_and_rollback_both_use_bounded_readiness_verification() -> None:
+    assert DEPLOY.count("wait_for_api_renderer_ready") == 3
+    assert "for attempt in $(seq 1 30)" in DEPLOY
+    assert "AH-T01 deploy error: API/renderer readiness timed out" in DEPLOY
+
+    rollback = re.search(
+        r"rollback_on_failure\(\) \{(?P<body>.*?)\n\}\ntrap rollback_on_failure EXIT",
+        DEPLOY,
+        re.DOTALL,
+    )
+    assert rollback is not None
+    rollback_body = rollback.group("body")
+    assert "wait_for_api_renderer_ready" in rollback_body
+    assert "rollback_images_restored" in rollback_body
+    assert "rollback health/readiness verification failed after bounded wait" in rollback_body
+    assert "rollback image identity verification failed" in rollback_body
+    for forbidden in ("worker", "agent-hub", "redis"):
+        assert forbidden not in shlex.split(rollback_body.replace('"', ""))

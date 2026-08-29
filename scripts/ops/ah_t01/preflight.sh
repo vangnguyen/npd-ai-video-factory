@@ -125,7 +125,8 @@ from pathlib import Path
 
 payload = {
     "schema_version": "1.0",
-    "change_id": "AH-T01A",
+    "change_id": "AH-T01",
+    "source_remediation": "AH-T01B",
     "status": "PASS",
     "git_commit": "$EXPECTED_COMMIT",
     "baseline_sha256": "$baseline_sha256",
@@ -177,5 +178,5 @@ PY
   chmod 600 "$SNAPSHOT_FILE"
 fi
 
-printf 'AH-T01A preflight ok: commit=%s queue=0 processing=0 salt_bytes=%s deploy=api,renderer immutable=worker,agent-hub,redis\n' \
+printf 'AH-T01B preflight ok: commit=%s queue=0 processing=0 salt_bytes=%s deploy=api,renderer immutable=worker,agent-hub,redis\n' \
   "$EXPECTED_COMMIT" "$salt_bytes"

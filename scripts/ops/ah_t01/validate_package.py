@@ -77,6 +77,10 @@ def main() -> int:
         "API/renderer/Caddy port bindings changed",
         "verify_deployment.py",
         "production_business_write_performed",
+        "wait_for_api_renderer_ready",
+        "rollback_images_restored",
+        "rollback health/readiness verification failed after bounded wait",
+        '"source_remediation": "AH-T01B"',
     ):
         if required not in deploy:
             fail(f"deployment is missing safety invariant: {required}")
@@ -87,11 +91,12 @@ def main() -> int:
         "AGENT_REDIS_URL",
         "CADDYFILE",
         "CADDY_CONTAINER",
+        '"source_remediation": "AH-T01B"',
     ):
         if required not in preflight:
             fail(f"preflight is missing safety invariant: {required}")
     print(
-        "AH-T01A package valid: API/renderer-only deploy+rollback, immutable worker/Agent Hub/Redis"
+        "AH-T01B package valid: API telemetry runtime + bounded API/renderer-only rollback"
     )
     return 0
 
