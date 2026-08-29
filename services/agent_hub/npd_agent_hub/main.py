@@ -111,6 +111,10 @@ from .google_login import (
 from .orchestrator import hub
 from .routers.provider_health import router as provider_health_router
 from .tool_registry import ToolCapability, list_tool_capabilities
+from .video_factory.router import (
+    disabled_boundary as disabled_video_factory_boundary,
+    router as video_factory_router,
+)
 
 
 @asynccontextmanager
@@ -129,6 +133,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(provider_health_router)
+app.include_router(video_factory_router)
+app.state.video_factory_boundary = disabled_video_factory_boundary
 schema_reader = EspoSchemaReader()
 mapping_reader = EspoMappingReader(schema_reader)
 
@@ -139,7 +145,7 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
-    if request.url.path.startswith("/api/"):
+    if request.url.path.startswith("/api/") or request.url.path == "/agent-hub/events/v1":
         response.headers.setdefault("Cache-Control", "no-store")
     return response
 

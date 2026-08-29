@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.ngocphuongdong.com/agent-hub/video-factory-boundary.v1.schema.json",
+  "title": "NPD Agent Hub Video Factory boundary event v1",
+  "$comment": "Pinned independently to npd-video-factory-v2 commit 8fa96409b0db6ec6d4dc3c04f6e3aaab2f3201ee. The vocabulary is reserved; video.project.created is the only accepted live emitter in AH-02.",
+  "x-pinned-video-factory-commit": "8fa96409b0db6ec6d4dc3c04f6e3aaab2f3201ee",
+  "x-live-inbound-actions": [
+    "project.create_draft"
+  ],
+  "x-live-outbound-events": [
+    "video.project.created"
+  ],
+  "x-network-transport": "not_implemented",
+  "x-default-mode": "disabled",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "event_id",
+    "event_type",
+    "occurred_at",
+    "payload"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "agent-hub-bridge.v1"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^bevt_[A-Za-z0-9_-]{4,60}$"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "trend.opportunity.detected",
+        "idea.shortlist.ready",
+        "video.project.created",
+        "video.analysis.completed",
+        "video.preview.ready",
+        "video.approval.required",
+        "video.approved",
+        "video.render.completed",
+        "video.render.failed",
+        "video.publish.completed",
+        "video.publish.failed",
+        "video.analytics.updated",
+        "video.winner.detected"
+      ]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object",
+      "not": {
+        "anyOf": [
+          {"required": ["token"]},
+          {"required": ["secret"]},
+          {"required": ["password"]},
+          {"required": ["credential"]}
+        ]
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "video.project.created"
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "project_id",
+              "project_version_id",
+              "workspace_id",
+              "source_campaign_id",
+              "status",
+              "execution_started",
+              "external_action"
+            ],
+            "properties": {
+              "project_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{2,119}$"
+              },
+              "project_version_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{2,119}$"
+              },
+              "workspace_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{2,119}$"
+              },
+              "source_campaign_id": {
+                "type": ["string", "null"],
+                "maxLength": 160
+              },
+              "status": {
+                "const": "draft"
+              },
+              "execution_started": {
+                "const": false
+              },
+              "external_action": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
