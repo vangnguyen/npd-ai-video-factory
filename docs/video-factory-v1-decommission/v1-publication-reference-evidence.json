@@ -1,0 +1,141 @@
+{
+  "schema_version": "1.0",
+  "scope": "ah01c_v1_publication_reference_evidence",
+  "status": "PASS",
+  "evidence_window_started_at": "2026-08-29T06:29:11.955416+00:00",
+  "evidence_window_completed_at": "2026-08-29T06:35:22.456484+00:00",
+  "read_only": true,
+  "production_write_performed": false,
+  "secret_logged": false,
+  "raw_business_payload_logged": false,
+  "search_boundary": {
+    "v1_job_id_count": 12,
+    "v1_job_id_prefix": "vid_17866",
+    "route_fragments": [
+      "157.10.201.169:8000",
+      "157.10.201.169:3001",
+      "/api/v1/video-jobs",
+      "/media/jobs/",
+      "final.mp4"
+    ]
+  },
+  "sources": [
+    {
+      "id": "v1-db0-job-metadata",
+      "captured_at": "2026-08-29T06:34:56.001109+00:00",
+      "status": "PASS",
+      "objects_scanned": 12,
+      "matches": 12,
+      "finding": "All 12 retained V1 job records were enumerated; seven have final.mp4 and none has publication, post, public URL or analytics fields."
+    },
+    {
+      "id": "v1-public-read-routes",
+      "captured_at": "2026-08-29T06:35:22.456484+00:00",
+      "status": "PASS",
+      "objects_scanned": 12,
+      "matches": 12,
+      "finding": "All 12 status routes returned 200; seven final.mp4 files returned a one-byte 206 response through both the API artifact route and renderer media route."
+    },
+    {
+      "id": "wordpress-public-rest",
+      "captured_at": "2026-08-29T06:29:11.955416+00:00",
+      "status": "PASS",
+      "objects_scanned": 4320,
+      "matches": 0,
+      "details": {
+        "base_url": "https://ngocphuongdong.com/",
+        "rest_bases_discovered": 16,
+        "public_collections": 10,
+        "non_public_collections": 6,
+        "media_items_scanned": 3919,
+        "authentication_used": false
+      }
+    },
+    {
+      "id": "primary-facebook-page",
+      "captured_at": "2026-08-29T06:31:27.999664+00:00",
+      "status": "PASS",
+      "objects_scanned": 227,
+      "matches": 0,
+      "details": {
+        "page_id": "1148837305263525",
+        "since": "2026-08-13T00:00:00Z",
+        "published_posts": 96,
+        "feed_objects": 96,
+        "videos": 35,
+        "read_only_gets": true,
+        "token_logged": false
+      }
+    },
+    {
+      "id": "production-n8n",
+      "captured_at": "2026-08-29T06:33:10.216000+00:00",
+      "status": "PASS",
+      "objects_scanned": 1391,
+      "matches": 0,
+      "details": {
+        "workflows": 11,
+        "active_workflows": 5,
+        "workflow_history_versions": 7,
+        "executions_since_2026_08_13": 1373,
+        "read_only_selects": true
+      }
+    },
+    {
+      "id": "agent-hub-db1",
+      "captured_at": "2026-08-29T06:31:55.715170+00:00",
+      "status": "PASS",
+      "objects_scanned": 6483,
+      "matches": 0,
+      "details": {
+        "namespace": "npd:agent-hub:v1",
+        "type_counts": {
+          "list": 302,
+          "string": 6166,
+          "zset": 15
+        },
+        "positive_ttl_keys": 0,
+        "outside_namespace_keys": 0,
+        "values_logged": false
+      }
+    },
+    {
+      "id": "content-publisher-state",
+      "captured_at": "2026-08-29T06:33:43.686135+00:00",
+      "status": "PASS",
+      "objects_scanned": 2320,
+      "matches": 0,
+      "details": {
+        "state_path": "/data/content-state.json",
+        "file_sha256": "980b0eb1a23ea6adc62b032090a43c38871ced6ba9753e5dcd4ec3e5fede2425",
+        "values_logged": false
+      }
+    },
+    {
+      "id": "repository-and-owner-review",
+      "captured_at": "2026-08-29T06:34:00+00:00",
+      "status": "PASS",
+      "objects_scanned": 194,
+      "matches": 1,
+      "finding": "The V3 owner-review generation manifest and assembly source retain V1 source job vid_1786695599261_60dbfd66ed."
+    }
+  ],
+  "summary": {
+    "canonical_external_matches": 0,
+    "known_local_lineage_matches": 1,
+    "public_status_routes_active": 12,
+    "public_final_artifact_routes_active": 7,
+    "public_renderer_media_routes_active": 7,
+    "catalog_resolution_policy": "Conservatively retain/archive every V1 job and require compatibility redirects for live read routes; absence is not used to authorize deletion."
+  },
+  "limitations": [
+    "Anonymous WordPress REST cannot enumerate private drafts or private design templates.",
+    "Only the primary Facebook Page defined by the accepted production topology was queried.",
+    "Operator messages, manually copied links and undeclared external systems cannot be proven absent by a point-in-time scan."
+  ],
+  "fallback_disposition": {
+    "unseen_or_late_discovered_reference": "ARCHIVE_REQUIRED",
+    "live_legacy_url": "REDIRECT_REQUIRED",
+    "deletion_by_absence_allowed": false
+  }
+}

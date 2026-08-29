@@ -18,6 +18,7 @@ def test_video_job_adapter_uses_existing_api_contract_and_idempotency():
     def handler(request: httpx.Request) -> httpx.Response:
         seen["path"] = request.url.path
         seen["idempotency"] = request.headers.get("Idempotency-Key")
+        seen["caller_id"] = request.headers.get("X-NPD-Caller-ID")
         seen["body"] = json.loads(request.content.decode("utf-8"))
         return httpx.Response(
             202,
@@ -66,6 +67,7 @@ def test_video_job_adapter_uses_existing_api_contract_and_idempotency():
     assert result.external_id == "vid_1234567890123_abcdefghij"
     assert seen["path"] == "/api/v1/video-jobs"
     assert seen["idempotency"] == f"agent-{task.task_id}-{action.action_id}"
+    assert seen["caller_id"] == "agent-hub-v1-tool"
     assert seen["body"] == video_job
 
 

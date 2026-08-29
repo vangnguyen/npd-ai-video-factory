@@ -1,0 +1,240 @@
+{
+  "schema_version": "1.0",
+  "catalog_status": "RESOLVED_CONSERVATIVE",
+  "generated_at": "2026-08-29T13:36:00+07:00",
+  "source_revision": "d42c8bf9e878af39f0e14f6b63d046bb48b9aae3",
+  "allowed_classifications": [
+    "ACTIVE_REFERENCE",
+    "ARCHIVE_REQUIRED",
+    "REDIRECT_REQUIRED",
+    "SAFE_TO_RETIRE",
+    "UNKNOWN"
+  ],
+  "owner_acceptance_status": "PENDING",
+  "destructive_change_allowed": false,
+  "v1_decommission": "NO-GO",
+  "coverage_policy": {
+    "canonical_systems": [
+      "V1 Redis DB0 and storage manifest",
+      "V3 owner-review lineage",
+      "ngocphuongdong.com public WordPress REST",
+      "primary Facebook Page 1148837305263525",
+      "production n8n current/history/execution data",
+      "Agent Hub Redis DB1",
+      "content publisher durable state",
+      "repository and handoff documentation"
+    ],
+    "unseen_reference_fallback": "ARCHIVE_REQUIRED",
+    "live_url_fallback": "REDIRECT_REQUIRED",
+    "absence_authorizes_deletion": false,
+    "refresh_required_before_ah03": true
+  },
+  "summary": {
+    "record_count": 16,
+    "by_classification": {
+      "ACTIVE_REFERENCE": 1,
+      "ARCHIVE_REQUIRED": 11,
+      "REDIRECT_REQUIRED": 3,
+      "SAFE_TO_RETIRE": 1
+    },
+    "unknown_count": 0,
+    "v1_job_count": 12,
+    "v1_jobs_with_final_mp4": 7,
+    "external_reference_matches": 0,
+    "known_local_lineage_matches": 1
+  },
+  "records": [
+    {
+      "id": "job-vid-1786689995454-f59f09de0a",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786689995454_f59f09de0a",
+      "runtime_status": "awaiting_review",
+      "artifact_count": 7,
+      "final_mp4_bytes": 5350113,
+      "classification": "ARCHIVE_REQUIRED",
+      "external_reference_matches": 0,
+      "local_reference_matches": 0,
+      "required_action": "Retain encrypted archive and legacy read compatibility until owner accepts retention and telemetry gates.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "job-vid-1786690874368-9656644ecd",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786690874368_9656644ecd",
+      "runtime_status": "awaiting_review",
+      "artifact_count": 7,
+      "final_mp4_bytes": 5289239,
+      "classification": "ARCHIVE_REQUIRED",
+      "external_reference_matches": 0,
+      "local_reference_matches": 0,
+      "required_action": "Retain encrypted archive and legacy read compatibility until owner accepts retention and telemetry gates.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "job-vid-1786692050185-0ed60af885",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786692050185_0ed60af885",
+      "runtime_status": "awaiting_review",
+      "artifact_count": 7,
+      "final_mp4_bytes": 5289239,
+      "classification": "ARCHIVE_REQUIRED",
+      "external_reference_matches": 0,
+      "local_reference_matches": 0,
+      "required_action": "Retain encrypted archive and legacy read compatibility until owner accepts retention and telemetry gates.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "job-vid-1786693022302-653150d2b4",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786693022302_653150d2b4",
+      "runtime_status": "failed",
+      "artifact_count": 2,
+      "final_mp4_bytes": null,
+      "classification": "ARCHIVE_REQUIRED",
+      "external_reference_matches": 0,
+      "local_reference_matches": 0,
+      "required_action": "Retain job metadata and partial artifacts in the encrypted archive; do not delete from live storage before the owner retention gate.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "job-vid-1786693204480-76cf367333",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786693204480_76cf367333",
+      "runtime_status": "awaiting_review",
+      "artifact_count": 7,
+      "final_mp4_bytes": 5289239,
+      "classification": "ARCHIVE_REQUIRED",
+      "external_reference_matches": 0,
+      "local_reference_matches": 0,
+      "required_action": "Retain encrypted archive and legacy read compatibility until owner accepts retention and telemetry gates.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "job-vid-1786693472238-3dbf90daf7",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786693472238_3dbf90daf7",
+      "runtime_status": "awaiting_review",
+      "artifact_count": 7,
+      "final_mp4_bytes": 5289239,
+      "classification": "ARCHIVE_REQUIRED",
+      "external_reference_matches": 0,
+      "local_reference_matches": 0,
+      "required_action": "Retain encrypted archive and legacy read compatibility until owner accepts retention and telemetry gates.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "job-vid-1786694686710-a7d5eef2ff",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786694686710_a7d5eef2ff",
+      "runtime_status": "failed",
+      "artifact_count": 2,
+      "final_mp4_bytes": null,
+      "classification": "ARCHIVE_REQUIRED",
+      "external_reference_matches": 0,
+      "local_reference_matches": 0,
+      "required_action": "Retain job metadata and partial artifacts in the encrypted archive; do not delete from live storage before the owner retention gate.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "job-vid-1786694825977-619f8e38a2",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786694825977_619f8e38a2",
+      "runtime_status": "failed",
+      "artifact_count": 2,
+      "final_mp4_bytes": null,
+      "classification": "ARCHIVE_REQUIRED",
+      "external_reference_matches": 0,
+      "local_reference_matches": 0,
+      "required_action": "Retain job metadata and partial artifacts in the encrypted archive; do not delete from live storage before the owner retention gate.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "job-vid-1786694962790-0868bc68bb",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786694962790_0868bc68bb",
+      "runtime_status": "failed",
+      "artifact_count": 2,
+      "final_mp4_bytes": null,
+      "classification": "ARCHIVE_REQUIRED",
+      "external_reference_matches": 0,
+      "local_reference_matches": 0,
+      "required_action": "Retain job metadata and partial artifacts in the encrypted archive; do not delete from live storage before the owner retention gate.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "job-vid-1786695065689-b5d3b8228c",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786695065689_b5d3b8228c",
+      "runtime_status": "failed",
+      "artifact_count": 2,
+      "final_mp4_bytes": null,
+      "classification": "ARCHIVE_REQUIRED",
+      "external_reference_matches": 0,
+      "local_reference_matches": 0,
+      "required_action": "Retain job metadata and partial artifacts in the encrypted archive; do not delete from live storage before the owner retention gate.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "job-vid-1786695210508-a32a1d4737",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786695210508_a32a1d4737",
+      "runtime_status": "awaiting_review",
+      "artifact_count": 7,
+      "final_mp4_bytes": 32793047,
+      "classification": "ARCHIVE_REQUIRED",
+      "external_reference_matches": 0,
+      "local_reference_matches": 0,
+      "required_action": "Retain encrypted archive and legacy read compatibility until owner accepts retention and telemetry gates.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "job-vid-1786695599261-60dbfd66ed",
+      "record_type": "V1_JOB",
+      "job_id": "vid_1786695599261_60dbfd66ed",
+      "runtime_status": "awaiting_review",
+      "artifact_count": 7,
+      "final_mp4_bytes": 12504187,
+      "classification": "ACTIVE_REFERENCE",
+      "external_reference_matches": 0,
+      "local_reference_matches": 1,
+      "required_action": "Preserve source media, metadata and lineage through V3 owner review plus the accepted V1 archive window.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "route-v1-job-status",
+      "record_type": "LIVE_ROUTE_FAMILY",
+      "location": "GET /api/v1/video-jobs/{job_id}",
+      "classification": "REDIRECT_REQUIRED",
+      "known_live_objects": 12,
+      "required_action": "Keep a compatibility read adapter for all retained legacy IDs before any V1 traffic switch.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "route-v1-job-artifact",
+      "record_type": "LIVE_ROUTE_FAMILY",
+      "location": "GET /api/v1/video-jobs/{job_id}/artifacts/{artifact_name}",
+      "classification": "REDIRECT_REQUIRED",
+      "known_live_objects": 7,
+      "required_action": "Archive artifacts and provide an authenticated compatibility redirect or adapter before disabling this route.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "route-renderer-media",
+      "record_type": "LIVE_ROUTE_FAMILY",
+      "location": "GET /media/jobs/{job_id}/{artifact_name}",
+      "classification": "REDIRECT_REQUIRED",
+      "known_live_objects": 7,
+      "required_action": "Remove mixed-root exposure only after retained artifacts have a protected archive/read target and the 14-day telemetry gate passes.",
+      "deletion_allowed": false
+    },
+    {
+      "id": "n8n-sprint1-smoke-fixture",
+      "record_type": "INACTIVE_INTEGRATION_REFERENCE",
+      "location": "NPD AI Video Factory - Sprint 1 Smoke Test",
+      "classification": "SAFE_TO_RETIRE",
+      "known_live_objects": 0,
+      "required_action": "Keep inactive until the n8n owner separately approves archival/removal; never activate it as a migration step.",
+      "deletion_allowed": false
+    }
+  ]
+}

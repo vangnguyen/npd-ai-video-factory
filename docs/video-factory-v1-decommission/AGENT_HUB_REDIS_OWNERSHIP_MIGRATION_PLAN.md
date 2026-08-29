@@ -1,6 +1,6 @@
 # Agent Hub Redis ownership migration plan
 
-Status: **design only; not accepted or executed**
+Status: **M0 offline tooling PASS; production migration not accepted or executed**
 
 This plan separates Agent Hub data ownership from the Redis container owned by Video Factory V1.
 It does not authorize a deployment, write pause, export, restore, network change, container action,
@@ -24,13 +24,18 @@ The read-only AH-01B scan observed ongoing Agent Hub activity:
 | Unsupported types | 0 |
 | Keys with positive TTL at the scan | 0 |
 
+A fresh AH-01C read-only scan at `2026-08-29T06:31:55Z` observed 6,483 namespace keys
+(6,166 strings, 302 lists and 15 sorted sets), zero outside-namespace keys and zero positive TTLs.
+The increase from the earlier scan confirms that a production export still requires an approved
+writer-quiesce window.
+
 The changing key count proves that migration cannot use an uncoordinated copy. DB1 activity is
 Agent Hub activity, not V1 queue activity. DB0 remained 12 job records with queue/processing empty.
 
-The current logical maintenance format supports all types observed in DB1, but it does not preserve
-TTL. The provider-health scheduler can create an expiring lease, so preflight must fail closed on
-any positive TTL unless the export format is upgraded to preserve it or the lease is intentionally
-quiesced and excluded.
+The AH-01C version 2 logical maintenance format now records per-value checksums, absolute expiry,
+source stability, type counts and namespace/content fingerprints. It fails closed on source drift,
+unsupported types, checksum corruption, namespace mismatch and an unexpected non-empty target.
+Version 1 restore remains supported as non-expiring legacy input.
 
 ## Accepted target architecture
 
@@ -62,6 +67,12 @@ The future target should have these properties before cutover approval:
 
 Exit: CI and independent local Redis restore pass. This is tooling proof only, not production-data
 restore evidence.
+
+Result: **PASS on 29/08/2026**. Two disposable Redis 7 containers exercised string/list/sorted-set
+data plus an expiring scheduler lease. Namespace/value/type/TTL parity, fail-closed cases, explicit
+replace rollback and AOF-backed restart persistence passed. The containers and volume were removed;
+no production connection or write occurred. See
+[`agent-hub-redis-m0-evidence.json`](agent-hub-redis-m0-evidence.json).
 
 ### M1 — Owner-approved target provisioning
 
@@ -107,8 +118,8 @@ dataset. V1 Redis still cannot be stopped until all other V1 gates pass.
 ## Acceptance checklist
 
 - [ ] Target architecture/security design accepted.
-- [ ] TTL-aware or fail-closed export behavior merged and tested.
-- [ ] Synthetic isolated Redis restore PASS.
+- [x] TTL-aware or fail-closed export behavior implemented and locally tested; merge pending.
+- [x] Synthetic isolated Redis restore PASS.
 - [ ] Encrypted production DB1 export captured outside production.
 - [ ] Production export restored and verified outside production.
 - [ ] Source/target key, type, checksum and application read-model parity PASS.

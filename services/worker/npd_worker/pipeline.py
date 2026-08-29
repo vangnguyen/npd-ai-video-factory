@@ -328,7 +328,11 @@ async def call_renderer(
     async with httpx.AsyncClient(timeout=timeout) as client:
         for attempt in range(2):
             try:
-                response = await client.post(f"{config.renderer_url}/render", json=payload)
+                response = await client.post(
+                    f"{config.renderer_url}/render",
+                    json=payload,
+                    headers={"X-NPD-Caller-ID": "video-factory-v1-worker"},
+                )
             except httpx.RequestError as exc:
                 last_network_error = exc
                 if attempt == 0:

@@ -2,11 +2,13 @@
 
 ## Current stage
 
-`AH-01 / audit only` — **NO-GO for Stage A**.
+`AH-01C / readiness closure` — **NO-GO for Stage A**.
 
 No deprecation, drain, disable, observation, removal, traffic switch, restart, deployment, Caddy
-change, provider call, data mutation, or PR merge was performed. AH-01B reduced the inventory to one
-`UNKNOWN` decision, which remains a hard stop.
+change, provider call or data mutation was performed. AH-01C resolved the last `UNKNOWN` through
+conservative archive/redirect dispositions, but owner catalog acceptance, backup custody, Agent Hub
+Redis production migration, telemetry deployment/observation and the fresh final snapshot remain
+hard stops.
 
 ## Global gates
 
@@ -20,8 +22,8 @@ All of the following are mandatory before Stage A:
 - the attributed 29/08 local-time renderer request and any subsequent caller have accepted
   telemetry/observation evidence and a retirement plan;
 - the AH-01B mixed-storage ownership manifest is accepted and enforced;
-- external CMS/social/internal artifact references are inventoried or explicitly accepted as a
-  residual risk by the owner;
+- the conservative external CMS/social/internal artifact catalog and its archive/redirect fallback
+  are explicitly accepted by the owner;
 - the dated exact running API/worker/renderer image exports and restore PASS are owner-accepted,
   retained in two protected copies and revalidated against a fresh snapshot;
 - the dated V1 Redis DB0, storage, protected configuration and operational evidence backup/restore

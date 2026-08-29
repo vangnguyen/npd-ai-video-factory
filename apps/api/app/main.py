@@ -10,6 +10,7 @@ from redis.asyncio import Redis
 
 from .artifacts import ArtifactAccessError, resolve_recorded_artifact
 from .config import settings
+from .legacy_telemetry import LegacyTelemetry
 from .models import JobCreateResponse, JobRecord, VideoJobCreate
 from .state import RedisJobStore
 
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI):
     redis = Redis.from_url(settings.redis_url, decode_responses=False)
     app.state.redis = redis
     app.state.job_store = RedisJobStore(redis)
+    app.state.legacy_telemetry = LegacyTelemetry.from_environment()
     try:
         yield
     finally:
@@ -33,6 +35,28 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="NPD AI Video Factory API", version="0.1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def record_legacy_route_access(request: Request, call_next):
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        route = request.scope.get("route")
+        route_template = getattr(route, "path", None)
+        telemetry = getattr(request.app.state, "legacy_telemetry", None)
+        if telemetry is not None:
+            telemetry.record(
+                route=route_template,
+                method=request.method,
+                status_code=status_code,
+                peer_host=request.client.host if request.client else None,
+                claimed_caller_id=request.headers.get("X-NPD-Caller-ID"),
+                user_agent=request.headers.get("User-Agent"),
+            )
 
 
 def store_from(request: Request) -> RedisJobStore:

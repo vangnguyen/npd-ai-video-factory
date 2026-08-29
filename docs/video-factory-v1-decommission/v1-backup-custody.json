@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "status": "PENDING_OWNER_CUSTODY_GATE",
+  "generated_at": "2026-08-29T13:38:00+07:00",
+  "production_write_performed": false,
+  "secret_logged": false,
+  "primary_copy": {
+    "bundle_id": "v1-backup-restore-20260829T045502Z",
+    "location_ref": "owner-workspace/outputs/v1-backup-restore-20260829T045502Z",
+    "storage_class": "encrypted owner-workspace output outside production and Git",
+    "bundle_total_bytes": 1895938306,
+    "payload_count": 16,
+    "payload_cipher": "AES-256-GCM",
+    "manifest_sha256": "08ed9f6f55dd2aef32430124468b2ef7da26d50d21d916480e8ad3ae6e06e920",
+    "technical_restore_status": "PASS",
+    "complete_v1_bundle_restore": true,
+    "custodian_role": "OWNER_WORKSTATION_CURRENT_USER",
+    "custodian_acceptance": "PENDING"
+  },
+  "second_protected_copy": {
+    "status": "NOT_CREATED",
+    "reason": "OWNER_HAS_NOT_SELECTED_AN_INDEPENDENT_PROTECTED_STORAGE_TARGET",
+    "same_device_copy_qualifies": false,
+    "required_properties": [
+      "independent failure domain from the primary workstation",
+      "encrypted at rest and in transit",
+      "access limited to the named custodian and recovery custodian",
+      "immutable or versioned retention where supported",
+      "post-copy payload checksum parity",
+      "documented recovery test without production restore"
+    ],
+    "custodian_role": "PENDING_OWNER_SELECTION",
+    "retention_acceptance": "PENDING"
+  },
+  "restore_key_custody": {
+    "current_protection": "Windows DPAPI CurrentUser",
+    "dpapi_blob_sha256": "3ace74d123a9dbed0e19208210dfa9192b323f4f758dd59bb46ee9c4e043a3fb",
+    "plaintext_key_at_rest": false,
+    "plaintext_key_logged": false,
+    "portable_recovery_proven": false,
+    "current_limitation": "Recovery depends on the current Windows user/profile context.",
+    "primary_key_custodian_role": "PENDING_OWNER_SELECTION",
+    "recovery_key_custodian_role": "PENDING_OWNER_SELECTION",
+    "escrow_target": "PENDING_OWNER_SELECTION"
+  },
+  "retention": {
+    "status": "PROPOSED_NOT_ACCEPTED",
+    "minimum_policy": "Retain both protected copies until the later of 90 days after owner-accepted AH-03 completion, V3 owner-review closure, and all legal/business audit holds.",
+    "deletion_requires": [
+      "owner retention acceptance",
+      "two-copy checksum parity",
+      "portable recovery proof",
+      "accepted AH-03 observation window",
+      "separate explicit deletion approval"
+    ]
+  },
+  "gate": {
+    "primary_copy_technical_restore": "PASS",
+    "second_protected_copy": "BLOCKED_OWNER_TARGET",
+    "named_custodian": "BLOCKED_OWNER_SELECTION",
+    "retention": "BLOCKED_OWNER_ACCEPTANCE",
+    "portable_restore_key_custody": "BLOCKED_OWNER_SELECTION",
+    "backup_custody_accepted": false,
+    "v1_shutdown_authorized": false,
+    "destructive_change_allowed": false
+  }
+}

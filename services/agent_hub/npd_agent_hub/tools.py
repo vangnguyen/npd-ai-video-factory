@@ -122,7 +122,10 @@ class ToolExecutor:
         if not self.settings.video_api_url:
             raise ToolNotConfigured("VIDEO_API_URL is not configured")
 
-        headers = {"Idempotency-Key": f"agent-{task.task_id}-{action.action_id}"}
+        headers = {
+            "Idempotency-Key": f"agent-{task.task_id}-{action.action_id}",
+            "X-NPD-Caller-ID": "agent-hub-v1-tool",
+        }
         async with self._client() as client:
             try:
                 response = await client.post(
