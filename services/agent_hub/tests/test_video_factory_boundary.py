@@ -372,42 +372,44 @@ def test_webhook_verifier_keeps_historical_key_copy_for_rotation() -> None:
     assert old_key.decode() not in repr(verifier)
 
 
-@pytest.mark.asyncio
-async def test_client_defaults_fail_closed_without_a_transport() -> None:
+def test_client_defaults_fail_closed_without_a_transport() -> None:
     disabled = VideoFactoryClient()
     with pytest.raises(IntegrationDisabled):
-        await disabled.get_contract()
+        asyncio.run(disabled.get_contract())
     not_configured = VideoFactoryClient(mode=BoundaryMode.NOT_CONFIGURED)
     with pytest.raises(IntegrationNotConfigured):
-        await not_configured.get_contract()
+        asyncio.run(not_configured.get_contract())
     assert disabled.status().configured is False
     assert disabled.status().network_calls_enabled is False
 
 
-@pytest.mark.asyncio
-async def test_mock_client_contract_draft_status_summary_and_idempotency() -> None:
+def test_mock_client_contract_draft_status_summary_and_idempotency() -> None:
     client, transport, server = mock_stack()
-    contract = await client.get_contract()
+    contract = asyncio.run(client.get_contract())
     assert contract.inbound_actions == ["project.create_draft"]
     assert client.status().live_outbound_events == LIVE_OUTBOUND_EVENTS
     assert client.status().network_calls_enabled is False
 
-    created = await client.create_draft_project(
-        draft_request(), idempotency_key="ah02-draft-project-0001"
+    created = asyncio.run(
+        client.create_draft_project(
+            draft_request(), idempotency_key="ah02-draft-project-0001"
+        )
     )
     assert created.project.status == "draft"
     assert created.bridge_request.execution_started is False
     assert created.bridge_request.external_action is False
     assert client.project_dto(created).status == "draft"
 
-    replay = await client.create_draft_project(
-        draft_request(), idempotency_key="ah02-draft-project-0001"
+    replay = asyncio.run(
+        client.create_draft_project(
+            draft_request(), idempotency_key="ah02-draft-project-0001"
+        )
     )
     assert replay.idempotent_replay is True
     assert replay.project.project_id == created.project.project_id
-    status = await client.get_status(created.bridge_request.request_id)
-    summary = await client.get_project_summary(created.project.project_id)
-    project = await client.get_project(created.project.project_id)
+    status = asyncio.run(client.get_status(created.bridge_request.request_id))
+    summary = asyncio.run(client.get_project_summary(created.project.project_id))
+    project = asyncio.run(client.get_project(created.project.project_id))
     assert status.status == "succeeded"
     assert status.execution_started is False
     assert summary.execution_controlled_by_video_factory is True
@@ -419,65 +421,68 @@ async def test_mock_client_contract_draft_status_summary_and_idempotency() -> No
     assert server.drain_webhooks() == []
 
 
-@pytest.mark.asyncio
-async def test_mock_rejects_changed_idempotent_payload() -> None:
+def test_mock_rejects_changed_idempotent_payload() -> None:
     client, _transport, _server = mock_stack()
-    await client.create_draft_project(
-        draft_request(), idempotency_key="ah02-idempotency-conflict"
+    asyncio.run(
+        client.create_draft_project(
+            draft_request(), idempotency_key="ah02-idempotency-conflict"
+        )
     )
     with pytest.raises(BridgeResponseError) as exc_info:
-        await client.create_draft_project(
-            draft_request(name="Changed"),
-            idempotency_key="ah02-idempotency-conflict",
+        asyncio.run(
+            client.create_draft_project(
+                draft_request(name="Changed"),
+                idempotency_key="ah02-idempotency-conflict",
+            )
         )
     assert exc_info.value.status_code == 409
     assert exc_info.value.code == "IDEMPOTENCY_CONFLICT"
 
 
-@pytest.mark.asyncio
-async def test_idempotency_header_rejects_control_characters_before_transport() -> None:
+def test_idempotency_header_rejects_control_characters_before_transport() -> None:
     client, transport, _server = mock_stack()
     with pytest.raises(ValueError, match="safe characters"):
-        await client.create_draft_project(
-            draft_request(), idempotency_key="ah02-safe-key-0001\r\nInjected"
+        asyncio.run(
+            client.create_draft_project(
+                draft_request(), idempotency_key="ah02-safe-key-0001\r\nInjected"
+            )
         )
     assert transport.call_count == 0
 
 
-@pytest.mark.asyncio
-async def test_reserved_capabilities_fail_before_transport() -> None:
+def test_reserved_capabilities_fail_before_transport() -> None:
     client, transport, _server = mock_stack()
     calls_before = transport.call_count
     invocations = (
-        client.request_generation(
+        lambda: client.request_generation(
             VideoFactoryGenerationRequestDTO(
                 project_id="prj_0001",
                 project_version_id="pver_0001",
                 objective="create draft",
             )
         ),
-        client.request_analysis(
+        lambda: client.request_analysis(
             VideoFactoryAnalysisRequestDTO(
                 project_id="prj_0001",
                 source_asset_ref="asset_0001",
                 idempotency_key_ref="ah02-analysis-0001",
             )
         ),
-        client.request_preview(
+        lambda: client.request_preview(
             VideoFactoryPreviewRequestDTO(
                 project_id="prj_0001",
                 timeline_version=1,
                 idempotency_key_ref="ah02-preview-0001",
             )
         ),
-        client.request_approval(
+        lambda: client.request_approval(
             VideoFactoryApprovalRequestDTO(
                 project_id="prj_0001",
                 render_id="rnd_0001",
                 expected_project_version_id="pver_0001",
             )
         ),
-        client.submit_approval(
+        lambda: client.submit_approval(
             VideoFactoryApprovalDecisionDTO(
                 project_id="prj_0001",
                 approval_id="apr_0001",
@@ -485,7 +490,7 @@ async def test_reserved_capabilities_fail_before_transport() -> None:
                 reviewer_ref="owner-01",
             )
         ),
-        client.request_render(
+        lambda: client.request_render(
             VideoFactoryRenderRequestDTO(
                 project_id="prj_0001",
                 project_version_id="pver_0001",
@@ -494,7 +499,7 @@ async def test_reserved_capabilities_fail_before_transport() -> None:
                 idempotency_key_ref="ah02-render-00001",
             )
         ),
-        client.request_publication(
+        lambda: client.request_publication(
             VideoFactoryPublicationRequestDTO(
                 project_id="prj_0001",
                 render_id="rnd_0001",
@@ -502,27 +507,26 @@ async def test_reserved_capabilities_fail_before_transport() -> None:
                 idempotency_key_ref="ah02-publish-00001",
             )
         ),
-        client.get_publications(
+        lambda: client.get_publications(
             VideoFactoryPublicationQueryDTO(project_id="prj_0001")
         ),
-        client.get_analytics(
+        lambda: client.get_analytics(
             VideoFactoryAnalyticsQueryDTO(project_id="prj_0001")
         ),
     )
-    for invocation in invocations:
+    for invoke in invocations:
         with pytest.raises(UnsupportedCapability):
-            await invocation
+            asyncio.run(invoke())
     assert transport.call_count == calls_before
 
 
-@pytest.mark.asyncio
-async def test_duplicate_generated_nonce_stops_before_second_transport_call() -> None:
+def test_duplicate_generated_nonce_stops_before_second_transport_call() -> None:
     client, transport, _server = mock_stack(
         nonce_factory=lambda: "duplicate-nonce-000001"
     )
-    await client.get_contract()
+    asyncio.run(client.get_contract())
     with pytest.raises(BridgeContractError, match="nonce"):
-        await client.get_contract()
+        asyncio.run(client.get_contract())
     assert transport.call_count == 1
 
 
