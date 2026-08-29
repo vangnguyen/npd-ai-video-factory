@@ -49,3 +49,12 @@ jobs:
         run: pytest -q
       - name: Run Phase 5.1 business-answer eval gate
         run: python -m npd_agent_hub.evals --minimum-pass-rate 1.0
+      - name: Validate AH-R01 Redis independence candidate
+        run: |
+          python ../../scripts/ops/agent_hub_redis/validate_independence_candidate.py
+          python -m py_compile npd_agent_hub/redis_connection.py npd_agent_hub/redis_read_model_probe.py npd_agent_hub/redis_source_snapshot.py
+          python -m py_compile ../../scripts/ops/agent_hub_redis/run_independence_candidate_drill.py
+          bash -n ../../scripts/ops/agent_hub_redis/ah_r01_preflight.sh
+          bash -n ../../scripts/ops/agent_hub_redis/ah_r01_provision.sh
+          bash -n ../../scripts/ops/agent_hub_redis/ah_r01_export_encrypted.sh
+          python ../../scripts/ops/agent_hub_redis/run_independence_candidate_drill.py

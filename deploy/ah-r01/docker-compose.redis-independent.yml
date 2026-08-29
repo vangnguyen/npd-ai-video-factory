@@ -1,0 +1,88 @@
+services:
+  agent-redis:
+    image: ${AGENT_REDIS_IMAGE:-redis:7-alpine}
+    restart: unless-stopped
+    read_only: true
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        password="$$(tr -d '\r\n' < /run/secrets/agent_redis_password)"
+        case "$$password" in
+          *[!A-Za-z0-9_-]*|'') exit 64 ;;
+        esac
+        [ "$${#password}" -ge 43 ] && [ "$${#password}" -le 128 ] || exit 64
+        umask 077
+        {
+          printf '%s\n' 'bind 0.0.0.0'
+          printf '%s\n' 'protected-mode yes'
+          printf '%s\n' 'appendonly yes'
+          printf '%s\n' 'appendfsync everysec'
+          printf '%s\n' 'aof-use-rdb-preamble yes'
+          printf 'requirepass %s\n' "$$password"
+        } > /run/redis/redis.conf
+        chown redis:redis /data /run/redis /run/redis/redis.conf
+        chmod 0600 /run/redis/redis.conf
+        cd /data
+        exec /usr/bin/setpriv --reuid redis --regid redis --clear-groups \
+          redis-server /run/redis/redis.conf
+    secrets:
+      - agent_redis_password
+    volumes:
+      - agent-redis-data:/data
+    tmpfs:
+      - /run/redis:mode=0700,uid=999,gid=1000
+      - /tmp:mode=1777
+    networks:
+      agent-data:
+        aliases:
+          - agent-redis
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          REDISCLI_AUTH="$$(tr -d '\r\n' < /run/secrets/agent_redis_password)"
+          redis-cli --no-auth-warning ping | grep -qx PONG
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      npd.owner: agent-hub
+      npd.change: ah-r01
+
+  agent-hub:
+    environment:
+      AGENT_REDIS_URL: redis://agent-redis:6379/0
+      AGENT_REDIS_PASSWORD_FILE: /run/secrets/agent_redis_password
+    secrets:
+      - agent_redis_password
+    networks:
+      agent-data: {}
+    depends_on:
+      agent-redis:
+        condition: service_healthy
+
+secrets:
+  agent_redis_password:
+    file: ${AH_R01_REDIS_PASSWORD_HOST_FILE:?set an absolute protected password file}
+
+networks:
+  agent-data:
+    name: ${AH_R01_REDIS_NETWORK_NAME:-npd-agent-hub-data}
+    internal: true
+    labels:
+      npd.owner: agent-hub
+      npd.change: ah-r01
+
+volumes:
+  agent-redis-data:
+    name: ${AH_R01_REDIS_VOLUME_NAME:-npd-agent-hub-redis-data}
+    labels:
+      npd.owner: agent-hub
+      npd.change: ah-r01

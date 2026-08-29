@@ -29,6 +29,7 @@ from .provider_health_models import (
     ProviderHealthSchedulerStatus,
     ProviderHealthSnapshot,
 )
+from .redis_connection import create_redis_client
 
 
 HEARTBEAT_RECEIPT_RETENTION = 5000
@@ -682,13 +683,18 @@ class RedisHubStore:
         self,
         *,
         redis_url: str | None = None,
+        password_file: str | None = None,
         namespace: str | None = None,
         client: Redis | None = None,
     ) -> None:
         self.namespace = (namespace or default_settings.store_namespace).strip(":")
-        self.redis = client or Redis.from_url(
+        self.redis = client or create_redis_client(
             redis_url or default_settings.agent_redis_url,
-            decode_responses=True,
+            password_file=(
+                default_settings.agent_redis_password_file
+                if password_file is None
+                else password_file
+            ),
         )
 
     def _key(self, *parts: str) -> str:
@@ -1321,6 +1327,7 @@ def build_store(settings: HubSettings | None = None) -> HubStore:
     if backend == "redis":
         return RedisHubStore(
             redis_url=cfg.agent_redis_url,
+            password_file=cfg.agent_redis_password_file,
             namespace=cfg.store_namespace,
         )
     raise ValueError(f"unsupported AGENT_STORE_BACKEND={cfg.store_backend}")
