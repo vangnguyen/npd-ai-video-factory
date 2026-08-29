@@ -1,0 +1,240 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-08-29T04:21:00Z",
+  "production_checkout": "ca535a6a4cea67beeb0cae97b8fb5ea3c6c1743c",
+  "method": "read-only docker inspect plus SHA-256 of every tracked source input copied by each Dockerfile, compared byte-for-byte with git blobs",
+  "source_file_hash_semantics": "Each services[].source_files[].sha256 value is the identical SHA-256 observed for both runtime image content and the materialized git source blob after a MATCH comparison.",
+  "summary": {
+    "service_count": 3,
+    "observed_source_file_count": 43,
+    "source_mismatch_count": 0,
+    "source_attribution_resolved": true,
+    "portable_rollback_bundle_verified": true
+  },
+  "services": [
+    {
+      "service": "api",
+      "container": "npd-ai-video-factory-api-1",
+      "image_id": "sha256:5c7597d6da754baaac21effe6c3511ab16460659ead7233b2fde1fe5af75e2f7",
+      "created": "2026-08-14T15:09:09.152402747+07:00",
+      "size_bytes": 167124231,
+      "repo_tags": [
+        "npd-ai-video-factory-api:latest"
+      ],
+      "repo_digests": [],
+      "source_commit": "78273a6d082dc90f8eae0ea57c2b30165e4328cc",
+      "copied_source_files_observed": 10,
+      "source_match_status": "MATCH",
+      "source_mismatch_count": 0,
+      "source_files": [
+        {
+          "sha256": "8ba2d47b2e4850fb9c6e00d421775da40723a53cf38036df3afd46abc0482f08",
+          "path": "apps/api/app/__init__.py"
+        },
+        {
+          "sha256": "52872fda9a14ec6a1b851713b4ff056510c3263401b4d0a4118bec3149953be3",
+          "path": "apps/api/app/artifacts.py"
+        },
+        {
+          "sha256": "edc83e5878b5cd59d9e7531e8bb591429fd740d9609279c27784d28332ac3626",
+          "path": "apps/api/app/assets.py"
+        },
+        {
+          "sha256": "6a54d33629f8fb5200fb70063ff3dc59f119feebf8990e69611732886159c5c7",
+          "path": "apps/api/app/config.py"
+        },
+        {
+          "sha256": "6e3d08d53c3d16f9b28f97aec1edcebdcfce197beb1c4d950233786d6f11d2f3",
+          "path": "apps/api/app/main.py"
+        },
+        {
+          "sha256": "cab090573bbf221425cb809630a7dc027c93cbf6d9a447829b1e77d85037da59",
+          "path": "apps/api/app/manifest.py"
+        },
+        {
+          "sha256": "b3a00a242aca3d85d6e7e3a28284d379ecfe37ef38b86f7efe3fe7454a0f49a6",
+          "path": "apps/api/app/models.py"
+        },
+        {
+          "sha256": "f363c96095727c85233112399e345a6203ad39fcc1482ef80d1324f4c96f40aa",
+          "path": "apps/api/app/providers.py"
+        },
+        {
+          "sha256": "4b1cd679958348eeff0a72991b8de182591b1d57a6ed128507693f4a49f79b39",
+          "path": "apps/api/app/state.py"
+        },
+        {
+          "sha256": "4a6a9fb238afa38ab3eeeaa5c15f2eb74a0f4a829b5af456ee8fca6dd75a2aa4",
+          "path": "apps/api/pyproject.toml"
+        }
+      ]
+    },
+    {
+      "service": "worker",
+      "container": "npd-ai-video-factory-worker-1",
+      "image_id": "sha256:8d367182ab9ca08d17b5d30b524281b951d27bc5a91168bc340adab0f79c962c",
+      "created": "2026-08-14T15:19:36.31801302+07:00",
+      "size_bytes": 640609249,
+      "repo_tags": [
+        "npd-ai-video-factory-worker:latest"
+      ],
+      "repo_digests": [],
+      "source_commit": "a92785dc1721ec4e991bf12655629d809e13c241",
+      "copied_source_files_observed": 25,
+      "source_match_status": "MATCH",
+      "source_mismatch_count": 0,
+      "source_files": [
+        {
+          "sha256": "e7c032548b728e1be1792efd33cea6911703d60ffd5307976ef1b0c53e21dd00",
+          "path": "apps/api/Dockerfile"
+        },
+        {
+          "sha256": "ad9c83214500dd834dd0ec00277749f659bfcfaec0b37899d2e48ea8525f208c",
+          "path": "apps/api/README.md"
+        },
+        {
+          "sha256": "8ba2d47b2e4850fb9c6e00d421775da40723a53cf38036df3afd46abc0482f08",
+          "path": "apps/api/app/__init__.py"
+        },
+        {
+          "sha256": "52872fda9a14ec6a1b851713b4ff056510c3263401b4d0a4118bec3149953be3",
+          "path": "apps/api/app/artifacts.py"
+        },
+        {
+          "sha256": "edc83e5878b5cd59d9e7531e8bb591429fd740d9609279c27784d28332ac3626",
+          "path": "apps/api/app/assets.py"
+        },
+        {
+          "sha256": "6a54d33629f8fb5200fb70063ff3dc59f119feebf8990e69611732886159c5c7",
+          "path": "apps/api/app/config.py"
+        },
+        {
+          "sha256": "6e3d08d53c3d16f9b28f97aec1edcebdcfce197beb1c4d950233786d6f11d2f3",
+          "path": "apps/api/app/main.py"
+        },
+        {
+          "sha256": "cab090573bbf221425cb809630a7dc027c93cbf6d9a447829b1e77d85037da59",
+          "path": "apps/api/app/manifest.py"
+        },
+        {
+          "sha256": "b3a00a242aca3d85d6e7e3a28284d379ecfe37ef38b86f7efe3fe7454a0f49a6",
+          "path": "apps/api/app/models.py"
+        },
+        {
+          "sha256": "d4f9e2ba990266f12d46cc1de5efbc2a9e1bdd195018ad295c332acf7ec5d6ca",
+          "path": "apps/api/app/providers.py"
+        },
+        {
+          "sha256": "4b1cd679958348eeff0a72991b8de182591b1d57a6ed128507693f4a49f79b39",
+          "path": "apps/api/app/state.py"
+        },
+        {
+          "sha256": "4a6a9fb238afa38ab3eeeaa5c15f2eb74a0f4a829b5af456ee8fca6dd75a2aa4",
+          "path": "apps/api/pyproject.toml"
+        },
+        {
+          "sha256": "488d419d72c0222a275135030a0d4f8645ff7ede721dd7f20118caf7576822fa",
+          "path": "apps/api/tests/test_artifacts.py"
+        },
+        {
+          "sha256": "2416a22a42b83f6f1d257bf24e991e80630859d91a0aeafb9405776fe079146e",
+          "path": "apps/api/tests/test_assets_manifest.py"
+        },
+        {
+          "sha256": "7e6482e4716a7bb752ae59e07ca3638ee364c835d3c82c3d50ed8731e459319a",
+          "path": "apps/api/tests/test_models.py"
+        },
+        {
+          "sha256": "b419a46c74444630625ebaf2545d97d684094a3d47fac0fd12d5e3413e46a100",
+          "path": "apps/api/tests/test_providers.py"
+        },
+        {
+          "sha256": "468400c67dc268b0cdc87d647c8bb1b35da5e87f99b09c7e20ba2718d4a873bb",
+          "path": "services/worker/Dockerfile"
+        },
+        {
+          "sha256": "669cf9d1b33aa095208d69ded5da1d4ad32c8a868f682288c260c02b3296dc9a",
+          "path": "services/worker/README.md"
+        },
+        {
+          "sha256": "504490d2db3819205cbdbffed2b62589fb809c17f3f14cad0c05789194059047",
+          "path": "services/worker/npd_worker/__init__.py"
+        },
+        {
+          "sha256": "d385743b83658d2d6684faec6ab4457a41ffadb60a599d7b8da696c78ad2a472",
+          "path": "services/worker/npd_worker/main.py"
+        },
+        {
+          "sha256": "a0bd18a582d2db763c5fb6695940847d04180ee835bf10cc845c1aa025172e6e",
+          "path": "services/worker/npd_worker/pipeline.py"
+        },
+        {
+          "sha256": "576f997ade85da3925279ae765221bb2f2576e1bae5182ab462ebf46cb968e22",
+          "path": "services/worker/npd_worker/preflight.py"
+        },
+        {
+          "sha256": "b20a1e343b55983ee7a0fd6456fa117079626708370b658c0d210879556eed81",
+          "path": "services/worker/pyproject.toml"
+        },
+        {
+          "sha256": "d104f28e86bdd7ea1b3c9f97264059847ca3235cc314804c8493d667167b3c4c",
+          "path": "services/worker/tests/test_pipeline.py"
+        },
+        {
+          "sha256": "eb7cf16286fc6d7851f29ae21b7234af914cb85b1c8c5fd4b0eea4dfaf09ed50",
+          "path": "services/worker/worker.py"
+        }
+      ]
+    },
+    {
+      "service": "renderer",
+      "container": "npd-ai-video-factory-renderer-1",
+      "image_id": "sha256:e42b8c5bf9a047d4b5031ddf9fdadffbd0acd38bfa34b50a7a23227a71ecaf33",
+      "created": "2026-08-14T15:19:12.879039213+07:00",
+      "size_bytes": 1612391037,
+      "repo_tags": [
+        "npd-ai-video-factory-renderer:latest"
+      ],
+      "repo_digests": [],
+      "source_commit": "a92785dc1721ec4e991bf12655629d809e13c241",
+      "copied_source_files_observed": 8,
+      "source_match_status": "MATCH",
+      "source_mismatch_count": 0,
+      "source_files": [
+        {
+          "sha256": "d215a6cead4ee04ca77044cbd0c305dd594a9a7c6456dcaaf1c0090354f0aa97",
+          "path": "renderer/package.json"
+        },
+        {
+          "sha256": "64bb8e226e10f9c56d2efc3078342c956cd53b6865b082ad88352275bb50be4d",
+          "path": "renderer/src/RealEstateShort.tsx"
+        },
+        {
+          "sha256": "9bcb63bac756d376cd590bb2666b6acb213b6dafd8619026f7be204067445945",
+          "path": "renderer/src/Root.tsx"
+        },
+        {
+          "sha256": "e16a4e95de346a2d5a4a5499864385f261a220579e7821afbc40ad32a753bb45",
+          "path": "renderer/src/index.ts"
+        },
+        {
+          "sha256": "7f5a00bc4a7e409aff965e3c59724d08c64a54f6b6c706f5d18bbc66aa761f61",
+          "path": "renderer/src/server.ts"
+        },
+        {
+          "sha256": "b7fa17b0fea996dcfe66fdd26684711930070183215b7519df1b5a811e7027af",
+          "path": "renderer/src/smoke-bundle.ts"
+        },
+        {
+          "sha256": "6503444e74eda9a4d4450afc61185be029f2dbf278dc171a4e9652a73a7e891a",
+          "path": "renderer/src/types.ts"
+        },
+        {
+          "sha256": "f36953cac145c88bb7b621574f6fcd921745097016ecab22374fd1d27b973854",
+          "path": "renderer/tsconfig.json"
+        }
+      ]
+    }
+  ],
+  "rollback_boundary": "The exact application images and pinned Redis image were exported into the encrypted off-production bundle and exercised in the isolated restore drill completed 2026-08-29T05:27:05Z. Owner acceptance of key custody, a second protected copy, and a fresh pre-change snapshot remain mandatory before shutdown; source match or this dated PASS alone is not production authorization."
+}

@@ -6,13 +6,16 @@ The V1 job queue is drained at the dated snapshot, but V1 is **not unused** and 
 
 - all four V1 containers are running;
 - Agent Hub is still configured for the V1 API and shared Redis;
-- the renderer handled an unattributed direct render on `2026-08-29` local time;
+- the renderer handled a direct render on `2026-08-29` local time, now attributed by AH-01B to a
+  one-off Codex V3 owner-review workflow;
 - the storage root mixes V1 data with recently generated owner-review material;
 - V1 API/renderer ports are directly reachable from the public network;
-- exact rollback images and a V1 restore-tested backup set are not yet proven.
+- exact rollback images and a V1 restore-tested backup set are now technically proven for the dated
+  AH-01B snapshot, but custody/retention acceptance and a second protected copy remain pending.
 
-This audit performed reads only. It did not submit a V1 job, invoke a provider, change a key, alter
-a workflow, restart a container, edit Caddy, or touch V2/V3 runtime.
+Production inspection and backup capture performed reads only. They did not submit a V1 job, invoke
+a provider, change a key, alter a workflow, restart a production container, edit Caddy, or touch
+V2/V3 runtime. The restore ran only in an isolated local environment.
 
 ## Snapshot identity
 
@@ -114,9 +117,15 @@ The current renderer log contains progress for two job IDs:
 | `vid_1787989200000_a1b2c3d4e5` | `2026-08-28T17:42:07.681444152Z` | `2026-08-28T17:44:48.378506689Z` | Absent |
 
 The second render occurred from approximately `00:42` to `00:44` on `2026-08-29` in
-Asia/Saigon. Its timing is close to the new owner-review storage mtimes, but the renderer does not
-log caller identity or request paths. AH-01 therefore records the caller as `UNKNOWN`; it does not
-assert that the request came from V2/V3.
+Asia/Saigon. AH-01B correlated the exact job ID, manifest/output paths, command result, renderer
+completion time, and artifact SHA-256 values with Codex thread
+`01a04949-b7d1-7520-a46a-8e5fa5a8cb4e`. The request was a host-local
+`http://127.0.0.1:3001/render` call for the V3 owner-review package, not an Agent Hub or n8n
+execution. See [AH01B_EVIDENCE.md](AH01B_EVIDENCE.md).
+
+This attribution resolves the observed request, not the broader absence-of-callers question. The
+renderer still does not log caller identity or request receipt, so identity-safe telemetry and a
+fresh observation window remain required before any disable or stop.
 
 ### Agent Hub
 
@@ -205,11 +214,18 @@ V1 decommission work until ownership is established.
 - AOF is local persistence, not an independent backup.
 - `/var/backups/npd-agent-hub` contains Agent Hub backups; these do not constitute V1 DB0/media
   backups.
-- `.runtime/env-before-v2-20260814T080332Z.backup` exists, but its protected contents were not read.
-- No independently verified, checksummed V1 DB0 + storage + image backup and successful restore
-  drill was found.
+- `.runtime/env-before-v2-20260814T080332Z.backup` exists; its bytes were captured only inside the
+  AES-256-GCM runtime payload and its protected contents were not decoded, displayed or logged.
+- AH-01B later produced an independent 16-payload, 1,895,938,306-byte encrypted bundle outside
+  production/Git. It includes V1 DB0, selected V1 storage, pilot/runtime evidence, exact
+  API/worker/renderer images, the pinned Redis image and source/audit evidence.
+- A real isolated restore/restart verified 12/12 DB0 keys, file counts/checksums, exact image
+  mappings, API/renderer reads, no provider/publish path and cleanup. Production postcheck remained
+  unchanged with restart count zero.
+- Agent Hub DB1 was deliberately excluded and remains a separate backup/rehome gate.
 
-`v1-backup-restore-coverage` therefore remains `UNKNOWN`.
+`v1-backup-restore-coverage` is therefore `KEEP`; owner custody/retention acceptance, a second
+protected copy and a fresh pre-change snapshot remain required.
 
 ## Runtime provenance
 
@@ -221,15 +237,19 @@ The local V1 images were created on 14/08 and have no registry digest or git rev
 | Worker | `8d367182ab9c` | `2026-08-14T15:19:36` |
 | Renderer | `e42b8c5bf9a` | `2026-08-14T15:19:12` |
 
-Source SHA-256 comparison found:
+AH-01B compared every tracked source input copied into the running images and found zero
+mismatches:
 
-- worker pipeline/providers and renderer source match `origin/codex/production-pilot`;
-- most API source matches that branch/current main, but the API provider file matches an
-  intermediate commit (`78273a6`) rather than the worker image;
-- the host checkout has since advanced independently and is not the image build source of truth.
+- API: 10/10 files match `78273a6d082dc90f8eae0ea57c2b30165e4328cc`;
+- worker: 25/25 files match `a92785dc1721ec4e991bf12655629d809e13c241`;
+- renderer: 8/8 files match `a92785dc1721ec4e991bf12655629d809e13c241`.
 
-Before any future stop/rebuild, export and checksum the exact images. Rebuilding from the current
-checkout is not a valid rollback plan.
+The host checkout has advanced independently and is not the image build source of truth. Exact
+image IDs and created timestamps are recorded in [AH01B_EVIDENCE.md](AH01B_EVIDENCE.md).
+
+The exact images are now exported, checksummed and restore-tested in the encrypted bundle. Before
+any future stop/rebuild, verify the protected copy and compare a fresh production snapshot.
+Rebuilding from the current checkout is not a valid rollback plan.
 
 ## Secret presence and least privilege
 
@@ -249,9 +269,11 @@ At the snapshot:
 - stored V1 media: present;
 - Agent Hub caller: configured but no recorded execution;
 - n8n caller: inactive and currently network-disconnected;
-- renderer caller: recent and unknown;
+- observed direct renderer request: attributed to Codex V3 owner-review; independent caller
+  telemetry and observation still pending;
 - published/external references: unknown;
-- independent restore capability: unproven.
+- independent V1 restore capability: technical PASS for the dated snapshot; owner custody and
+  second-copy gates pending.
 
 Before any AH-03/AH-04 production action, rerun every volatile check in this document and record a
 new timestamped snapshot. The AH-01 snapshot alone never authorizes a shutdown.
