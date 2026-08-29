@@ -2,10 +2,10 @@
   "schema_version": "1.0",
   "scope": "synthetic_agent_hub_redis_m0",
   "status": "PASS",
-  "generated_at": "2026-08-29T06:58:56.445965+00:00",
-  "source_revision": "d42c8bf9e878af39f0e14f6b63d046bb48b9aae3",
+  "generated_at": "2026-08-29T08:03:50.306870+00:00",
+  "source_revision": "4762bc82dac36c6c8e5d42b679e7924b134e6f4b",
   "tested_sources": {
-    "maintenance_py_sha256": "cc3aaf427c507abfd170e69e26317909fd5917fe5a3e8c3835267f559bb724bc",
+    "maintenance_py_sha256": "12d20d9a7cd5a09d474a81b05b010df50591b40d0f3c75141352ecda4143eac3",
     "drill_py_sha256": "d126d31e00cc5da01e757ece95e855ce9e71e03692e29e610c0a1a46d890ce87"
   },
   "redis_image": "redis:7-alpine",
@@ -33,7 +33,7 @@
     },
     "ttl_key_count": 1,
     "source_consistency": "PASS",
-    "namespace_sha256": "2334a6b370b61761b58b2feee1a6659113849f4301e995e9bd69eb12217a2cc0",
+    "namespace_sha256": "8ba372f3e40dfd0e2be94228db081c05595eee80dbb45342cb3c1d888d103e02",
     "content_sha256": "447b93817ca98b9bdcfa949bdea3789cfb752598bc816bcc21330cd347e4e4b5",
     "values_logged": false
   },
