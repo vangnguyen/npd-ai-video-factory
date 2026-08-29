@@ -41,6 +41,11 @@ ROUTE_ACTIONS = {
         "/media/{path}": "legacy_media_read",
     },
 }
+REQUIRED_ACCEPTANCE_PATHS = {
+    "api_legacy_routes",
+    "renderer_render",
+    "renderer_media",
+}
 CALLER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
 METHOD = re.compile(r"^[A-Z]{3,10}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -144,6 +149,24 @@ def validate_event(event: dict[str, Any]) -> datetime:
     return parse_time(str(event.get("observed_at", "")))
 
 
+def attribution_status(claimed_caller_id: Any) -> str:
+    return (
+        "ATTRIBUTED"
+        if isinstance(claimed_caller_id, str) and claimed_caller_id != "invalid"
+        else "UNATTRIBUTED"
+    )
+
+
+def path_coverage_label(service: Any, route: Any) -> str | None:
+    if service == "video-factory-v1-api" and route in ROUTE_ACTIONS["video-factory-v1-api"]:
+        return None if route in {"/healthz", "/readyz"} else "api_legacy_routes"
+    if service == "video-factory-v1-renderer" and route == "/render":
+        return "renderer_render"
+    if service == "video-factory-v1-renderer" and route == "/media/{path}":
+        return "renderer_media"
+    return None
+
+
 def summarize(
     lines: Iterable[str],
     *,
@@ -220,6 +243,7 @@ def summarize(
             "method": key[3],
             "status_code": key[4],
             "claimed_caller_id": key[5],
+            "attribution_status": attribution_status(key[5]),
             "source_fingerprint": key[6],
             "client_fingerprint": key[7],
             "event_count": count,
@@ -359,9 +383,15 @@ def evaluate(
         )
         for item in mappings
         if isinstance(item, dict) and item.get("accepted_by_owner") is True
+        and (
+            item.get("claimed_caller_id") is not None
+            or (isinstance(item.get("owner_label"), str) and item["owner_label"].strip())
+        )
         for action in item.get("allowed_actions", [])
     }
-    unexplained: list[dict[str, Any]] = []
+    unexplained_by_identity: dict[tuple[Any, ...], dict[str, Any]] = {}
+    unattributed_by_identity: dict[tuple[Any, ...], dict[str, Any]] = {}
+    accepted_path_coverage: set[str] = set()
     counter_boundary_gaps: list[dict[str, Any]] = []
     last_route_count: dict[tuple[str, str, str], int] = {}
     last_deprecated_count: dict[tuple[str, str], int] = {}
@@ -415,6 +445,9 @@ def evaluate(
         for aggregate in day.get("aggregates", []):
             if aggregate.get("action") == "health_probe":
                 continue
+            expected_attribution = attribution_status(aggregate.get("claimed_caller_id"))
+            if aggregate.get("attribution_status") != expected_attribution:
+                raise ObservationError("daily aggregate attribution_status is inconsistent")
             key = (
                 aggregate.get("service"),
                 aggregate.get("source_fingerprint"),
@@ -422,10 +455,29 @@ def evaluate(
                 aggregate.get("claimed_caller_id"),
                 aggregate.get("action"),
             )
+            record = {
+                name: aggregate.get(name)
+                for name in (
+                    "service",
+                    "route",
+                    "action",
+                    "claimed_caller_id",
+                    "attribution_status",
+                    "source_fingerprint",
+                    "client_fingerprint",
+                )
+            }
+            mapping_accepted = key in accepted
+            coverage = path_coverage_label(aggregate.get("service"), aggregate.get("route"))
+            if mapping_accepted and coverage is not None:
+                accepted_path_coverage.add(coverage)
+            if expected_attribution == "UNATTRIBUTED":
+                unattributed_by_identity[key] = {
+                    **record,
+                    "owner_mapping_accepted": mapping_accepted,
+                }
             if key not in accepted:
-                unexplained.append({name: aggregate.get(name) for name in (
-                    "service", "action", "claimed_caller_id", "source_fingerprint", "client_fingerprint"
-                )})
+                unexplained_by_identity[key] = record
         for process in day.get("process_instances", []):
             identity = (str(process.get("service")), str(process.get("process_instance_id")))
             if identity not in seen_processes:
@@ -448,7 +500,12 @@ def evaluate(
             if (service, process_id) not in accepted_restarts:
                 unaccepted_restarts.append({"service": service, "process_instance_id": process_id})
 
-    reset_required = bool(unexplained or unaccepted_restarts or counter_boundary_gaps)
+    missing_path_coverage = sorted(REQUIRED_ACCEPTANCE_PATHS - accepted_path_coverage)
+    unexplained = list(unexplained_by_identity.values())
+    unattributed = list(unattributed_by_identity.values())
+    reset_required = bool(
+        unexplained or unaccepted_restarts or counter_boundary_gaps or missing_path_coverage
+    )
     return {
         "schema_version": "1.0",
         "status": "FAIL" if reset_required else "PASS",
@@ -456,6 +513,12 @@ def evaluate(
         "window_start": ordered[0]["window_start"],
         "window_end": ordered[-1]["window_end"],
         "unexplained_callers": unexplained,
+        "unattributed_callers": unattributed,
+        "path_coverage": {
+            label: "PASS" if label in accepted_path_coverage else "FAIL"
+            for label in sorted(REQUIRED_ACCEPTANCE_PATHS)
+        },
+        "missing_path_coverage": missing_path_coverage,
         "unaccepted_restarts": unaccepted_restarts,
         "counter_boundary_gaps": counter_boundary_gaps,
         "reset_required": reset_required,

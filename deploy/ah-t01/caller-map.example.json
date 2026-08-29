@@ -2,14 +2,37 @@
   "schema_version": "1.0",
   "accepted_mappings": [
     {
+      "service": "video-factory-v1-api",
+      "source_fingerprint": "hmac-sha256:REPLACE_WITH_24_HEX_CHARS",
+      "client_fingerprint": "hmac-sha256:REPLACE_WITH_24_HEX_CHARS",
+      "claimed_caller_id": "REPLACE_WITH_SAFE_CALLER_LABEL",
+      "allowed_actions": [
+        "legacy_read"
+      ],
+      "owner_label": "Owner-reviewed API legacy caller",
+      "accepted_by_owner": false
+    },
+    {
       "service": "video-factory-v1-renderer",
       "source_fingerprint": "hmac-sha256:REPLACE_WITH_24_HEX_CHARS",
       "client_fingerprint": "hmac-sha256:REPLACE_WITH_24_HEX_CHARS",
       "claimed_caller_id": "video-factory-v1-worker",
       "allowed_actions": [
-        "legacy_render"
+        "legacy_render",
+        "legacy_media_read"
       ],
       "owner_label": "V1 worker",
+      "accepted_by_owner": false
+    },
+    {
+      "service": "video-factory-v1-renderer",
+      "source_fingerprint": "hmac-sha256:REPLACE_WITH_24_HEX_CHARS",
+      "client_fingerprint": "hmac-sha256:REPLACE_WITH_24_HEX_CHARS",
+      "claimed_caller_id": null,
+      "allowed_actions": [
+        "legacy_media_read"
+      ],
+      "owner_label": "Owner explanation required for UNATTRIBUTED renderer caller",
       "accepted_by_owner": false
     }
   ]

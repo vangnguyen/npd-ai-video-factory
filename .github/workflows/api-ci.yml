@@ -30,7 +30,7 @@ jobs:
       - name: Validate AH-T01 telemetry deployment package
         run: |
           python ../../scripts/ops/ah_t01/validate_package.py
-          pytest -q ../../scripts/ops/ah_t01/test_telemetry_observation.py
+          pytest -q ../../scripts/ops/ah_t01/test_telemetry_observation.py ../../scripts/ops/ah_t01/test_deployment_scope.py ../../scripts/ops/ah_t01/test_verify_deployment.py
           python -m py_compile ../../scripts/ops/ah_t01/telemetry_observation.py ../../scripts/ops/ah_t01/verify_deployment.py
           bash -n ../../scripts/ops/ah_t01/preflight.sh ../../scripts/ops/ah_t01/deploy.sh
 
