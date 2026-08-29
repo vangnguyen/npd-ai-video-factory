@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-08-29T12:28:00+07:00",
+  "generated_at": "2026-08-29T13:38:00+07:00",
   "source_repository": "https://github.com/vangnguyen/npd-ai-video-factory",
-  "source_revision": "7c4442b3c42da09626838b7d195d6eed08cc034b",
+  "source_revision": "d42c8bf9e878af39f0e14f6b63d046bb48b9aae3",
   "ah01_audit_source_revision": "02c31be4729bf19f150791ee623dfb25d957ada7",
   "production_host": "157.10.201.169",
   "production_checkout_revision": "ca535a6a4cea67beeb0cae97b8fb5ea3c6c1743c",
@@ -23,13 +23,10 @@
       "DEPRECATE": 11,
       "DISABLE": 3,
       "KEEP": 10,
-      "MIGRATE": 15,
-      "REPLACE_WITH_V2_API": 4,
-      "UNKNOWN": 1
+      "MIGRATE": 16,
+      "REPLACE_WITH_V2_API": 4
     },
-    "unknown_component_ids": [
-      "v1-publication-reference-catalog"
-    ],
+    "unknown_component_ids": [],
     "destructive_change_allowed": false
   },
   "components": [
@@ -717,35 +714,35 @@
       "type": "observability",
       "location": "apps/api/app/main.py; services/worker/npd_worker; renderer/src/server.ts; Docker json-file logs",
       "runtime_active": true,
-      "current_state": "Health routes and job logs exist, but renderer logs omit caller identity/request receipt and there are no deprecation counters or consumer IDs.",
-      "last_known_use": "Renderer progress logs through 2026-08-28T17:44:48Z.",
+      "current_state": "Production health/job logs still omit reliable caller identity. AH-01C source now adds fixed-route counters, HMAC source/client fingerprints, sanitized claimed caller IDs and explicit no-payload/no-raw-identity flags for API and renderer; known worker and Agent Hub callers self-label. It is not deployed.",
+      "last_known_use": "Production renderer progress logs through 2026-08-28T17:44:48Z; AH-01C local telemetry unit/smoke tests passed on 2026-08-29.",
       "active_consumers": ["Operators", "Future deprecation monitor"],
       "data_ownership": "V1 operational telemetry",
       "dependencies": ["v1-api-service", "v1-worker-service", "v1-renderer-service"],
       "replacement": "Authenticated bridge audit plus legacy call counters during 7-14 day observation.",
-      "migration_requirement": "Add identity-safe deprecation telemetry before blocking writes; keep logs secret-free.",
+      "migration_requirement": "Owner-approve a telemetry-only deploy with protected HMAC salt, verify secret-free events, then complete 14 consecutive accepted days before blocking writes.",
       "shutdown_risk": "Without caller attribution, absence of known calls cannot prove absence of consumers.",
       "decision": "MIGRATE",
-      "owner_gate": "Reviewed AH-03 instrumentation PR; no production deploy without owner approval.",
-      "evidence": ["PROD:API/worker/renderer log aggregates", "SRC:logging implementations"]
+      "owner_gate": "No production telemetry deploy or observation start without explicit owner approval; a PASS window still grants no port/stop action.",
+      "evidence": ["PROD:API/worker/renderer log aggregates", "SRC:apps/api/app/legacy_telemetry.py", "SRC:renderer/src/legacyTelemetry.ts", "DOC:LEGACY_TELEMETRY_PLAN.md"]
     },
     {
       "id": "v1-publication-reference-catalog",
       "component": "External published-video and downstream reference inventory",
       "type": "data_lineage",
-      "location": "External CMS/social/content catalogs (not represented in V1 schema)",
-      "runtime_active": null,
-      "current_state": "Repository/local/n8n evidence was audited: the V3 package references source job vid_1786695599261_60dbfd66ed; n8n has one inactive route fixture, zero concrete job IDs and zero public-port URL references. Authorized external CMS/social catalogs were unavailable.",
-      "last_known_use": "Known local V3 lineage retained; no publication use proven.",
-      "active_consumers": ["UNKNOWN external pages or operator links"],
+      "location": "docs/video-factory-v1-decommission/v1-publication-reference-catalog.json",
+      "runtime_active": true,
+      "current_state": "AH-01C enumerated all 12 V1 jobs and the accepted WordPress, primary Facebook Page, n8n, Agent Hub, publisher-state and local lineage sources. No canonical external match was found; one V3 lineage is active, all other jobs require archive, and live read routes require redirects. Unknown classification count is zero without authorizing deletion.",
+      "last_known_use": "Twelve public status routes and seven final videos remained live at 2026-08-29T06:35:22Z; V3 owner review retains source job vid_1786695599261_60dbfd66ed.",
+      "active_consumers": ["V3 owner-review lineage", "Legacy status/artifact compatibility", "Conservative fallback for manually copied or late-discovered links"],
       "data_ownership": "External publishing systems and business owners",
       "dependencies": ["v1-api-artifact-route", "v1-storage-job-artifacts", "v1-production-pilot-artifacts"],
-      "replacement": "Owner-approved reference inventory and redirect/archive policy.",
-      "migration_requirement": "Search authorized CMS/social inventories for V1 job IDs/artifact URLs before changing read routes or storage.",
-      "shutdown_risk": "Unseen public or internal links may break and retained media may be deleted while referenced.",
-      "decision": "UNKNOWN",
-      "owner_gate": "No artifact route/storage removal until owner accepts reference audit.",
-      "evidence": ["SRC:apps/api/app/models.py has no publication/analytics fields", "LOCAL:V3 generation manifest source_job_id", "PROD:n8n workflow reference aggregate on 2026-08-29", "DOC:V1_PUBLICATION_REFERENCE_AUDIT.md"]
+      "replacement": "Owner-accepted encrypted archive plus authenticated compatibility read/redirect behavior for retained legacy IDs.",
+      "migration_requirement": "Retain every V1 job under the catalog, preserve the V3 lineage, implement read compatibility for live routes, refresh the source scans immediately before AH-03 and fail late references closed to archive/redirect.",
+      "shutdown_risk": "Unseen public or internal links may still exist; the conservative archive/redirect fallback prevents absence from becoming deletion authority.",
+      "decision": "MIGRATE",
+      "owner_gate": "No artifact route/storage removal until the owner accepts the catalog, backup custody, 14-day telemetry and fresh pre-AH-03 snapshot.",
+      "evidence": ["DOC:v1-publication-reference-catalog.json", "DOC:v1-publication-reference-evidence.json", "PROD:read-only CMS/social/n8n/AH/publisher scans at 2026-08-29", "LOCAL:V3 generation manifest source_job_id", "DOC:V1_PUBLICATION_REFERENCE_AUDIT.md"]
     },
     {
       "id": "v1-image-provenance",

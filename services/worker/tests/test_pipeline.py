@@ -1,4 +1,6 @@
+import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -7,10 +9,55 @@ from npd_worker.pipeline import (
     VideoQCError,
     WorkerConfig,
     build_subtitles,
+    call_renderer,
     ensure_brand_logo,
     safe_job_dir,
     validate_probe_payload,
 )
+
+
+def test_renderer_call_identifies_v1_worker_without_a_secret(monkeypatch, tmp_path: Path) -> None:
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            seen["client_options"] = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, url, *, json, headers):
+            seen.update(url=url, payload=json, headers=headers)
+            return SimpleNamespace(status_code=200)
+
+    monkeypatch.setattr("npd_worker.pipeline.httpx.AsyncClient", FakeClient)
+    config = WorkerConfig(
+        job_root=tmp_path / "jobs",
+        asset_root=tmp_path / "assets",
+        schema_path=tmp_path / "schema.json",
+        renderer_url="http://renderer:3001",
+        brand_name="Ngọc Phương Đông",
+        logo_path=tmp_path / "logo.png",
+        tts_provider="espeak",
+        espeak_voice="vi",
+        espeak_rate=145,
+        renderer_timeout_seconds=600,
+    )
+
+    asyncio.run(
+        call_renderer(
+            config,
+            job_id="vid_12345678",
+            manifest_path=tmp_path / "manifest.json",
+            output_path=tmp_path / "final.mp4",
+        )
+    )
+
+    assert seen["url"] == "http://renderer:3001/render"
+    assert seen["headers"] == {"X-NPD-Caller-ID": "video-factory-v1-worker"}
 
 
 def test_safe_job_dir_stays_under_root(tmp_path: Path) -> None:

@@ -6,6 +6,7 @@ import {dirname, isAbsolute, relative, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {z} from "zod";
 
+import {createLegacyTelemetry} from "./legacyTelemetry";
 import type {VideoManifest} from "./types";
 
 const port = Number(process.env.PORT ?? 3001);
@@ -13,6 +14,20 @@ const storageRoot = resolve(process.env.STORAGE_ROOT ?? "/workspace/storage");
 const entryPoint = fileURLToPath(new URL("./index.ts", import.meta.url));
 
 const app = express();
+const recordLegacyAccess = createLegacyTelemetry(process.env.LEGACY_TELEMETRY_SALT?.trim() || undefined);
+app.use((req, res, next) => {
+  res.on("finish", () => {
+    recordLegacyAccess({
+      path: req.path,
+      method: req.method,
+      statusCode: res.statusCode,
+      peerAddress: req.socket.remoteAddress,
+      claimedCallerId: req.get("X-NPD-Caller-ID"),
+      userAgent: req.get("User-Agent"),
+    });
+  });
+  next();
+});
 app.use(express.json({limit: "1mb"}));
 app.use("/media", express.static(storageRoot, {dotfiles: "deny", fallthrough: false}));
 

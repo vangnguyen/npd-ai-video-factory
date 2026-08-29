@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections import Counter
@@ -15,10 +16,21 @@ INVENTORY = AUDIT_DIR / "v1-components.json"
 STORAGE_MANIFEST = AUDIT_DIR / "v1-storage-ownership-manifest.json"
 PROVENANCE_MANIFEST = AUDIT_DIR / "v1-runtime-image-provenance.json"
 BACKUP_RESTORE_EVIDENCE = AUDIT_DIR / "v1-backup-restore-evidence.json"
+PUBLICATION_CATALOG = AUDIT_DIR / "v1-publication-reference-catalog.json"
+PUBLICATION_EVIDENCE = AUDIT_DIR / "v1-publication-reference-evidence.json"
+BACKUP_CUSTODY = AUDIT_DIR / "v1-backup-custody.json"
+REDIS_M0_EVIDENCE = AUDIT_DIR / "agent-hub-redis-m0-evidence.json"
 REQUIRED_TOOLING = {
     ROOT / "scripts" / "ops" / "v1_backup" / "README.md",
     ROOT / "scripts" / "ops" / "v1_backup" / "export-db0-readonly.sh",
     ROOT / "scripts" / "ops" / "v1_backup" / "verify_redis_export.py",
+    ROOT / "scripts" / "ops" / "agent_hub_redis" / "README.md",
+    ROOT / "scripts" / "ops" / "agent_hub_redis" / "run_synthetic_restore_drill.py",
+    ROOT / "scripts" / "ops" / "v1_publication_audit" / "README.md",
+    ROOT / "scripts" / "ops" / "v1_publication_audit" / "audit_wordpress_public.py",
+    ROOT / "apps" / "api" / "app" / "legacy_telemetry.py",
+    ROOT / "renderer" / "src" / "legacyTelemetry.ts",
+    ROOT / "renderer" / "src" / "smoke-legacy-telemetry.ts",
 }
 
 ALLOWED_DECISIONS = {
@@ -54,6 +66,14 @@ REQUIRED_DOCS = {
     "v1-storage-ownership-manifest.json",
     "v1-runtime-image-provenance.json",
     "v1-backup-restore-evidence.json",
+    "AH01C_READINESS_CLOSURE.md",
+    "BACKUP_CUSTODY_PLAN.md",
+    "LEGACY_TELEMETRY_PLAN.md",
+    "PRE_AH03_SNAPSHOT_RUNBOOK.md",
+    "v1-publication-reference-catalog.json",
+    "v1-publication-reference-evidence.json",
+    "v1-backup-custody.json",
+    "agent-hub-redis-m0-evidence.json",
 }
 REQUIRED_COMPONENT_FIELDS = {
     "id",
@@ -408,13 +428,237 @@ def validate_backup_restore_evidence() -> None:
         fail("backup evidence must preserve the V1 decommission NO-GO gate")
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def validate_publication_closure() -> None:
+    catalog = json.loads(PUBLICATION_CATALOG.read_text(encoding="utf-8"))
+    if catalog.get("schema_version") != "1.0" or catalog.get("catalog_status") != "RESOLVED_CONSERVATIVE":
+        fail("publication catalog must be a resolved conservative v1.0 catalog")
+    allowed = {
+        "ACTIVE_REFERENCE",
+        "ARCHIVE_REQUIRED",
+        "REDIRECT_REQUIRED",
+        "SAFE_TO_RETIRE",
+        "UNKNOWN",
+    }
+    if set(catalog.get("allowed_classifications") or []) != allowed:
+        fail("publication catalog classification enum is invalid")
+    if catalog.get("destructive_change_allowed") is not False or catalog.get("v1_decommission") != "NO-GO":
+        fail("publication catalog must preserve destructive=false and V1 NO-GO")
+    policy = catalog.get("coverage_policy") or {}
+    if (
+        policy.get("unseen_reference_fallback") != "ARCHIVE_REQUIRED"
+        or policy.get("live_url_fallback") != "REDIRECT_REQUIRED"
+        or policy.get("absence_authorizes_deletion") is not False
+        or policy.get("refresh_required_before_ah03") is not True
+    ):
+        fail("publication catalog fallback policy is not fail-closed")
+
+    records = catalog.get("records")
+    if not isinstance(records, list) or not records:
+        fail("publication catalog records must be a non-empty list")
+    ids: list[str] = []
+    classifications: Counter[str] = Counter()
+    for index, record in enumerate(records):
+        if not isinstance(record, dict):
+            fail(f"publication record {index} is not an object")
+        record_id = record.get("id")
+        classification = record.get("classification")
+        if not isinstance(record_id, str) or not record_id:
+            fail(f"publication record {index} has invalid id")
+        if classification not in allowed:
+            fail(f"publication record {record_id} has invalid classification")
+        if classification == "UNKNOWN":
+            fail(f"publication record {record_id} must not remain UNKNOWN in AH-01C")
+        if record.get("deletion_allowed") is not False:
+            fail(f"publication record {record_id} must not allow deletion")
+        ids.append(record_id)
+        classifications[classification] += 1
+    if len(ids) != len(set(ids)):
+        fail("publication catalog contains duplicate record IDs")
+
+    storage = json.loads(STORAGE_MANIFEST.read_text(encoding="utf-8"))
+    expected_job_ids = sorted(
+        {
+            parts[1]
+            for item in storage.get("files") or []
+            if len(parts := str(item.get("path") or "").split("/")) >= 3
+            and parts[0] == "jobs"
+            and parts[1].startswith("vid_")
+        }
+    )
+    job_records = [record for record in records if record.get("record_type") == "V1_JOB"]
+    actual_job_ids = sorted(str(record.get("job_id") or "") for record in job_records)
+    if actual_job_ids != expected_job_ids or len(actual_job_ids) != 12:
+        fail("publication catalog does not cover every retained V1 job exactly once")
+    active_jobs = [record for record in job_records if record["classification"] == "ACTIVE_REFERENCE"]
+    if [record["job_id"] for record in active_jobs] != ["vid_1786695599261_60dbfd66ed"]:
+        fail("publication catalog must preserve the known V3 source lineage")
+
+    summary = catalog.get("summary") or {}
+    if (
+        summary.get("record_count") != len(records)
+        or summary.get("by_classification") != dict(sorted(classifications.items()))
+        or summary.get("unknown_count") != 0
+        or summary.get("v1_job_count") != len(job_records)
+        or summary.get("v1_jobs_with_final_mp4") != sum(
+            record.get("final_mp4_bytes") is not None for record in job_records
+        )
+    ):
+        fail("publication catalog summary is stale")
+
+    evidence = json.loads(PUBLICATION_EVIDENCE.read_text(encoding="utf-8"))
+    if (
+        evidence.get("schema_version") != "1.0"
+        or evidence.get("status") != "PASS"
+        or evidence.get("read_only") is not True
+        or evidence.get("production_write_performed") is not False
+        or evidence.get("secret_logged") is not False
+        or evidence.get("raw_business_payload_logged") is not False
+    ):
+        fail("publication evidence safety envelope is invalid")
+    sources = evidence.get("sources") or []
+    expected_source_ids = {
+        "v1-db0-job-metadata",
+        "v1-public-read-routes",
+        "wordpress-public-rest",
+        "primary-facebook-page",
+        "production-n8n",
+        "agent-hub-db1",
+        "content-publisher-state",
+        "repository-and-owner-review",
+    }
+    if {item.get("id") for item in sources if isinstance(item, dict)} != expected_source_ids:
+        fail("publication evidence source coverage is incomplete")
+    if any(item.get("status") != "PASS" for item in sources):
+        fail("publication evidence contains a non-PASS source")
+    fallback = evidence.get("fallback_disposition") or {}
+    if (
+        fallback.get("unseen_or_late_discovered_reference") != "ARCHIVE_REQUIRED"
+        or fallback.get("live_legacy_url") != "REDIRECT_REQUIRED"
+        or fallback.get("deletion_by_absence_allowed") is not False
+    ):
+        fail("publication evidence fallback is not fail-closed")
+
+
+def validate_backup_custody() -> None:
+    payload = json.loads(BACKUP_CUSTODY.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != "1.0" or payload.get("status") != "PENDING_OWNER_CUSTODY_GATE":
+        fail("backup custody must remain pending the owner custody gate")
+    if payload.get("production_write_performed") is not False or payload.get("secret_logged") is not False:
+        fail("backup custody safety flags are invalid")
+    primary = payload.get("primary_copy") or {}
+    if (
+        primary.get("bundle_id") != "v1-backup-restore-20260829T045502Z"
+        or primary.get("bundle_total_bytes") != 1895938306
+        or primary.get("payload_count") != 16
+        or primary.get("payload_cipher") != "AES-256-GCM"
+        or primary.get("technical_restore_status") != "PASS"
+        or primary.get("complete_v1_bundle_restore") is not True
+    ):
+        fail("backup custody primary copy does not match restore-tested evidence")
+    validate_sha256(primary.get("manifest_sha256"), context="backup custody manifest")
+    second = payload.get("second_protected_copy") or {}
+    if second.get("status") != "NOT_CREATED" or second.get("same_device_copy_qualifies") is not False:
+        fail("backup custody must not claim an unverified second protected copy")
+    key_custody = payload.get("restore_key_custody") or {}
+    validate_sha256(key_custody.get("dpapi_blob_sha256"), context="backup custody DPAPI blob")
+    if (
+        key_custody.get("plaintext_key_at_rest") is not False
+        or key_custody.get("plaintext_key_logged") is not False
+        or key_custody.get("portable_recovery_proven") is not False
+    ):
+        fail("backup key custody must preserve the pending portable-recovery gate")
+    gate = payload.get("gate") or {}
+    if (
+        gate.get("primary_copy_technical_restore") != "PASS"
+        or gate.get("backup_custody_accepted") is not False
+        or gate.get("v1_shutdown_authorized") is not False
+        or gate.get("destructive_change_allowed") is not False
+    ):
+        fail("backup custody must preserve owner and shutdown gates")
+
+
+def validate_redis_m0_evidence() -> None:
+    payload = json.loads(REDIS_M0_EVIDENCE.read_text(encoding="utf-8"))
+    if (
+        payload.get("schema_version") != "1.0"
+        or payload.get("scope") != "synthetic_agent_hub_redis_m0"
+        or payload.get("status") != "PASS"
+        or payload.get("production_connection_performed") is not False
+        or payload.get("production_write_performed") is not False
+    ):
+        fail("Redis M0 evidence safety envelope is invalid")
+    tested = payload.get("tested_sources") or {}
+    expected_sources = {
+        "maintenance_py_sha256": ROOT / "services" / "agent_hub" / "npd_agent_hub" / "maintenance.py",
+        "drill_py_sha256": ROOT / "scripts" / "ops" / "agent_hub_redis" / "run_synthetic_restore_drill.py",
+    }
+    for field, path in expected_sources.items():
+        validate_sha256(tested.get(field), context=f"Redis M0 {field}")
+        if tested[field] != file_sha256(path):
+            fail(f"Redis M0 evidence is stale for {path.relative_to(ROOT)}")
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", str(payload.get("redis_image_id") or "")):
+        fail("Redis M0 exact image ID is invalid")
+    isolation = payload.get("synthetic_isolation") or {}
+    if (
+        isolation.get("remote_exposure") is not False
+        or isolation.get("leftover_containers") != 0
+        or isolation.get("leftover_volumes") != 0
+    ):
+        fail("Redis M0 synthetic cleanup/isolation is incomplete")
+    checks = payload.get("checks") or {}
+    for field in (
+        "namespace_only_export",
+        "unsupported_type_fail_closed",
+        "non_empty_target_fail_closed",
+        "namespace_mismatch_fail_closed",
+        "checksum_corruption_fail_closed_before_write",
+        "first_restore_parity",
+        "ttl_semantics",
+        "outside_namespace_preserved",
+        "explicit_replace_rollback_parity",
+        "target_restart_persistence",
+    ):
+        if checks.get(field) != "PASS":
+            fail(f"Redis M0 check {field} must be PASS")
+    gate = payload.get("gate") or {}
+    if (
+        gate.get("m0_offline_tooling") != "PASS"
+        or gate.get("production_db1_export_restore") != "NOT_RUN"
+        or gate.get("production_migration_authorized") is not False
+        or gate.get("v1_shutdown_authorized") is not False
+    ):
+        fail("Redis M0 evidence must preserve production migration gates")
+
+
+def validate_telemetry_source_gate() -> None:
+    env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+    if not re.search(r"(?m)^LEGACY_TELEMETRY_SALT=$", env_example):
+        fail(".env.example must declare an empty legacy telemetry salt")
+    worker = (ROOT / "services" / "worker" / "npd_worker" / "pipeline.py").read_text(
+        encoding="utf-8"
+    )
+    tools = (ROOT / "services" / "agent_hub" / "npd_agent_hub" / "tools.py").read_text(
+        encoding="utf-8"
+    )
+    if "video-factory-v1-worker" not in worker or "agent-hub-v1-tool" not in tools:
+        fail("known V1 callers must send non-secret telemetry labels")
+
+
 def main() -> None:
     missing_docs = sorted(name for name in REQUIRED_DOCS if not (AUDIT_DIR / name).is_file())
     if missing_docs:
         fail(f"missing deliverables: {', '.join(missing_docs)}")
     missing_tooling = sorted(str(path.relative_to(ROOT)) for path in REQUIRED_TOOLING if not path.is_file())
     if missing_tooling:
-        fail(f"missing AH-01B tooling: {', '.join(missing_tooling)}")
+        fail(f"missing AH-01B/AH-01C tooling: {', '.join(missing_tooling)}")
 
     payload = json.loads(INVENTORY.read_text(encoding="utf-8"))
     if payload.get("schema_version") != "1.0":
@@ -475,18 +719,24 @@ def main() -> None:
         fail("summary.by_decision is stale")
     if summary.get("unknown_component_ids") != unknown_ids:
         fail("summary.unknown_component_ids is stale")
-    if unknown_ids and summary.get("destructive_change_allowed") is not False:
-        fail("destructive_change_allowed must be false while UNKNOWN remains")
+    if unknown_ids:
+        fail(f"AH-01C inventory must have zero UNKNOWN decisions: {', '.join(unknown_ids)}")
+    if summary.get("destructive_change_allowed") is not False:
+        fail("destructive_change_allowed must remain false after UNKNOWN reaches zero")
 
     validate_storage_manifest()
     validate_provenance_manifest()
     validate_backup_restore_evidence()
+    validate_publication_closure()
+    validate_backup_custody()
+    validate_redis_m0_evidence()
+    validate_telemetry_source_gate()
 
-    verifier = ROOT / "scripts" / "ops" / "v1_backup" / "verify_redis_export.py"
-    try:
-        compile(verifier.read_text(encoding="utf-8"), str(verifier), "exec")
-    except SyntaxError as exc:
-        fail(f"backup verifier has invalid Python syntax: {exc}")
+    for python_tool in sorted(path for path in REQUIRED_TOOLING if path.suffix == ".py"):
+        try:
+            compile(python_tool.read_text(encoding="utf-8"), str(python_tool), "exec")
+        except SyntaxError as exc:
+            fail(f"{python_tool.relative_to(ROOT)} has invalid Python syntax: {exc}")
 
     for name in sorted(REQUIRED_DOCS):
         path = AUDIT_DIR / name

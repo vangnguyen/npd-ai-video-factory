@@ -10,6 +10,8 @@ on:
       - "services/agent_hub/**"
       - "scripts/ci/**"
       - "scripts/ops/v1_backup/**"
+      - "scripts/ops/agent_hub_redis/**"
+      - "scripts/ops/v1_publication_audit/**"
       - "workflows/n8n/**"
       - "docs/video-factory-v1-decommission/**"
       - ".github/workflows/agent-hub-ci.yml"
@@ -22,9 +24,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate V1 decommission inventory
         run: python scripts/ci/validate-v1-decommission-inventory.py
-      - name: Validate V1 backup tooling syntax
+      - name: Validate V1/AH-01C audit tooling syntax
         run: |
           python -m py_compile scripts/ops/v1_backup/verify_redis_export.py
+          python -m py_compile scripts/ops/agent_hub_redis/run_synthetic_restore_drill.py
+          python -m py_compile scripts/ops/v1_publication_audit/audit_wordpress_public.py
           bash -n scripts/ops/v1_backup/export-db0-readonly.sh
       - name: Validate import with production n8n version
         run: bash scripts/ci/validate-n8n-workflows.sh

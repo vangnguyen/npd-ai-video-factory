@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "scope": "synthetic_agent_hub_redis_m0",
+  "status": "PASS",
+  "generated_at": "2026-08-29T06:58:56.445965+00:00",
+  "source_revision": "d42c8bf9e878af39f0e14f6b63d046bb48b9aae3",
+  "tested_sources": {
+    "maintenance_py_sha256": "cc3aaf427c507abfd170e69e26317909fd5917fe5a3e8c3835267f559bb724bc",
+    "drill_py_sha256": "d126d31e00cc5da01e757ece95e855ce9e71e03692e29e610c0a1a46d890ce87"
+  },
+  "redis_image": "redis:7-alpine",
+  "redis_image_id": "sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2",
+  "production_connection_performed": false,
+  "production_write_performed": false,
+  "synthetic_isolation": {
+    "host_binding": "127.0.0.1 only",
+    "remote_exposure": false,
+    "ephemeral_source_container": true,
+    "ephemeral_target_container": true,
+    "ephemeral_target_volume": true,
+    "cleanup_required": true,
+    "leftover_containers": 0,
+    "leftover_volumes": 0
+  },
+  "export": {
+    "backup_version": 2,
+    "namespace": "npd:agent-hub:v1",
+    "key_count": 4,
+    "type_counts": {
+      "list": 1,
+      "string": 2,
+      "zset": 1
+    },
+    "ttl_key_count": 1,
+    "source_consistency": "PASS",
+    "namespace_sha256": "2334a6b370b61761b58b2feee1a6659113849f4301e995e9bd69eb12217a2cc0",
+    "content_sha256": "447b93817ca98b9bdcfa949bdea3789cfb752598bc816bcc21330cd347e4e4b5",
+    "values_logged": false
+  },
+  "checks": {
+    "namespace_only_export": "PASS",
+    "unsupported_type_fail_closed": "PASS",
+    "non_empty_target_fail_closed": "PASS",
+    "namespace_mismatch_fail_closed": "PASS",
+    "checksum_corruption_fail_closed_before_write": "PASS",
+    "first_restore_count": 4,
+    "first_restore_parity": "PASS",
+    "ttl_semantics": "PASS",
+    "outside_namespace_preserved": "PASS",
+    "explicit_replace_rollback_count": 4,
+    "explicit_replace_rollback_parity": "PASS",
+    "target_restart_persistence": "PASS"
+  },
+  "gate": {
+    "m0_offline_tooling": "PASS",
+    "production_db1_export_restore": "NOT_RUN",
+    "production_migration_authorized": false,
+    "v1_shutdown_authorized": false
+  }
+}

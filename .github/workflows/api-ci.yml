@@ -54,6 +54,8 @@ jobs:
         run: npm install
       - name: Typecheck renderer
         run: npm run typecheck
+      - name: Validate identity-safe legacy telemetry
+        run: npm run telemetry:check
       - name: Bundle Remotion composition
         run: npm run bundle:check
 
