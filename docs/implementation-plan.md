@@ -14,7 +14,7 @@
 
 The API foundation is covered by GitHub Actions CI. The current CI installs `apps/api[dev]` and runs pytest on pushes to the Sprint 1 branch and pull requests to `main`.
 
-## Completed vertical-slice continuation
+## Completed vertical slice
 
 10. [x] Implement the `real-estate-short-v1` Remotion renderer.
    - create a real composition at 1080x1920, 30 fps
@@ -41,7 +41,9 @@ The API foundation is covered by GitHub Actions CI. The current CI installs `app
    - GitHub Actions for Python and renderer tests
    - Docker Compose smoke test
    - final 45-second 1080x1920 H.264 MP4
-   - record job ID, manifest validation result, ffprobe metadata, and test results in PR #2
+   - record job ID, manifest validation result, ffprobe metadata, and test results in the Sprint 1 PR
+
+Tasks 10-13 are complete. See `docs/sprint-1-acceptance-evidence.md` for the verified job and media metadata. Sprint 2 remains out of scope until this PR is reviewed and merged.
 
 ## Scope guard
 

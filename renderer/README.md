@@ -14,6 +14,24 @@ Sprint 1 renderer service for `real-estate-short-v1`.
 }
 ```
 
+`output_path` is optional and defaults to `final.mp4` beside the manifest.
+
+Success:
+
+```json
+{
+  "status": "success",
+  "output_path": "/workspace/storage/jobs/vid_.../final.mp4",
+  "duration": 45,
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "codec": "h264"
+}
+```
+
+Failures return `status`, `error_code`, a safe message, retryability, and structured details without a raw stack trace.
+
 The service:
 
 1. validates request paths stay below `STORAGE_ROOT`;
@@ -23,12 +41,13 @@ The service:
 5. selects `real-estate-short-v1` with manifest input props;
 6. renders H.264 + AAC to the requested output path.
 
-The template supports timeline scenes, local video/image media, narration/music, subtitles, brand logo, headline overlays, and a final CTA card.
+The template supports timeline scenes, local video/image media, narration/music, mobile-safe subtitles, Vietnamese Noto Sans glyph coverage, brand logo, headline/body/emphasis overlays, and a final CTA card. Subtitle seconds are converted into explicit global frame ranges at the composition FPS. Renderer progress events map 0-100% render completion into overall job progress 70-95.
 
 ## Development checks
 
 ```bash
-npm install
+npm ci
+npm test
 npm run typecheck
 npm run bundle:check
 ```

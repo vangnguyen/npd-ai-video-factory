@@ -15,14 +15,17 @@ The Sprint 1 worker claims Redis jobs and runs the resumable vertical-slice pipe
 
 ## Sprint 1 TTS
 
-`TTS_PROVIDER=espeak` uses the offline `espeak-ng` Vietnamese voice inside the worker container. This removes external credentials from the smoke test while preserving the provider interface for later production adapters.
+`TTS_PROVIDER=espeak` uses the offline `espeak-ng` Vietnamese voice inside the worker container. This removes external credentials from the smoke test while preserving the provider interface for later production adapters. Narration is synthesized per scene, assembled into an exact-duration PCM master, and persisted with measured cue timing so subtitles follow speech rather than placeholder scene duration.
 
 ## QC
 
-The worker runs FFprobe after render and requires:
+The worker runs FFprobe and FFmpeg content analysis after render and requires:
 
 - MP4 larger than 100 KB;
 - H.264 video;
 - 1080x1920 dimensions;
+- 30 fps;
 - audio stream;
 - duration within 3 seconds of the requested duration.
+- central-frame luminance samples that are not predominantly black;
+- decodable audio with a non-silent peak.

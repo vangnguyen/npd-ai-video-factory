@@ -17,3 +17,4 @@ storage/jobs/*
 e2e-artifacts/
 coverage/
 .pytest_cache/
+e2e-artifacts/

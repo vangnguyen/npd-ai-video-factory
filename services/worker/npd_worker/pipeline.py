@@ -6,7 +6,9 @@ import json
 import logging
 import os
 import re
+import sys
 import wave
+from array import array
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeVar
@@ -129,16 +131,144 @@ def load_model(path: Path, model_type: type[T]) -> T:
     return model_type.model_validate_json(path.read_text(encoding="utf-8"))
 
 
-def build_subtitles(storyboard: StoryboardResult) -> list[dict[str, Any]]:
+class NarrationCue(BaseModel):
+    scene_id: str
+    start_seconds: float
+    end_seconds: float
+    text: str
+
+
+class NarrationTiming(BaseModel):
+    duration_seconds: float
+    cues: list[NarrationCue]
+
+
+PCM_ACTIVITY_THRESHOLD = 128
+NARRATION_START_PADDING_SECONDS = 0.15
+NARRATION_END_PADDING_SECONDS = 0.20
+
+
+def build_subtitles(timing: NarrationTiming) -> list[dict[str, Any]]:
     return [
         {
-            "start_seconds": scene.start_seconds,
-            "end_seconds": round(scene.start_seconds + scene.duration_seconds, 3),
-            "text": scene.narration[:160],
+            "start_seconds": cue.start_seconds,
+            "end_seconds": cue.end_seconds,
+            "text": cue.text[:160],
         }
-        for scene in storyboard.scenes
-        if scene.narration.strip()
+        for cue in timing.cues
+        if cue.text.strip()
     ]
+
+
+def _pcm16_samples(path: Path) -> tuple[array, int]:
+    with wave.open(str(path), "rb") as wav:
+        if wav.getnchannels() != 1 or wav.getsampwidth() != 2 or wav.getcomptype() != "NONE":
+            raise ValueError("Sprint 1 narration chunks must be mono 16-bit PCM WAV")
+        sample_rate = wav.getframerate()
+        samples = array("h")
+        samples.frombytes(wav.readframes(wav.getnframes()))
+    if sys.byteorder == "big":
+        samples.byteswap()
+    return samples, sample_rate
+
+
+def _trim_pcm_activity(samples: array, sample_rate: int) -> array:
+    active = [index for index, sample in enumerate(samples) if abs(sample) >= PCM_ACTIVITY_THRESHOLD]
+    if not active:
+        raise ValueError("TTS chunk contains no audible samples")
+    padding = max(1, int(round(sample_rate * 0.04)))
+    start = max(0, active[0] - padding)
+    end = min(len(samples), active[-1] + padding + 1)
+    return samples[start:end]
+
+
+async def synthesize_timed_narration(
+    provider: Any,
+    *,
+    storyboard: StoryboardResult,
+    language: str,
+    output_path: Path,
+    timing_path: Path,
+    duration_seconds: float,
+) -> NarrationTiming:
+    chunks: list[tuple[Any, array, int]] = []
+    sample_rate: int | None = None
+    for scene in storyboard.scenes:
+        chunk_path = output_path.with_name(f"narration-{scene.id}.wav")
+        await provider.synthesize(text=scene.narration, language=language, output_path=chunk_path)
+        samples, chunk_rate = _pcm16_samples(chunk_path)
+        if sample_rate is None:
+            sample_rate = chunk_rate
+        elif sample_rate != chunk_rate:
+            raise ValueError("TTS chunks use inconsistent sample rates")
+        chunks.append((scene, _trim_pcm_activity(samples, chunk_rate), chunk_rate))
+
+    if sample_rate is None:
+        raise ValueError("storyboard has no narration scenes")
+
+    total_frames = int(round(duration_seconds * sample_rate))
+    master = array("h", [0]) * total_frames
+    cues: list[NarrationCue] = []
+    for scene, samples, _chunk_rate in chunks:
+        cue_start = round(scene.start_seconds + NARRATION_START_PADDING_SECONDS, 3)
+        latest_end = scene.start_seconds + scene.duration_seconds - NARRATION_END_PADDING_SECONDS
+        cue_end = cue_start + len(samples) / sample_rate
+        if cue_end > latest_end + 0.001:
+            raise ValueError(
+                f"TTS narration for {scene.id} is {cue_end - cue_start:.3f}s and does not fit its scene"
+            )
+        start_frame = int(round(cue_start * sample_rate))
+        end_frame = start_frame + len(samples)
+        if end_frame > len(master):
+            raise ValueError(f"TTS narration for {scene.id} exceeds the composition duration")
+        master[start_frame:end_frame] = samples
+        cues.append(
+            NarrationCue(
+                scene_id=scene.id,
+                start_seconds=cue_start,
+                end_seconds=round(cue_end, 3),
+                text=scene.narration,
+            )
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    frames = array("h", master)
+    if sys.byteorder == "big":
+        frames.byteswap()
+    with wave.open(str(output_path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(frames.tobytes())
+
+    timing = NarrationTiming(duration_seconds=duration_seconds, cues=cues)
+    write_json(timing_path, timing)
+    validate_narration_audio(output_path, timing, expected_duration=duration_seconds)
+    return timing
+
+
+def validate_narration_audio(
+    path: Path,
+    timing: NarrationTiming,
+    *,
+    expected_duration: float,
+) -> float:
+    samples, sample_rate = _pcm16_samples(path)
+    duration = len(samples) / float(sample_rate)
+    if abs(duration - expected_duration) > 0.05:
+        raise ValueError("narration master duration does not match the composition")
+    previous_end = 0.0
+    for cue in timing.cues:
+        if cue.start_seconds < previous_end or cue.end_seconds <= cue.start_seconds:
+            raise ValueError("narration cue timing is not monotonic")
+        if cue.end_seconds > expected_duration + 0.001:
+            raise ValueError("narration cue exceeds the composition duration")
+        start = max(0, int(cue.start_seconds * sample_rate))
+        end = min(len(samples), int(round(cue.end_seconds * sample_rate)))
+        if not any(abs(sample) >= PCM_ACTIVITY_THRESHOLD for sample in samples[start:end]):
+            raise ValueError(f"narration cue {cue.scene_id} contains no audible samples")
+        previous_end = cue.end_seconds
+    return duration
 
 
 def _srt_timestamp(seconds: float) -> str:
@@ -208,6 +338,15 @@ def validate_probe_payload(
     if require_audio and audio is None:
         raise VideoQCError("final output has no audio stream")
 
+    frame_rate = video.get("avg_frame_rate") or video.get("r_frame_rate")
+    try:
+        numerator, denominator = str(frame_rate).split("/", maxsplit=1)
+        fps = float(numerator) / float(denominator)
+    except (TypeError, ValueError, ZeroDivisionError) as exc:
+        raise VideoQCError("final output frame rate is unavailable") from exc
+    if abs(fps - 30.0) > 0.01:
+        raise VideoQCError(f"expected 30 fps video, found {fps:.3f}")
+
     raw_duration = (payload.get("format") or {}).get("duration") or video.get("duration")
     try:
         duration = float(raw_duration)
@@ -221,8 +360,91 @@ def validate_probe_payload(
         "duration_seconds": round(duration, 3),
         "width": int(video["width"]),
         "height": int(video["height"]),
+        "fps": round(fps, 3),
         "video_codec": video.get("codec_name"),
         "audio_codec": audio.get("codec_name") if audio else None,
+    }
+
+
+def validate_visual_luma_values(values: list[float]) -> dict[str, Any]:
+    if not values:
+        raise VideoQCError("final output has no visual luminance samples")
+    dark_count = sum(value < 8.0 for value in values)
+    dark_ratio = dark_count / len(values)
+    if dark_ratio > 0.10:
+        raise VideoQCError(
+            f"final output central image area is black in {dark_ratio:.1%} of sampled seconds"
+        )
+    return {
+        "visual_sample_count": len(values),
+        "dark_visual_sample_ratio": round(dark_ratio, 4),
+        "visual_luma_min": round(min(values), 3),
+        "visual_luma_max": round(max(values), 3),
+    }
+
+
+def parse_volume_output(output: str) -> dict[str, float]:
+    mean_match = re.search(r"mean_volume:\s*(-?(?:inf|\d+(?:\.\d+)?))\s*dB", output, re.I)
+    peak_match = re.search(r"max_volume:\s*(-?(?:inf|\d+(?:\.\d+)?))\s*dB", output, re.I)
+    if mean_match is None or peak_match is None:
+        raise VideoQCError("final output audio volume metadata is unavailable")
+    mean_db = float(mean_match.group(1))
+    peak_db = float(peak_match.group(1))
+    if peak_db < -35.0:
+        raise VideoQCError(f"final output audio is effectively silent at {peak_db:.1f} dB peak")
+    return {"audio_mean_db": round(mean_db, 3), "audio_peak_db": round(peak_db, 3)}
+
+
+async def analyze_render_content(path: Path) -> dict[str, Any]:
+    visual = await asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-v",
+        "error",
+        "-i",
+        str(path),
+        "-vf",
+        "fps=1,crop=iw*0.5:ih*0.4:iw*0.25:ih*0.3,signalstats,metadata=mode=print:file=-",
+        "-an",
+        "-f",
+        "null",
+        "-",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    visual_stdout, visual_stderr = await visual.communicate()
+    if visual.returncode != 0:
+        raise VideoQCError(
+            f"ffmpeg visual inspection failed: {visual_stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    luma_values = [
+        float(value)
+        for value in re.findall(
+            r"lavfi\.signalstats\.YAVG=([0-9.eE+-]+)",
+            visual_stdout.decode("utf-8", errors="replace"),
+        )
+    ]
+
+    audio = await asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-hide_banner",
+        "-i",
+        str(path),
+        "-vn",
+        "-af",
+        "volumedetect",
+        "-f",
+        "null",
+        "-",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _audio_stdout, audio_stderr = await audio.communicate()
+    if audio.returncode != 0:
+        raise VideoQCError("ffmpeg could not decode the rendered audio stream")
+
+    return {
+        **validate_visual_luma_values(luma_values),
+        **parse_volume_output(audio_stderr.decode("utf-8", errors="replace")),
     }
 
 
@@ -252,6 +474,7 @@ async def probe_video(path: Path, *, expected_duration: float, require_audio: bo
         expected_duration=expected_duration,
         require_audio=require_audio,
     )
+    result.update(await analyze_render_content(path))
     result["size_bytes"] = path.stat().st_size
     return result
 
@@ -312,7 +535,7 @@ async def call_renderer(
     job_id: str,
     manifest_path: Path,
     output_path: Path,
-) -> None:
+) -> dict[str, Any]:
     payload = {
         "job_id": job_id,
         "manifest_path": str(manifest_path),
@@ -337,13 +560,20 @@ async def call_renderer(
                 raise RendererUnavailable(str(exc)) from exc
 
             if response.status_code < 400:
-                return
+                try:
+                    result = response.json()
+                except ValueError as exc:
+                    raise RendererFailed("renderer returned invalid JSON") from exc
+                if result.get("status") != "success" or result.get("output_path") != str(output_path):
+                    raise RendererFailed("renderer returned an invalid success response")
+                return result
             try:
-                error = response.json().get("error", {})
+                body = response.json()
             except ValueError:
-                error = {}
-            retryable = bool(error.get("retryable")) or response.status_code in {502, 503, 504}
-            message = str(error.get("message") or f"renderer returned HTTP {response.status_code}")
+                body = {}
+            error = body.get("error", {})
+            retryable = bool(body.get("retryable") or error.get("retryable")) or response.status_code in {502, 503, 504}
+            message = str(body.get("message") or error.get("message") or f"renderer returned HTTP {response.status_code}")
             if retryable and attempt == 0:
                 await asyncio.sleep(2)
                 continue
@@ -372,10 +602,14 @@ async def run_job(
     job_dir.mkdir(parents=True, exist_ok=True)
     request = record.request
     content_provider = DeterministicContentProvider()
-    tts_provider = get_tts_provider(config)
     current_stage = JobStage.SCRIPTING
 
     try:
+        request_path = job_dir / "request.json"
+        if not request_path.is_file():
+            write_json(request_path, request)
+        await register_artifact(store, job_id, kind="request", path=request_path)
+
         script_path = job_dir / "script.json"
         try:
             script = load_model(script_path, ScriptResult)
@@ -387,8 +621,9 @@ async def run_job(
             except Exception as exc:
                 raise PipelineFailure(
                     code="CONTENT_PROVIDER_FAILED",
-                    message=str(exc),
+                    message="Content provider could not generate the script.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
             write_json(script_path, script)
         await register_artifact(store, job_id, kind="script", path=script_path)
@@ -404,8 +639,9 @@ async def run_job(
             except Exception as exc:
                 raise PipelineFailure(
                     code="CONTENT_PROVIDER_FAILED",
-                    message=str(exc),
+                    message="Content provider could not generate the storyboard.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
             if abs(storyboard.duration_seconds - request.video.duration_seconds) > 0.1:
                 raise PipelineFailure(
@@ -417,29 +653,40 @@ async def run_job(
         await register_artifact(store, job_id, kind="storyboard", path=storyboard_path)
 
         voice_path = job_dir / "narration.wav"
+        timing_path = job_dir / "narration-timing.json"
         try:
-            validate_wav(voice_path)
+            timing = load_model(timing_path, NarrationTiming)
+            validate_narration_audio(
+                voice_path,
+                timing,
+                expected_duration=float(request.video.duration_seconds),
+            )
         except Exception:
             current_stage = JobStage.GENERATING_VOICE
             await advance(store, job_id, stage=current_stage, progress=30)
             try:
-                await tts_provider.synthesize(
-                    text=script.full_narration,
+                tts_provider = get_tts_provider(config)
+                timing = await synthesize_timed_narration(
+                    tts_provider,
+                    storyboard=storyboard,
                     language=request.video.language,
                     output_path=voice_path,
+                    timing_path=timing_path,
+                    duration_seconds=float(request.video.duration_seconds),
                 )
-                validate_wav(voice_path)
             except Exception as exc:
                 raise PipelineFailure(
                     code="TTS_PROVIDER_FAILED",
-                    message=str(exc),
+                    message="TTS provider could not generate narration audio.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
         await register_artifact(store, job_id, kind="audio", path=voice_path)
+        await register_artifact(store, job_id, kind="metadata", path=timing_path)
 
         current_stage = JobStage.GENERATING_SUBTITLES
         await advance(store, job_id, stage=current_stage, progress=40)
-        subtitles = build_subtitles(storyboard)
+        subtitles = build_subtitles(timing)
         subtitles_path = job_dir / "subtitles.srt"
         write_srt(subtitles_path, subtitles)
         await register_artifact(store, job_id, kind="subtitle", path=subtitles_path)
@@ -450,10 +697,14 @@ async def run_job(
             resolved_assets = LocalAssetResolver(config.asset_root).resolve(request, storyboard)
         except AssetResolutionError as exc:
             raise PipelineFailure(
-                code="ASSET_NOT_FOUND",
-                message=str(exc),
+                code="ASSET_RESOLUTION_FAILED",
+                message="Local assets could not be resolved for every scene.",
                 stage=current_stage,
+                details=[{"type": type(exc).__name__}],
             ) from exc
+        assets_path = job_dir / "resolved-assets.json"
+        write_json(assets_path, [item.model_dump(mode="json") for item in resolved_assets])
+        await register_artifact(store, job_id, kind="assets", path=assets_path)
 
         current_stage = JobStage.BUILDING_MANIFEST
         await advance(store, job_id, stage=current_stage, progress=60)
@@ -479,9 +730,10 @@ async def run_job(
                 persist_manifest(manifest, manifest_path, config.schema_path)
             except ManifestValidationError as exc:
                 raise PipelineFailure(
-                    code="MANIFEST_INVALID",
-                    message=str(exc),
+                    code="MANIFEST_VALIDATION_FAILED",
+                    message="Video manifest validation failed.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
         await register_artifact(store, job_id, kind="manifest", path=manifest_path)
 
@@ -511,15 +763,17 @@ async def run_job(
             except RendererUnavailable as exc:
                 raise PipelineFailure(
                     code="RENDERER_UNAVAILABLE",
-                    message=str(exc),
+                    message="Renderer service is unavailable after bounded retries.",
                     stage=current_stage,
                     retryable=True,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
             except RendererFailed as exc:
                 raise PipelineFailure(
                     code="RENDER_FAILED",
-                    message=str(exc),
+                    message="Renderer could not produce the final video.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
 
             current_stage = JobStage.QUALITY_CHECK
@@ -532,9 +786,10 @@ async def run_job(
                 )
             except VideoQCError as exc:
                 raise PipelineFailure(
-                    code="VIDEO_QC_FAILED",
-                    message=str(exc),
+                    code="QC_FAILED",
+                    message="Final video failed quality-control verification.",
                     stage=current_stage,
+                    details=[{"type": type(exc).__name__}],
                 ) from exc
         else:
             current_stage = JobStage.QUALITY_CHECK
@@ -543,7 +798,7 @@ async def run_job(
         qc_path = job_dir / "qc.json"
         write_json(qc_path, qc)
         await register_artifact(store, job_id, kind="video", path=final_path)
-        await register_artifact(store, job_id, kind="metadata", path=qc_path)
+        await register_artifact(store, job_id, kind="qc", path=qc_path)
         completed = await store.update_stage(
             job_id,
             status=JobStatus.AWAITING_REVIEW,

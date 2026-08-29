@@ -19,7 +19,7 @@
         "assignments": {
           "assignments": [
             { "id": "base-url", "name": "apiBaseUrl", "value": "http://api:8000/api/v1", "type": "string" },
-            { "id": "request", "name": "request", "value": "={\"topic\":\"3 ly do nen chu y Vinhomes Green Paradise tuan nay\",\"project\":\"vinhomes-green-paradise\",\"video\":{\"duration_seconds\":45,\"aspect\":\"9:16\",\"language\":\"vi\",\"template\":\"real-estate-short-v1\"},\"content\":{\"objective\":\"lead_generation\",\"audience\":\"khach hang quan tam bat dong san Can Gio\",\"tone\":\"thong tin, tin cay, khong phong dai\",\"cta\":\"Dang ky tham quan sa ban\"},\"media\":{\"source\":\"local\",\"project_asset_folder\":\"vinhomes-green-paradise\",\"minimum_clips\":5,\"allow_stock\":false,\"allow_ai_generation\":false}}", "type": "object" }
+            { "id": "request", "name": "request", "value": "={\"topic\":\"Ba lý do nên chú ý Vinhomes Green Paradise tuần này\",\"project\":\"vinhomes-green-paradise\",\"video\":{\"duration_seconds\":45,\"aspect\":\"9:16\",\"language\":\"vi\",\"template\":\"real-estate-short-v1\"},\"content\":{\"objective\":\"lead_generation\",\"audience\":\"khách hàng quan tâm bất động sản Cần Giờ\",\"tone\":\"thông tin, tin cậy, không phóng đại\",\"cta\":\"Đăng ký tham quan sa bàn để nhận thông tin chi tiết\"},\"media\":{\"source\":\"local\",\"project_asset_folder\":\"vinhomes-green-paradise\",\"minimum_clips\":5,\"allow_stock\":false,\"allow_ai_generation\":false}}", "type": "object" }
           ]
         },
         "options": {}
@@ -49,7 +49,25 @@
       "name": "Create Video Job",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-160, 120]
+      "position": [-160, 120],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            { "id": "create-error", "leftValue": "={{ !!$json.error || !$json.job_id }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "03d5986d-2e8c-4dda-8363-70bb4d078dd6",
+      "name": "Create Request Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [60, 120]
     },
     {
       "parameters": {
@@ -60,7 +78,7 @@
       "name": "Wait Before Poll",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [80, 120],
+      "position": [300, 200],
       "webhookId": "cf817936-90c2-4b19-9bd2-d50f27ddbc36"
     },
     {
@@ -72,14 +90,15 @@
       "name": "Get Job Status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [320, 120]
+      "position": [540, 200],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
           "conditions": [
-            { "id": "terminal", "leftValue": "={{ ['awaiting_review', 'failed'].includes($json.status) || $runIndex >= 59 }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }
+            { "id": "terminal", "leftValue": "={{ ['awaiting_review', 'failed'].includes($json.status) || !!$json.error || $runIndex >= 59 }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }
           ],
           "combinator": "and"
         },
@@ -89,16 +108,27 @@
       "name": "Terminal Status?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [560, 120]
+      "position": [780, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const job = $json;\nconst timedOut = !['awaiting_review', 'failed'].includes(job.status) && !job.error;\nconst artifacts = Array.isArray(job.artifacts) ? job.artifacts : [];\nconst video = artifacts.find((item) => item.name === 'final.mp4');\nreturn [{ json: {\n  ok: job.status === 'awaiting_review',\n  job_id: job.job_id || null,\n  status: timedOut ? 'timeout' : (job.status || 'failed'),\n  stage: job.stage || null,\n  progress: job.progress ?? null,\n  artifact_url: video?.url || null,\n  error: job.error || (timedOut ? { code: 'SMOKE_TEST_TIMEOUT', message: 'Bounded polling exhausted after 60 attempts / 600 seconds.' } : { code: 'SMOKE_TEST_REQUEST_FAILED', message: 'API request failed.' })\n} }];"
+      },
+      "id": "88ace129-e66d-40e9-861d-a1c1bcdf8f87",
+      "name": "Return Smoke Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 80]
     }
   ],
   "connections": {
     "Manual Trigger": { "main": [[{ "node": "Configure Smoke Test", "type": "main", "index": 0 }]] },
     "Configure Smoke Test": { "main": [[{ "node": "Create Video Job", "type": "main", "index": 0 }]] },
-    "Create Video Job": { "main": [[{ "node": "Wait Before Poll", "type": "main", "index": 0 }]] },
+    "Create Video Job": { "main": [[{ "node": "Create Request Failed?", "type": "main", "index": 0 }]] },
+    "Create Request Failed?": { "main": [[{ "node": "Return Smoke Result", "type": "main", "index": 0 }], [{ "node": "Wait Before Poll", "type": "main", "index": 0 }]] },
     "Wait Before Poll": { "main": [[{ "node": "Get Job Status", "type": "main", "index": 0 }]] },
     "Get Job Status": { "main": [[{ "node": "Terminal Status?", "type": "main", "index": 0 }]] },
-    "Terminal Status?": { "main": [[], [{ "node": "Wait Before Poll", "type": "main", "index": 0 }]] }
+    "Terminal Status?": { "main": [[{ "node": "Return Smoke Result", "type": "main", "index": 0 }], [{ "node": "Wait Before Poll", "type": "main", "index": 0 }]] }
   },
   "pinData": {},
   "meta": {
