@@ -70,6 +70,29 @@ agent_redis_url_present() {
 }
 queue_length() { docker exec "$1" redis-cli -n 0 LLEN npd:video-jobs:queue | tr -d '\r'; }
 processing_length() { docker exec "$1" redis-cli -n 0 LLEN npd:video-jobs:processing | tr -d '\r'; }
+api_renderer_ready() {
+  curl --fail --silent http://127.0.0.1:8000/readyz >/dev/null \
+    && curl --fail --silent http://127.0.0.1:3001/healthz >/dev/null
+}
+wait_for_api_renderer_ready() {
+  local attempt
+  for attempt in $(seq 1 30); do
+    if api_renderer_ready; then return 0; fi
+    sleep 2
+  done
+  return 1
+}
+rollback_images_restored() {
+  local api_current renderer_current api_current_image renderer_current_image
+  api_current="$(v1_container api)" || return 1
+  renderer_current="$(v1_container renderer)" || return 1
+  api_current_image="$(image_id "$api_current")" || return 1
+  renderer_current_image="$(image_id "$renderer_current")" || return 1
+  [[ "$(container_running "$api_current")" == "true" \
+    && "$(container_running "$renderer_current")" == "true" \
+    && "$api_current_image" == "$api_image_before" \
+    && "$renderer_current_image" == "$renderer_image_before" ]]
+}
 
 api_before="$(v1_container api)"
 worker_before="$(v1_container worker)"
@@ -130,12 +153,28 @@ find "$receipt_dir/config" -type f -exec chmod 600 {} +
 sha256sum "$receipt_dir"/config/* > "$receipt_dir/config.sha256"
 
 rollback_on_failure() {
-  exit_code=$?
+  local exit_code=$?
+  local rollback_ok=true
+  trap - EXIT
   if [[ $exit_code -eq 0 ]]; then return; fi
   printf 'AH-T01 deploy failed; restoring only the previous API and renderer image identities\n' >&2
-  docker tag "$api_image_before" "$api_ref" || true
-  docker tag "$renderer_image_before" "$renderer_ref" || true
-  docker compose -f "$BASE_COMPOSE" up -d --no-deps --force-recreate "${ROLLBACK_TARGETS[@]}" || true
+  docker tag "$api_image_before" "$api_ref" || rollback_ok=false
+  docker tag "$renderer_image_before" "$renderer_ref" || rollback_ok=false
+  docker compose -f "$BASE_COMPOSE" up -d --no-deps --force-recreate "${ROLLBACK_TARGETS[@]}" \
+    || rollback_ok=false
+  if [[ "$rollback_ok" == "true" ]] && ! wait_for_api_renderer_ready; then
+    printf 'AH-T01 rollback health/readiness verification failed after bounded wait\n' >&2
+    rollback_ok=false
+  fi
+  if [[ "$rollback_ok" == "true" ]] && ! rollback_images_restored; then
+    printf 'AH-T01 rollback image identity verification failed\n' >&2
+    rollback_ok=false
+  fi
+  if [[ "$rollback_ok" == "true" ]]; then
+    printf 'AH-T01 rollback verified: API and renderer baseline images are healthy\n' >&2
+  else
+    printf 'AH-T01 rollback requires manual operator attention; immutable services were not restarted\n' >&2
+  fi
   exit "$exit_code"
 }
 trap rollback_on_failure EXIT
@@ -146,14 +185,8 @@ AH_T01_TELEMETRY_SALT_HOST_FILE="$AH_T01_TELEMETRY_SALT_HOST_FILE" \
 AH_T01_TELEMETRY_SALT_HOST_FILE="$AH_T01_TELEMETRY_SALT_HOST_FILE" \
   docker compose -f "$BASE_COMPOSE" -f "$OVERLAY_COMPOSE" up -d --no-deps --force-recreate "${DEPLOY_TARGETS[@]}"
 
-for _ in $(seq 1 30); do
-  curl --fail --silent http://127.0.0.1:8000/readyz >/dev/null \
-    && curl --fail --silent http://127.0.0.1:3001/healthz >/dev/null \
-    && break
-  sleep 2
-done
-curl --fail --silent http://127.0.0.1:8000/readyz >/dev/null
-curl --fail --silent http://127.0.0.1:3001/healthz >/dev/null
+wait_for_api_renderer_ready \
+  || { printf 'AH-T01 deploy error: API/renderer readiness timed out\n' >&2; exit 3; }
 
 raw_probe_marker="ah-t01-raw-probe-$timestamp"
 api_code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
@@ -250,7 +283,7 @@ payload = {
     "schema_version": "1.0",
     "status": "PASS",
     "change_id": "AH-T01",
-    "source_remediation": "AH-T01A",
+    "source_remediation": "AH-T01B",
     "started_at": "$started_at",
     "verified_at": "$verified_at",
     "observation_window_start": "$verified_at",

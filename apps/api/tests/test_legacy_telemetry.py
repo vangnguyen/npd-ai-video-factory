@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from app.legacy_telemetry import LegacyTelemetry
+from app.legacy_telemetry import LOGGER_NAME, LegacyTelemetry
 
 
 def test_telemetry_hashes_identity_and_counts_deprecated_routes(caplog):
     telemetry = LegacyTelemetry(salt="test-only-salt")
 
-    with caplog.at_level(logging.INFO, logger="npd.legacy_telemetry"):
+    with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
         first = telemetry.record(
             route="/api/v1/video-jobs/{job_id}",
             method="GET",
@@ -47,7 +47,7 @@ def test_telemetry_hashes_identity_and_counts_deprecated_routes(caplog):
 def test_missing_salt_disables_identity_instead_of_logging_raw_values(caplog):
     telemetry = LegacyTelemetry(salt=None)
 
-    with caplog.at_level(logging.INFO, logger="npd.legacy_telemetry"):
+    with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
         event = telemetry.record(
             route="/healthz",
             method="GET",
@@ -68,7 +68,7 @@ def test_missing_salt_disables_identity_instead_of_logging_raw_values(caplog):
 
 def test_unmatched_route_is_not_logged(caplog):
     telemetry = LegacyTelemetry(salt="test-only-salt")
-    with caplog.at_level(logging.INFO, logger="npd.legacy_telemetry"):
+    with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
         event = telemetry.record(
             route=None,
             method="GET",

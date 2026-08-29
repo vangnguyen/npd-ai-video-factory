@@ -14,7 +14,12 @@ from typing import Any
 from uuid import uuid4
 
 
-LOGGER = logging.getLogger("npd.legacy_telemetry")
+# Uvicorn installs an INFO handler on the ``uvicorn`` logger hierarchy before
+# application lifespan starts. Keep telemetry in that hierarchy so structured
+# events have a production output path without changing global/root logging or
+# adding a second handler that could duplicate records.
+LOGGER_NAME = "uvicorn.error.npd.legacy_telemetry"
+LOGGER = logging.getLogger(LOGGER_NAME)
 CALLER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
 ROUTE_ACTIONS = {
     "/healthz": "health_probe",

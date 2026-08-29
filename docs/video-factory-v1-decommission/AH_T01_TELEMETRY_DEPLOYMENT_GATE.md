@@ -1,11 +1,26 @@
 # AH-T01 legacy telemetry deployment gate
 
-Status: **AH-T01A source remediation; G-08 review pending; production deploy not authorized or executed**
+Status: **AH-T01B source-only remediation candidate; owner review pending; no production action authorized**
 
 AH-T01 is a telemetry-only production change candidate. It does not block writes, alter routes,
 change ports, change proxy configuration, migrate Redis, switch traffic, stop V1 as a stack, or
 authorize AH-03. The narrowed candidate may rebuild/recreate only API and renderer after a new
 action-time owner approval. Worker, Agent Hub and Redis are immutable for deploy and rollback.
+
+## Failed 29/08 action and current boundary
+
+The owner-approved AH-T01 attempt at exact commit `7fae3bacbf51e92e8f0cfda0b09efb2566717e8f`
+recreated only API and renderer. Renderer verification emitted valid identity-safe events, but the
+API emitted no telemetry event because its custom INFO logger had no production handler under
+Uvicorn's logging configuration. Verification failed closed and rollback recreated only API and
+renderer from their recorded baseline images. The bounded independent postcheck found both
+services healthy and the worker, Agent Hub, Redis, Caddy, topology, queue/processing state and
+`AGENT_REDIS_URL` digest unchanged.
+
+There is no successful deployment receipt, no `verified_at`, and no observation-window start. The
+protected production salt, receipt root and failed-attempt evidence remain protected and are not
+modified by AH-T01B. Any later production retry requires a fresh owner action gate for an exact
+merged commit and a new change window.
 
 ## Candidate controls
 
@@ -15,6 +30,10 @@ action-time owner approval. Worker, Agent Hub and Redis are immutable for deploy
   identity.
 - Events include UTC observation time and a random process-instance UUID. Route and deprecated
   counters remain process-local, while the UUID makes a restart or reset visible.
+- API telemetry uses the `uvicorn.error` logger hierarchy so INFO events inherit Uvicorn's actual
+  production handler without changing root logging or attaching a duplicate handler. A subprocess
+  integration test applies Uvicorn's real logging configuration and exercises the real middleware
+  for `/healthz`, `/readyz` and a missing-job 404, including parseability and raw-identity checks.
 - The Compose override mounts the secret only into API and renderer and contains no port, network,
   route, Redis or command changes.
 - Preflight requires the exact approved commit, a clean tracked tree, protected secret permissions,
@@ -24,7 +43,9 @@ action-time owner approval. Worker, Agent Hub and Redis are immutable for deploy
   content. Deploy recomputes one canonical baseline digest and stops before build if it differs.
 - The deploy runner requires the literal `DEPLOY_AH_T01_TELEMETRY`, records protected config and
   prior image identities, rebuilds/recreates only API and renderer with `--no-deps`, and rolls back
-  only API and renderer on failure. Postcheck fails if worker, Agent Hub or Redis container/image
+  only API and renderer on failure. Both forward deployment and rollback use a bounded readiness
+  wait; rollback additionally verifies that both running services use their recorded baseline
+  image identities. Postcheck fails if worker, Agent Hub or Redis container/image
   identity changes, queue/processing changes, `AGENT_REDIS_URL` digest changes, or network/port
   membership changes. It also compares the Caddy container/image, network/port digests and host
   Caddyfile checksum before/after; no Caddy validate, reload or mutation command exists.
@@ -62,7 +83,7 @@ bash scripts/ops/ah_t01/deploy.sh \
   --confirm DEPLOY_AH_T01_TELEMETRY
 ```
 
-No command above is approved by this readiness PR.
+No command above is approved by this source-only remediation PR.
 
 ## Fourteen complete days
 

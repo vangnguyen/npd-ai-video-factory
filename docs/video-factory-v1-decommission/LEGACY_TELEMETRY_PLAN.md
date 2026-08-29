@@ -1,6 +1,6 @@
 # V1 legacy telemetry plan
 
-Status: **AH-T01 deployment candidate prepared; not deployed; observation not started**
+Status: **AH-T01B source-only remediation candidate; successful deployment and observation not started**
 
 AH-01C adds identity-safe structured telemetry to the V1 API and renderer source. It does not add
 authentication, change Caddy or ports, restart a service, deploy an image, block a request, or
@@ -28,8 +28,8 @@ forwarded headers.
 
 ## Separate deployment gate
 
-Before a production telemetry-only deploy, the owner must approve the exact V1 API, worker,
-renderer and Agent Hub image changes. The change window must:
+Before a production telemetry-only deploy, the owner must approve the exact V1 API and renderer
+image changes. Worker, Agent Hub and Redis remain immutable. The change window must:
 
 1. generate a dedicated high-entropy `LEGACY_TELEMETRY_SALT` in protected production secret
    storage;
@@ -37,9 +37,11 @@ renderer and Agent Hub image changes. The change window must:
 3. deploy only the approved services without stopping Redis or V1 as a stack;
 4. prove health/read routes and one mock-only caller attribution path;
 5. verify logs contain no raw IP, user agent, payload, token or salt; and
-6. roll back the affected image/config on any regression.
+6. roll back only API and renderer on any regression, wait for bounded readiness, and prove both
+   services returned to their recorded baseline image identities.
 
-No real video create/render request is authorized merely to test telemetry.
+No real video create/render request is authorized merely to test telemetry. The failed 29/08
+attempt produced no successful receipt or observation start; any retry requires a fresh owner gate.
 
 ## Fourteen-day acceptance window
 
