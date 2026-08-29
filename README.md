@@ -71,6 +71,7 @@ not poll providers, send notifications, retry delivery or enable production writ
 - [13-task implementation plan](docs/implementation-plan.md)
 - [API contract and error model](docs/api-contract.md)
 - [Acceptance tests](docs/acceptance-tests.md)
+- [Agent Hub to Video Factory boundary v1](docs/AGENT_HUB_VIDEO_FACTORY_BOUNDARY_V1.md)
 - [Phase 6B Campaign Operating System](docs/PHASE_6B_CAMPAIGN_OPERATING_SYSTEM.md)
 - [Phase 7 Attribution & Revenue OS](docs/PHASE_7_ATTRIBUTION_REVENUE_OS.md)
 - [Phase 8 Experiment & Optimization OS](docs/PHASE_8_EXPERIMENT_OPTIMIZATION_OS.md)
