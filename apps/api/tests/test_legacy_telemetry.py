@@ -1,5 +1,8 @@
 import json
 import logging
+from pathlib import Path
+
+import pytest
 
 from app.legacy_telemetry import LegacyTelemetry
 
@@ -32,6 +35,8 @@ def test_telemetry_hashes_identity_and_counts_deprecated_routes(caplog):
     assert second["route_request_count"] == 2
     assert second["deprecated_attempt_count"] == 2
     assert second["claimed_caller_id"] == "invalid"
+    assert first["process_instance_id"] == second["process_instance_id"]
+    assert first["observed_at"].endswith("+00:00")
     rendered = "\n".join(record.message for record in caplog.records)
     assert "203.0.113.42" not in rendered
     assert "sensitive-agent/1.0" not in rendered
@@ -74,3 +79,25 @@ def test_unmatched_route_is_not_logged(caplog):
         )
     assert event is None
     assert caplog.records == []
+
+
+def test_environment_loads_salt_from_absolute_secret_file(monkeypatch, tmp_path: Path):
+    salt_file = tmp_path / "telemetry-salt"
+    salt_file.write_text("s" * 32 + "\n", encoding="utf-8")
+    monkeypatch.delenv("LEGACY_TELEMETRY_SALT", raising=False)
+    monkeypatch.setenv("LEGACY_TELEMETRY_SALT_FILE", str(salt_file.resolve()))
+
+    assert LegacyTelemetry.from_environment().identity_ready is True
+
+
+def test_environment_fails_closed_on_conflict_or_weak_file(monkeypatch, tmp_path: Path):
+    salt_file = tmp_path / "telemetry-salt"
+    salt_file.write_text("short", encoding="utf-8")
+    monkeypatch.setenv("LEGACY_TELEMETRY_SALT", "d" * 32)
+    monkeypatch.setenv("LEGACY_TELEMETRY_SALT_FILE", str(salt_file.resolve()))
+    with pytest.raises(RuntimeError, match="only one"):
+        LegacyTelemetry.from_environment()
+
+    monkeypatch.delenv("LEGACY_TELEMETRY_SALT")
+    with pytest.raises(RuntimeError, match="at least 32 bytes"):
+        LegacyTelemetry.from_environment()

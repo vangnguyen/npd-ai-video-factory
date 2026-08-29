@@ -27,6 +27,12 @@ jobs:
         run: python -m pip install -e '.[dev]'
       - name: Run API tests
         run: pytest -q
+      - name: Validate AH-T01 telemetry deployment package
+        run: |
+          python ../../scripts/ops/ah_t01/validate_package.py
+          pytest -q ../../scripts/ops/ah_t01/test_telemetry_observation.py
+          python -m py_compile ../../scripts/ops/ah_t01/telemetry_observation.py ../../scripts/ops/ah_t01/verify_deployment.py
+          bash -n ../../scripts/ops/ah_t01/preflight.sh ../../scripts/ops/ah_t01/deploy.sh
 
   test-worker:
     runs-on: ubuntu-latest
