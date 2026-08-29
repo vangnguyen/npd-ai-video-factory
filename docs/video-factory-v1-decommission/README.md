@@ -27,6 +27,7 @@ it does not change Agent Hub or Video Factory runtime behavior.
 - [AH-01B UNKNOWN resolution evidence](AH01B_EVIDENCE.md)
 - [Storage ownership manifest](v1-storage-ownership-manifest.json)
 - [Runtime image provenance manifest](v1-runtime-image-provenance.json)
+- [Backup/restore evidence manifest](v1-backup-restore-evidence.json)
 - [Agent Hub Redis ownership migration plan](AGENT_HUB_REDIS_OWNERSHIP_MIGRATION_PLAN.md)
 - [V1 backup/restore plan](V1_BACKUP_RESTORE_PLAN.md)
 - [Publication/reference audit](V1_PUBLICATION_REFERENCE_AUDIT.md)
@@ -38,8 +39,10 @@ No V1 service, route, worker, queue, data, Caddy configuration, provider setting
 traffic was changed during AH-01. Destructive work is prohibited while the inventory contains any
 `UNKNOWN` decision. AH-01B attributed the observed `2026-08-29` local-time renderer request,
 classified the complete mixed-storage manifest, proved source provenance and recorded PR retention
-directions. Backup/restore and external publication-reference coverage remain `UNKNOWN`; Redis
-rehome and telemetry are accepted-plan prerequisites, so shutdown remains NO-GO.
+directions. The encrypted off-production V1 bundle passed a real isolated restore/restart drill, so
+backup/restore is now `KEEP`; external publication-reference coverage is the sole remaining
+`UNKNOWN`. Bundle custody, a second protected copy, Redis rehome, telemetry and the other owner
+gates remain prerequisites, so shutdown remains NO-GO.
 
 The next eligible initiative is AH-02 contract work using mocks only. AH-03 deprecation, AH-04
 drain/disable, production deployment, merge, traffic switching, and deletion each remain explicit

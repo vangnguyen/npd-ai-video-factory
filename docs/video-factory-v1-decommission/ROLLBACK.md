@@ -4,12 +4,15 @@
 
 **Not ready for a shutdown change.**
 
-AH-01 found Redis AOF persistence and an older protected environment backup, but did not find a
-complete, independent, restore-tested set covering V1 DB0, storage, exact images, configuration and
-queue order. The running API/worker/renderer images are local `:latest` builds without git revision
-labels or registry digests. AH-01B recorded exact image IDs and matched all 43 copied source inputs,
-so source provenance is resolved. `v1-backup-restore-coverage` remains `UNKNOWN` because no exact
-image export or real restore drill exists.
+AH-01B created a complete encrypted off-production V1 bundle and passed an isolated restore/restart
+drill covering DB0, selected V1 storage, exact images, protected runtime evidence and queue order.
+The running API/worker/renderer images remain local `:latest` builds without git revision labels or
+registry digests, but their exact content is retained and mapped to the production config IDs.
+`v1-backup-restore-coverage` is `KEEP`.
+
+Shutdown is still not ready because owner acceptance of bundle retention/key custody, a second
+protected copy, fresh pre-change evidence, the separate Agent Hub DB1 backup/rehome, publication
+reference audit, telemetry/observation and explicit production authorization are outstanding.
 
 This document defines the required future procedure. It is not permission to execute it. Any
 production restore, container recreation, route change, queue mutation or data replacement requires

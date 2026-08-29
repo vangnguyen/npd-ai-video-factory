@@ -1,0 +1,208 @@
+{
+  "schema_version": "1.0",
+  "bundle_id": "v1-backup-restore-20260829T045502Z",
+  "storage_class": "encrypted owner-workspace output outside production and Git",
+  "bundle_total_bytes": 1895938306,
+  "capture_started_at": "2026-08-29T05:02:30.766603Z",
+  "capture_completed_at": "2026-08-29T05:16:13Z",
+  "restore_started_at": "2026-08-29T05:22:18.041637Z",
+  "restore_completed_at": "2026-08-29T05:27:05.393931Z",
+  "technical_restore_status": "PASS",
+  "complete_v1_bundle_restore": true,
+  "owner_acceptance_status": "PENDING",
+  "encryption": {
+    "payload_cipher": "AES-256-GCM",
+    "key_protection": "Windows DPAPI CurrentUser",
+    "plaintext_payload_at_rest": false,
+    "key_material_committed": false,
+    "key_material_logged": false
+  },
+  "source": {
+    "production_checkout_revision": "ca535a6a4cea67beeb0cae97b8fb5ea3c6c1743c",
+    "ah01b_audit_revision": "f92667d96d6982c9cbf63a53a8cd3f92d1f6a379",
+    "api_source_revision": "78273a6d082dc90f8eae0ea57c2b30165e4328cc",
+    "worker_renderer_source_revision": "a92785dc1721ec4e991bf12655629d809e13c241"
+  },
+  "capture_boundary": {
+    "production_write_performed": false,
+    "remote_temporary_file_created": false,
+    "redis_save_or_bgsave_called": false,
+    "agent_hub_db1_exported": false,
+    "v1_db0_key_count": 12,
+    "v1_queue_length": 0,
+    "v1_processing_length": 0,
+    "pre_and_post_snapshot_match": true
+  },
+  "payloads": [
+    {
+      "name": "ah01b-audit-source",
+      "ciphertext_bytes": 365587,
+      "ciphertext_sha256": "e00dea5055013bdfab19060eac5399ec3dd90bd88688f60060465bb17cc10996"
+    },
+    {
+      "name": "api-source",
+      "ciphertext_bytes": 45687,
+      "ciphertext_sha256": "087fe6d1238baa3ebe80e9dd52916b783ec9a723cdab73c6b98706481afe0762"
+    },
+    {
+      "name": "exact-image-api",
+      "ciphertext_bytes": 58361434,
+      "ciphertext_sha256": "91126cbb1beedd5135df6e7d554faddd3348502c53df4f961733320474f20581"
+    },
+    {
+      "name": "exact-image-redis",
+      "ciphertext_bytes": 15832296,
+      "ciphertext_sha256": "bd8060a9921957d06d2aedb7f6ee2bfae70508a17d2f8b75a733f2227f7768fc"
+    },
+    {
+      "name": "exact-image-renderer",
+      "ciphertext_bytes": 554837180,
+      "ciphertext_sha256": "2b6e19e6da15c1c433b095d16129e177fa3395ae66fcd3f1a6d7b90603ec848c"
+    },
+    {
+      "name": "exact-image-worker",
+      "ciphertext_bytes": 237172483,
+      "ciphertext_sha256": "3a8a12e89e324459430488fb7160be26c19a9cf8d02f90d927ce4eb59326af3f"
+    },
+    {
+      "name": "exact-images-combined",
+      "ciphertext_bytes": 823046621,
+      "ciphertext_sha256": "46663982981cf09a673c565f4f72e276a75e1882f91e4f21453b4bad0cadf356"
+    },
+    {
+      "name": "pilot",
+      "ciphertext_bytes": 33190692,
+      "ciphertext_sha256": "56ee37a6315213d8499e52640c48ea1c02570d4ba0367e130a62f04187449fd9"
+    },
+    {
+      "name": "pilot-file-manifest",
+      "ciphertext_bytes": 7973,
+      "ciphertext_sha256": "5dc733c52e70f75a06aa3ebc5c2276c132f980fae59a35197fb05cbe4793d112"
+    },
+    {
+      "name": "redis-db0-confirmation",
+      "ciphertext_bytes": 17419,
+      "ciphertext_sha256": "a2346ca708e223f8a1ae6a9d26f2d5793e3837089b887ca00b37d4dc17378556"
+    },
+    {
+      "name": "redis-db0-primary",
+      "ciphertext_bytes": 17419,
+      "ciphertext_sha256": "a5a186bb3a6d189d7b64938513051d4334cb4a59f3e82e5d44a1031da9a11136"
+    },
+    {
+      "name": "runtime",
+      "ciphertext_bytes": 8725119,
+      "ciphertext_sha256": "e7d1e6dd50f20738e3623083830fbb2cdadededa4a8c7f39a0208ed2f2592bbf"
+    },
+    {
+      "name": "runtime-file-manifest",
+      "ciphertext_bytes": 2386,
+      "ciphertext_sha256": "eb4cbd3ff961909cc5805cec7970ec13e8dc718d2e80676442dbffa5c12af6be"
+    },
+    {
+      "name": "storage",
+      "ciphertext_bytes": 164187459,
+      "ciphertext_sha256": "102b06acd2b6e4d21fdb375303b63985d3333b62836835f169948f0f8539312d"
+    },
+    {
+      "name": "storage-file-manifest",
+      "ciphertext_bytes": 17149,
+      "ciphertext_sha256": "e6684ea015e7ce5410c9095dab9aa8c1d075aa0b7497d1d88ea804337acb6a22"
+    },
+    {
+      "name": "worker-renderer-source",
+      "ciphertext_bytes": 46284,
+      "ciphertext_sha256": "730247a81d00e6ff19ed3856ac40a64aebf019d20e656d759aa8820b0c54f64d"
+    }
+  ],
+  "restore_checks": {
+    "encrypted_payload_count": 16,
+    "redis_db0": {
+      "status": "PASS",
+      "restored_key_count": 12,
+      "queue_length": 0,
+      "processing_length": 0,
+      "post_restart_checksum_type_ttl_parity": true
+    },
+    "storage": {
+      "status": "PASS",
+      "file_count": 106,
+      "total_bytes": 177216076
+    },
+    "production_pilot_artifacts": {
+      "status": "PASS",
+      "file_count": 45,
+      "total_bytes": 38408292
+    },
+    "protected_runtime": {
+      "status": "PASS",
+      "file_count": 17,
+      "total_bytes": 9145104,
+      "plaintext_logged": false
+    },
+    "exact_images": {
+      "status": "PASS",
+      "production_config_to_local_oci_manifest_verified": true,
+      "mutable_tags_loaded": false,
+      "api": {
+        "production_config_id": "sha256:5c7597d6da754baaac21effe6c3511ab16460659ead7233b2fde1fe5af75e2f7",
+        "local_oci_manifest_id": "sha256:5eb88ba6289a9a3563e59e56f3e9a7c67b726427eeb5ec851ee77b632b553981"
+      },
+      "worker": {
+        "production_config_id": "sha256:8d367182ab9ca08d17b5d30b524281b951d27bc5a91168bc340adab0f79c962c",
+        "local_oci_manifest_id": "sha256:f655ed4aa76d4a192df71db1a161cd9432b938f5cab77ba18bfea098bc4ce17c"
+      },
+      "renderer": {
+        "production_config_id": "sha256:e42b8c5bf9a047d4b5031ddf9fdadffbd0acd38bfa34b50a7a23227a71ecaf33",
+        "local_oci_manifest_id": "sha256:7669e96d9835058f4947f2dfeec616e0cb6f8c3863c7387dbb3ec02b5626f87d"
+      },
+      "redis": {
+        "production_config_id": "sha256:2a51817f79255c8b69f86a974459c2e0359aff81417d80158f2b9e541e6f4b33",
+        "local_oci_manifest_id": "sha256:b5f4c57c96d9243bfbb08a824b8752b0cd88d7ca8247b914fb890945589b56d1",
+        "repository_digest": "redis@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2"
+      }
+    },
+    "isolated_runtime": {
+      "status": "PASS",
+      "network_internal": true,
+      "published_ports": 0,
+      "api_health_ready_job_read": "PASS",
+      "renderer_health": "PASS",
+      "post_restart_read": "PASS",
+      "worker_started": false,
+      "provider_credentials_supplied": false,
+      "provider_or_publish_call_performed": false
+    },
+    "cleanup": {
+      "status": "PASS",
+      "leftover_containers": 0,
+      "leftover_volumes": 0,
+      "leftover_networks": 0,
+      "plaintext_temporary_files": 0
+    }
+  },
+  "evidence_hashes": {
+    "bundle_manifest_sha256": "08ed9f6f55dd2aef32430124468b2ef7da26d50d21d916480e8ad3ae6e06e920",
+    "restore_report_sha256": "b30f43e870bbbdd3267adb282196cba65a72acb703e2986c672266a1fc83acf2",
+    "bundle_tool_sha256": "ec9f3def5b337a6b1872b69520f58cd5b8f84f71424ecae662a3006fe4d60d51"
+  },
+  "production_postcheck": {
+    "checked_at": "2026-08-29T05:28:00Z",
+    "checkout_and_image_ids_unchanged": true,
+    "container_restart_counts": 0,
+    "v1_db0_key_count": 12,
+    "v1_queue_length": 0,
+    "v1_processing_length": 0,
+    "api_job_posts_since_capture": 0,
+    "worker_jobs_since_capture": 0,
+    "renderer_renders_since_capture": 0
+  },
+  "remaining_gates": {
+    "owner_bundle_retention_and_dpapi_key_custody_acceptance": true,
+    "second_protected_copy_recommended_before_any_shutdown": true,
+    "agent_hub_db1_backup_and_migration_separate": true,
+    "publication_reference_catalog_unresolved": true,
+    "destructive_change_allowed": false,
+    "v1_decommission": "NO-GO"
+  }
+}

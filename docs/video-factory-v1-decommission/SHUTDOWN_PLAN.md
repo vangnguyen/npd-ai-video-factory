@@ -5,8 +5,8 @@
 `AH-01 / audit only` — **NO-GO for Stage A**.
 
 No deprecation, drain, disable, observation, removal, traffic switch, restart, deployment, Caddy
-change, provider call, data mutation, or PR merge was performed. AH-01B reduced the inventory to two
-`UNKNOWN` decisions, which remains a hard stop.
+change, provider call, data mutation, or PR merge was performed. AH-01B reduced the inventory to one
+`UNKNOWN` decision, which remains a hard stop.
 
 ## Global gates
 
@@ -22,9 +22,10 @@ All of the following are mandatory before Stage A:
 - the AH-01B mixed-storage ownership manifest is accepted and enforced;
 - external CMS/social/internal artifact references are inventoried or explicitly accepted as a
   residual risk by the owner;
-- exact running API/worker/renderer images are exported, checksummed and restore-tested;
-- V1 Redis DB0, storage, protected configuration and operational evidence have an independent,
-  checksummed backup with a successful restore drill;
+- the dated exact running API/worker/renderer image exports and restore PASS are owner-accepted,
+  retained in two protected copies and revalidated against a fresh snapshot;
+- the dated V1 Redis DB0, storage, protected configuration and operational evidence backup/restore
+  PASS is owner-accepted, retained in two protected copies and refreshed at the change gate;
 - Agent Hub DB1 has a separate tested backup and an approved rehome/split plan;
 - Agent Hub has a reviewed replacement/deprecation behavior for `video.jobs.create`;
 - any V2 replacement used by Agent Hub is a documented, accepted bridge contract—not a non-bridge

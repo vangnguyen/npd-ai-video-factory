@@ -14,6 +14,7 @@ AUDIT_DIR = ROOT / "docs" / "video-factory-v1-decommission"
 INVENTORY = AUDIT_DIR / "v1-components.json"
 STORAGE_MANIFEST = AUDIT_DIR / "v1-storage-ownership-manifest.json"
 PROVENANCE_MANIFEST = AUDIT_DIR / "v1-runtime-image-provenance.json"
+BACKUP_RESTORE_EVIDENCE = AUDIT_DIR / "v1-backup-restore-evidence.json"
 REQUIRED_TOOLING = {
     ROOT / "scripts" / "ops" / "v1_backup" / "README.md",
     ROOT / "scripts" / "ops" / "v1_backup" / "export-db0-readonly.sh",
@@ -52,6 +53,7 @@ REQUIRED_DOCS = {
     "LEGACY_PR_DECISIONS.md",
     "v1-storage-ownership-manifest.json",
     "v1-runtime-image-provenance.json",
+    "v1-backup-restore-evidence.json",
 }
 REQUIRED_COMPONENT_FIELDS = {
     "id",
@@ -235,8 +237,175 @@ def validate_provenance_manifest() -> None:
         fail("provenance summary.observed_source_file_count is stale")
     if summary.get("source_mismatch_count") != total_mismatches:
         fail("provenance summary.source_mismatch_count is stale")
-    if summary.get("portable_rollback_bundle_verified") is not False:
-        fail("portable rollback must remain unverified until a real restore drill passes")
+    if summary.get("portable_rollback_bundle_verified") is not True:
+        fail("portable rollback must remain verified after the real restore drill passes")
+
+
+def validate_backup_restore_evidence() -> None:
+    payload = json.loads(BACKUP_RESTORE_EVIDENCE.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != "1.0":
+        fail("backup evidence schema_version must be 1.0")
+    if payload.get("technical_restore_status") != "PASS":
+        fail("backup evidence technical_restore_status must be PASS")
+    if payload.get("complete_v1_bundle_restore") is not True:
+        fail("backup evidence complete_v1_bundle_restore must be true")
+    if payload.get("owner_acceptance_status") != "PENDING":
+        fail("backup evidence must preserve the pending owner acceptance gate")
+    if not isinstance(payload.get("bundle_total_bytes"), int) or payload["bundle_total_bytes"] <= 0:
+        fail("backup evidence has invalid bundle_total_bytes")
+
+    encryption = payload.get("encryption") or {}
+    if encryption.get("payload_cipher") != "AES-256-GCM":
+        fail("backup evidence payload cipher must be AES-256-GCM")
+    if encryption.get("key_protection") != "Windows DPAPI CurrentUser":
+        fail("backup evidence key protection must remain Windows DPAPI CurrentUser")
+    for field in ("plaintext_payload_at_rest", "key_material_committed", "key_material_logged"):
+        if encryption.get(field) is not False:
+            fail(f"backup evidence encryption.{field} must be false")
+
+    boundary = payload.get("capture_boundary") or {}
+    for field in (
+        "production_write_performed",
+        "remote_temporary_file_created",
+        "redis_save_or_bgsave_called",
+        "agent_hub_db1_exported",
+    ):
+        if boundary.get(field) is not False:
+            fail(f"backup evidence capture_boundary.{field} must be false")
+    if boundary.get("pre_and_post_snapshot_match") is not True:
+        fail("backup evidence production snapshots must match")
+    if boundary.get("v1_db0_key_count") != 12:
+        fail("backup evidence must record the 12-key V1 DB0 snapshot")
+    if boundary.get("v1_queue_length") != 0 or boundary.get("v1_processing_length") != 0:
+        fail("backup evidence must preserve the empty V1 queue/processing snapshot")
+
+    payloads = payload.get("payloads")
+    if not isinstance(payloads, list) or len(payloads) != 16:
+        fail("backup evidence must contain 16 encrypted payload records")
+    names: list[str] = []
+    for index, item in enumerate(payloads):
+        if not isinstance(item, dict):
+            fail(f"backup evidence payload {index} is not an object")
+        name = item.get("name")
+        if not isinstance(name, str) or not name:
+            fail(f"backup evidence payload {index} has invalid name")
+        names.append(name)
+        if not isinstance(item.get("ciphertext_bytes"), int) or item["ciphertext_bytes"] <= 0:
+            fail(f"backup evidence payload {name} has invalid ciphertext_bytes")
+        validate_sha256(item.get("ciphertext_sha256"), context=f"backup payload {name}")
+    if len(names) != len(set(names)):
+        fail("backup evidence has duplicate payload names")
+    if payload["bundle_total_bytes"] < sum(item["ciphertext_bytes"] for item in payloads):
+        fail("backup evidence bundle_total_bytes is smaller than its encrypted payloads")
+    required_payloads = {
+        "redis-db0-primary",
+        "redis-db0-confirmation",
+        "storage",
+        "pilot",
+        "runtime",
+        "exact-image-api",
+        "exact-image-worker",
+        "exact-image-renderer",
+        "exact-image-redis",
+    }
+    if not required_payloads.issubset(names):
+        fail("backup evidence is missing a required encrypted payload")
+
+    checks = payload.get("restore_checks") or {}
+    if checks.get("encrypted_payload_count") != len(payloads):
+        fail("backup evidence encrypted_payload_count is stale")
+    redis = checks.get("redis_db0") or {}
+    if (
+        redis.get("status") != "PASS"
+        or redis.get("restored_key_count") != boundary.get("v1_db0_key_count")
+        or redis.get("queue_length") != boundary.get("v1_queue_length")
+        or redis.get("processing_length") != boundary.get("v1_processing_length")
+        or redis.get("post_restart_checksum_type_ttl_parity") is not True
+    ):
+        fail("backup evidence Redis DB0 restore checks are incomplete")
+    for section in ("storage", "production_pilot_artifacts", "protected_runtime"):
+        item = checks.get(section) or {}
+        if item.get("status") != "PASS":
+            fail(f"backup evidence {section} status must be PASS")
+        if not isinstance(item.get("file_count"), int) or item["file_count"] <= 0:
+            fail(f"backup evidence {section} file_count is invalid")
+        if not isinstance(item.get("total_bytes"), int) or item["total_bytes"] <= 0:
+            fail(f"backup evidence {section} total_bytes is invalid")
+    if (checks.get("protected_runtime") or {}).get("plaintext_logged") is not False:
+        fail("backup evidence must not log protected runtime plaintext")
+
+    images = checks.get("exact_images") or {}
+    if (
+        images.get("status") != "PASS"
+        or images.get("production_config_to_local_oci_manifest_verified") is not True
+        or images.get("mutable_tags_loaded") is not False
+    ):
+        fail("backup evidence exact-image restore checks are incomplete")
+    for service in ("api", "worker", "renderer", "redis"):
+        item = images.get(service) or {}
+        for field in ("production_config_id", "local_oci_manifest_id"):
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", str(item.get(field) or "")):
+                fail(f"backup evidence exact image {service}.{field} is invalid")
+
+    isolated = checks.get("isolated_runtime") or {}
+    if (
+        isolated.get("status") != "PASS"
+        or isolated.get("network_internal") is not True
+        or isolated.get("published_ports") != 0
+        or isolated.get("api_health_ready_job_read") != "PASS"
+        or isolated.get("renderer_health") != "PASS"
+        or isolated.get("post_restart_read") != "PASS"
+        or isolated.get("worker_started") is not False
+        or isolated.get("provider_credentials_supplied") is not False
+        or isolated.get("provider_or_publish_call_performed") is not False
+    ):
+        fail("backup evidence isolated runtime safety checks are incomplete")
+    cleanup = checks.get("cleanup") or {}
+    if cleanup.get("status") != "PASS" or any(
+        cleanup.get(field) != 0
+        for field in (
+            "leftover_containers",
+            "leftover_volumes",
+            "leftover_networks",
+            "plaintext_temporary_files",
+        )
+    ):
+        fail("backup evidence cleanup checks are incomplete")
+
+    for name, value in (payload.get("evidence_hashes") or {}).items():
+        validate_sha256(value, context=f"backup evidence hash {name}")
+    if len(payload.get("evidence_hashes") or {}) != 3:
+        fail("backup evidence must preserve all three evidence hashes")
+
+    postcheck = payload.get("production_postcheck") or {}
+    if (
+        postcheck.get("checkout_and_image_ids_unchanged") is not True
+        or postcheck.get("container_restart_counts") != 0
+        or postcheck.get("v1_db0_key_count") != boundary.get("v1_db0_key_count")
+        or postcheck.get("v1_queue_length") != boundary.get("v1_queue_length")
+        or postcheck.get("v1_processing_length") != boundary.get("v1_processing_length")
+        or any(
+            postcheck.get(field) != 0
+            for field in (
+                "api_job_posts_since_capture",
+                "worker_jobs_since_capture",
+                "renderer_renders_since_capture",
+            )
+        )
+    ):
+        fail("backup evidence production postcheck is incomplete")
+
+    gates = payload.get("remaining_gates") or {}
+    for field in (
+        "owner_bundle_retention_and_dpapi_key_custody_acceptance",
+        "second_protected_copy_recommended_before_any_shutdown",
+        "agent_hub_db1_backup_and_migration_separate",
+        "publication_reference_catalog_unresolved",
+    ):
+        if gates.get(field) is not True:
+            fail(f"backup evidence remaining_gates.{field} must remain true")
+    if gates.get("destructive_change_allowed") is not False or gates.get("v1_decommission") != "NO-GO":
+        fail("backup evidence must preserve the V1 decommission NO-GO gate")
 
 
 def main() -> None:
@@ -311,6 +480,7 @@ def main() -> None:
 
     validate_storage_manifest()
     validate_provenance_manifest()
+    validate_backup_restore_evidence()
 
     verifier = ROOT / "scripts" / "ops" / "v1_backup" / "verify_redis_export.py"
     try:

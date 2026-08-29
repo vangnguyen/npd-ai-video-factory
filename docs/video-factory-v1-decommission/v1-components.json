@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-08-29T11:27:19+07:00",
+  "generated_at": "2026-08-29T12:28:00+07:00",
   "source_repository": "https://github.com/vangnguyen/npd-ai-video-factory",
   "source_revision": "7c4442b3c42da09626838b7d195d6eed08cc034b",
   "ah01_audit_source_revision": "02c31be4729bf19f150791ee623dfb25d957ada7",
@@ -22,13 +22,12 @@
       "DELETE_LATER": 2,
       "DEPRECATE": 11,
       "DISABLE": 3,
-      "KEEP": 9,
+      "KEEP": 10,
       "MIGRATE": 15,
       "REPLACE_WITH_V2_API": 4,
-      "UNKNOWN": 2
+      "UNKNOWN": 1
     },
     "unknown_component_ids": [
-      "v1-backup-restore-coverage",
       "v1-publication-reference-catalog"
     ],
     "destructive_change_allowed": false
@@ -592,7 +591,7 @@
       "type": "data",
       "location": "/opt/npd-ai-video-factory/.runtime",
       "runtime_active": false,
-      "current_state": "17 files, 9,145,104 bytes; contains logs, stale PID markers, a media zip and an environment backup with protected contents.",
+      "current_state": "17 files, 9,145,104 bytes; contains logs, stale PID markers, a media zip and a secret-bearing environment backup. The full set was captured only as an opaque AES-256-GCM payload and restore-verified without decoding or logging protected values.",
       "last_known_use": "Newest mtime 2026-08-14T08:09:38.074908Z.",
       "active_consumers": ["Legacy operator rollback/audit"],
       "data_ownership": "V1 operational evidence; env backup is secret-bearing",
@@ -602,7 +601,7 @@
       "shutdown_risk": "Disclosure risk if archived with public artifacts; rollback risk if removed early.",
       "decision": "MIGRATE",
       "owner_gate": "Owner-approved secure archival procedure.",
-      "evidence": ["PROD:filename/size/mtime-only inventory; contents not read"]
+      "evidence": ["PROD:filename/size/mtime inventory", "DOC:v1-backup-restore-evidence.json", "LOCAL:encrypted runtime capture/restore; protected values not decoded or logged"]
     },
     {
       "id": "v1-root-compose",
@@ -630,12 +629,12 @@
       "runtime_active": true,
       "current_state": "Both ports listen on 0.0.0.0/[::] and health endpoints are reachable from outside the VPS; neither write route has authentication.",
       "last_known_use": "AH-01 external health probes on 2026-08-29.",
-      "active_consumers": ["Legacy operators", "UNKNOWN direct renderer caller", "Potential public callers"],
+      "active_consumers": ["Legacy operators", "Observed one-off Codex V3 owner-review caller", "Potential unauthenticated callers"],
       "data_ownership": "Production network exposure",
       "dependencies": ["v1-api-service", "v1-renderer-service"],
       "replacement": "Internal-only legacy access during drain; V2 bridge uses authenticated, allowlisted contract routing.",
       "migration_requirement": "Owner-gated containment must preserve known consumers and add identity/telemetry before final disable.",
-      "shutdown_risk": "Leaving exposure permits cost abuse/data access; changing it now may break the unknown direct caller.",
+      "shutdown_risk": "Leaving exposure permits cost abuse/data access; changing it before identity-safe telemetry and observation may break a caller not visible in current logs.",
       "decision": "DISABLE",
       "owner_gate": "Separate urgent owner decision for network containment; no Caddy/firewall change in AH-01.",
       "evidence": ["PROD:ss listeners", "PROD:external health requests", "SRC:unauthenticated route definitions"]
@@ -699,18 +698,18 @@
       "component": "V1 independent backup and restore capability",
       "type": "operational_control",
       "location": "/var/backups; /opt/npd-ai-video-factory/.runtime; Docker Redis volume",
-      "runtime_active": null,
-      "current_state": "AH-01B defined a stream-only bundle and isolated restore protocol. Local Docker is available, but no approved encrypted production bundle, exact image export set or real restore report exists; restore status is NOT RUN.",
-      "last_known_use": "Synthetic Redis DUMP/RESTORE transport was exercised locally; no production data was captured or restored.",
+      "runtime_active": true,
+      "current_state": "AH-01B captured a 1,895,938,306-byte AES-256-GCM bundle outside production/Git and completed a real isolated restore of V1 DB0, storage, pilot/runtime evidence and exact API/worker/renderer/Redis images. Technical restore status is PASS; owner retention and DPAPI key-custody acceptance remain pending.",
+      "last_known_use": "Read-only capture completed 2026-08-29T05:16:13Z; isolated restore/restart verification completed 2026-08-29T05:27:05Z with cleanup PASS and no production mutation.",
       "active_consumers": ["Future AH-04 rollback"],
       "data_ownership": "V1 operations and mixed storage owners",
       "dependencies": ["v1-redis-job-history", "shared-redis-runtime", "v1-storage-job-artifacts", "mixed-storage-root", "v1-production-pilot-artifacts", "v1-runtime-logs-env-backup", "v1-image-provenance"],
       "replacement": "Checksummed, encrypted backup set with documented restore test and separate secret handling.",
-      "migration_requirement": "Use the guarded read-only exporter and isolated verifier to create an encrypted off-production bundle, then restore-test every required dataset and exact image before Stage A/C; preserve Agent Hub DB1 separately.",
-      "shutdown_risk": "Rollback is not proven; destructive change can become irreversible.",
-      "decision": "UNKNOWN",
-      "owner_gate": "No shutdown stage beyond audit until restore evidence is owner-reviewed.",
-      "evidence": ["PROD:backup path metadata scan", "SRC:scripts/phase5/backup.sh scope review", "PROD:Redis INFO persistence", "DOC:V1_BACKUP_RESTORE_PLAN.md", "SRC:scripts/ops/v1_backup"]
+      "migration_requirement": "Retain the encrypted bundle and its DPAPI-protected key under an owner-accepted custody/retention policy, make a second protected copy before any shutdown, recapture a fresh forward-recovery snapshot at the change gate, and preserve Agent Hub DB1 separately.",
+      "shutdown_risk": "The dated V1 snapshot is technically restorable, but a single owner-workspace copy, pending key-custody acceptance, later production drift and the separate DB1 dependency still block shutdown.",
+      "decision": "KEEP",
+      "owner_gate": "Owner must accept bundle retention/key custody and a second protected copy before shutdown; this technical PASS grants no production action.",
+      "evidence": ["DOC:v1-backup-restore-evidence.json", "LOCAL:outputs/v1-backup-restore-20260829T045502Z", "DOC:V1_BACKUP_RESTORE_PLAN.md", "SRC:scripts/ops/v1_backup", "PROD:read-only capture and postcheck 2026-08-29T05:02:30Z-05:28:00Z"]
     },
     {
       "id": "v1-observability",
@@ -754,17 +753,17 @@
       "type": "deployment_control",
       "location": "Local-only images npd-ai-video-factory-api/worker/renderer:latest",
       "runtime_active": true,
-      "current_state": "AH-01B recorded exact image IDs and matched every tracked copied source input with zero mismatches: API 10/10 at 78273a6; worker 25/25 and renderer 8/8 at a92785d. Images remain local-only without registry digests/revision labels.",
-      "last_known_use": "Running containers and source inputs inspected 2026-08-29T04:21:00Z.",
+      "current_state": "AH-01B recorded exact image IDs, matched all 43 tracked copied source inputs with zero mismatches, exported the exact API/worker/renderer images plus pinned Redis image into the encrypted bundle, and verified production-config-to-local-OCI mappings in the isolated restore.",
+      "last_known_use": "Running containers/source inspected 2026-08-29T04:21:00Z; exact image restore/health verification completed 2026-08-29T05:27:05Z.",
       "active_consumers": ["V1 production runtime", "Future rollback"],
       "data_ownership": "V1 deployment artifacts",
       "dependencies": ["v1-api-service", "v1-worker-service", "v1-renderer-service"],
       "replacement": "Keep exact image/source provenance; portable rollback images belong to the restore-tested backup bundle.",
-      "migration_requirement": "Retain the recorded IDs and source hash manifest; export/checksum/restore-test under v1-backup-restore-coverage; do not rebuild from the current checkout as a rollback substitute.",
-      "shutdown_risk": "Source is attributable, but local image loss still breaks rollback until the independent bundle is verified.",
+      "migration_requirement": "Retain the recorded IDs, source hash manifest and encrypted exact-image payloads; create a second protected copy and recapture/verify against a fresh production snapshot before any shutdown. Do not rebuild from the current checkout as a rollback substitute.",
+      "shutdown_risk": "The dated images are portable and verified, but losing the single protected bundle or allowing runtime drift without recapture would break rollback.",
       "decision": "KEEP",
-      "owner_gate": "No stop/rebuild/deploy until the separately tracked rollback bundle is captured and verified.",
-      "evidence": ["PROD:docker image inspect created/labels/digests at 2026-08-29T04:21:00Z", "PROD:runtime source SHA-256 comparison, 43/43 inputs matched", "DOC:AH01B_EVIDENCE.md"]
+      "owner_gate": "No stop/rebuild/deploy until the owner accepts bundle custody and a fresh pre-change image snapshot.",
+      "evidence": ["PROD:docker image inspect created/labels/digests at 2026-08-29T04:21:00Z", "PROD:runtime source SHA-256 comparison, 43/43 inputs matched", "DOC:v1-runtime-image-provenance.json", "DOC:v1-backup-restore-evidence.json"]
     },
     {
       "id": "v1-open-pr34",

@@ -4,12 +4,12 @@
 
 AH-01 is complete as a read-only audit. **V1 shutdown and deletion are NO-GO.**
 
-AH-01B resolved six of the original eight `UNKNOWN` classifications. The V1 renderer request on
+AH-01B resolved seven of the original eight `UNKNOWN` classifications. The V1 renderer request on
 `2026-08-29` local time is now attributed to a one-off Codex V3 owner-review render, and the running
 image source inputs are matched to exact commits. The shared storage root still contains recently updated
 `owner-review-v3-*` material, and Agent Hub Redis DB1 is hosted by the Redis container owned by the
-V1 Compose project. Two `UNKNOWN` items remain: the real restore-tested backup bundle and authorized
-external publication/reference coverage.
+V1 Compose project. A real encrypted off-production V1 bundle passed its isolated restore/restart
+drill. One `UNKNOWN` remains: authorized external publication/reference coverage.
 
 No production service, route, queue, key, file, secret, Caddy configuration, n8n workflow, PR,
 provider, or traffic path was changed by this audit.
@@ -40,9 +40,10 @@ provider, or traffic path was changed by this audit.
 | V2 documentation revision | `8fa96409b0db6ec6d4dc3c04f6e3aaab2f3201ee` |
 | Production method | Docker/Redis/PostgreSQL/filesystem/log/network/config inspection, read only |
 
-Secret values were neither read nor recorded. Container environment inspection was restricted to
-safe configuration values and booleans indicating whether named secret variables were present.
-No V1 job was created and no paid provider was called.
+Secret values were never decoded, displayed or logged. The protected runtime backup was streamed
+only into its AES-256-GCM payload; container environment inspection was restricted to safe
+configuration values and booleans indicating whether named secret variables were present. No V1
+job was created and no paid provider was called.
 
 ## Current dependency topology
 
@@ -79,11 +80,11 @@ a scoped V1-only action.
 | F-07 | Renderer handled a direct job from `17:42:07Z` to `17:44:48Z` on 28/08; AH-01B attributed it to a one-off Codex V3 owner-review workflow. | The observed caller is resolved, but telemetry/observation is still required before stop. |
 | F-08 | Storage contains V1 data and four recently updated `owner-review-v3-*` directories. | Whole-root archive/delete/move is prohibited. |
 | F-09 | Agent Hub DB1 lives in the Redis service owned by V1 Compose. | Redis must be rehomed/split before V1 Compose can be stopped. |
-| F-10 | Running V1 images have no git revision label or registry digest. | Exact rollback cannot be reproduced from the checkout without first exporting the images. |
+| F-10 | Running V1 images have no git revision label or registry digest; AH-01B exported and restore-tested their exact content with verified production-config-to-local-OCI mappings. | Rebuilding from the checkout is invalid; retain the encrypted exact-image payloads and recapture on runtime drift. |
 | F-11 | API and worker were built from different source snapshots; worker/renderer match the old production-pilot branch. | Current checkout is not a reliable runtime source of truth. |
 | F-12 | The only production n8n V1 workflow is inactive, manual, network-disconnected, and has zero retained executions. | It can be archived/deprecated later; it is not evidence that all V1 callers are absent. |
 | F-13 | V1 uses Redis, not PostgreSQL. No production table name containing `video` was found. | Do not mutate n8n PostgreSQL as part of V1 job-data handling. |
-| F-14 | AOF persistence exists, but no independent, restore-tested V1 DB0 + storage backup set was found. | AH-04 cannot begin until backup/restore evidence is produced. |
+| F-14 | A 16-payload encrypted V1 bundle passed isolated DB0/storage/image restore and restart checks without production mutation; owner custody/retention acceptance and a second protected copy remain pending. | Technical restore coverage is `KEEP`, but this dated PASS alone does not authorize AH-03/AH-04. |
 | F-15 | V2's documented bridge is authenticated and isolated but currently draft-only. | It cannot yet replace V1 render/approval/publish behavior through the bridge. |
 
 ## Repository inventory
@@ -174,8 +175,9 @@ and no retained execution row for it.
 5. The current logs do not include renderer caller identity. AH-01B attributed the observed request
    through the exact Codex command/job/path/hash chain, but telemetry still cannot identify future
    callers independently.
-6. Runtime images are local `:latest` builds with no registry digest or git revision label. Exact
-   image export is a prerequisite for reversible shutdown work.
+6. Runtime images are local `:latest` builds with no registry digest or git revision label. Their
+   exact content is now retained and restore-tested in the encrypted bundle; owner custody, a second
+   protected copy and a fresh pre-change comparison remain prerequisites for reversible shutdown.
 
 These are recorded as risks, not silently remediated in an audit PR. Network containment is urgent
 but still requires explicit production change authorization, identity-safe telemetry and a fresh
@@ -204,7 +206,6 @@ exists. The non-bridge V2 API is not an authorized shortcut.
 
 | Component | What must be proven |
 |---|---|
-| `v1-backup-restore-coverage` | Independent DB0/storage/image backup and a successful restore drill |
 | `v1-publication-reference-catalog` | Authorized CMS/social/internal link inventory for V1 artifacts |
 
 Any one of these is sufficient to block destructive work.
@@ -222,10 +223,10 @@ Any one of these is sufficient to block destructive work.
 ## Owner-gated next steps
 
 1. Owner-review the AH-01B evidence, storage manifest, Redis design and PR retention directions.
-2. Produce the encrypted, restore-tested V1 DB0/storage/exact-image bundle outside production.
+2. Accept bundle retention/DPAPI key custody and create a second protected copy before shutdown.
 3. Complete an authorized CMS/social/internal artifact-reference inventory.
 4. Implement and rehearse the Agent Hub Redis rehome plan before any production cutover request.
-5. Implement AH-02 against `agent-hub-bridge.v1` with mocks and contract tests only.
+5. Review AH-02 against `agent-hub-bridge.v1`; keep validation mock/offline until separately approved.
 6. Seek a new owner gate for AH-03 deprecation behavior and production deployment only after all
    required evidence is accepted.
 7. Start a 14-day observation only after deprecation telemetry and write blocking are deployed.

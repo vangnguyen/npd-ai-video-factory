@@ -28,8 +28,8 @@ accepted. Closing or deleting the branch remains an owner gate.
   acceptance gate.
 
 Decision: `DEPRECATE` with **DO NOT MERGE** status. Preserve the branch/PR as historical provider and
-pilot evidence until exact-image backup, V1 rollback retention and the separate owner-review record
-are all accepted. Closing, retargeting or deleting it remains an owner gate.
+pilot evidence until the dated exact-image backup, V1 rollback retention/custody and the separate
+owner-review record are all accepted. Closing, retargeting or deleting it remains an owner gate.
 
 These classifications resolve the inventory's direction without granting any GitHub mutation or
 production authority.

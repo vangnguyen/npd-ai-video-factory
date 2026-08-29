@@ -9,7 +9,7 @@
     "observed_source_file_count": 43,
     "source_mismatch_count": 0,
     "source_attribution_resolved": true,
-    "portable_rollback_bundle_verified": false
+    "portable_rollback_bundle_verified": true
   },
   "services": [
     {
@@ -236,5 +236,5 @@
       ]
     }
   ],
-  "rollback_boundary": "Exact local image IDs must be exported, checksummed, retained outside production, loaded and exercised in an isolated restore drill before shutdown. Source match alone is not rollback readiness."
+  "rollback_boundary": "The exact application images and pinned Redis image were exported into the encrypted off-production bundle and exercised in the isolated restore drill completed 2026-08-29T05:27:05Z. Owner acceptance of key custody, a second protected copy, and a fresh pre-change snapshot remain mandatory before shutdown; source match or this dated PASS alone is not production authorization."
 }
