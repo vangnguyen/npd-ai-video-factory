@@ -7,8 +7,11 @@ import logging
 import os
 import re
 from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
 from threading import Lock
 from typing import Any
+from uuid import uuid4
 
 
 LOGGER = logging.getLogger("npd.legacy_telemetry")
@@ -20,6 +23,7 @@ ROUTE_ACTIONS = {
     "/api/v1/video-jobs/{job_id}": "legacy_read",
     "/api/v1/video-jobs/{job_id}/artifacts/{artifact_name}": "legacy_artifact_read",
 }
+MINIMUM_SALT_BYTES = 32
 
 
 def _safe_claimed_caller(value: str | None) -> str | None:
@@ -36,19 +40,42 @@ def _fingerprint(value: str, salt: bytes | None) -> str | None:
     return f"hmac-sha256:{digest[:24]}"
 
 
+def _salt_from_environment() -> str | None:
+    direct = os.getenv("LEGACY_TELEMETRY_SALT", "").strip()
+    file_value = os.getenv("LEGACY_TELEMETRY_SALT_FILE", "").strip()
+    if direct and file_value:
+        raise RuntimeError(
+            "configure only one of LEGACY_TELEMETRY_SALT or LEGACY_TELEMETRY_SALT_FILE"
+        )
+    if file_value:
+        path = Path(file_value)
+        if not path.is_absolute():
+            raise RuntimeError("LEGACY_TELEMETRY_SALT_FILE must be an absolute path")
+        try:
+            direct = path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise RuntimeError("LEGACY_TELEMETRY_SALT_FILE could not be read") from exc
+        if not direct:
+            raise RuntimeError("LEGACY_TELEMETRY_SALT_FILE is empty")
+    if direct and len(direct.encode("utf-8")) < MINIMUM_SALT_BYTES:
+        raise RuntimeError(f"legacy telemetry salt must contain at least {MINIMUM_SALT_BYTES} bytes")
+    return direct or None
+
+
 class LegacyTelemetry:
     """Emit identity-safe route events without storing payloads, IDs, URLs, IPs or user agents."""
 
     def __init__(self, *, salt: str | None, logger: logging.Logger = LOGGER):
         self._salt = salt.encode("utf-8") if salt else None
         self._logger = logger
+        self._process_instance_id = str(uuid4())
         self._route_counts: Counter[str] = Counter()
         self._deprecated_attempt_count = 0
         self._lock = Lock()
 
     @classmethod
     def from_environment(cls) -> "LegacyTelemetry":
-        return cls(salt=os.getenv("LEGACY_TELEMETRY_SALT", "").strip() or None)
+        return cls(salt=_salt_from_environment())
 
     @property
     def identity_ready(self) -> bool:
@@ -79,6 +106,8 @@ class LegacyTelemetry:
         agent = user_agent or "unavailable"
         event: dict[str, Any] = {
             "event": "legacy_route_access",
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+            "process_instance_id": self._process_instance_id,
             "service": "video-factory-v1-api",
             "route": route,
             "method": method.upper(),

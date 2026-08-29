@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "accepted_mappings": [
+    {
+      "service": "video-factory-v1-renderer",
+      "source_fingerprint": "hmac-sha256:REPLACE_WITH_24_HEX_CHARS",
+      "client_fingerprint": "hmac-sha256:REPLACE_WITH_24_HEX_CHARS",
+      "claimed_caller_id": "video-factory-v1-worker",
+      "allowed_actions": [
+        "legacy_render"
+      ],
+      "owner_label": "V1 worker",
+      "accepted_by_owner": false
+    }
+  ]
+}

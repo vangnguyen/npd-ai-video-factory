@@ -1,6 +1,6 @@
 # V1 legacy telemetry plan
 
-Status: **source implemented and locally tested; not deployed; observation not started**
+Status: **AH-T01 deployment candidate prepared; not deployed; observation not started**
 
 AH-01C adds identity-safe structured telemetry to the V1 API and renderer source. It does not add
 authentication, change Caddy or ports, restart a service, deploy an image, block a request, or
@@ -58,3 +58,8 @@ Exit requires 14 complete consecutive days with:
 
 Any unexplained caller, telemetry gap, missing salt, restart gap or raw-identity leak resets the
 window. Even a PASS observation does not itself authorize port closure, traffic switch or V1 stop.
+
+The owner-gated deployment candidate, protected salt-file contract, mock-only verification and
+14-day evidence evaluator are specified in
+[`AH_T01_TELEMETRY_DEPLOYMENT_GATE.md`](AH_T01_TELEMETRY_DEPLOYMENT_GATE.md). Their presence in Git
+does not authorize production execution.

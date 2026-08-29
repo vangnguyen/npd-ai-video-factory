@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "accepted_process_restarts": [
+    {
+      "service": "video-factory-v1-api",
+      "process_instance_id": "REPLACE_WITH_PROCESS_UUID",
+      "reason": "REPLACE_WITH_REVIEWED_CHANGE_OR_INCIDENT_REFERENCE",
+      "accepted_by_owner": false
+    }
+  ]
+}

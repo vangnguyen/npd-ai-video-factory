@@ -1,0 +1,18 @@
+services:
+  api:
+    environment:
+      LEGACY_TELEMETRY_SALT: ""
+      LEGACY_TELEMETRY_SALT_FILE: /run/secrets/legacy_telemetry_salt
+    secrets:
+      - legacy_telemetry_salt
+
+  renderer:
+    environment:
+      LEGACY_TELEMETRY_SALT: ""
+      LEGACY_TELEMETRY_SALT_FILE: /run/secrets/legacy_telemetry_salt
+    secrets:
+      - legacy_telemetry_salt
+
+secrets:
+  legacy_telemetry_salt:
+    file: ${AH_T01_TELEMETRY_SALT_HOST_FILE:?set an absolute protected salt file}
