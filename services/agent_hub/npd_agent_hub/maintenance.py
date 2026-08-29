@@ -15,6 +15,7 @@ from typing import Any
 from redis import Redis
 
 from .config import settings
+from .redis_connection import create_redis_client
 
 
 BACKUP_VERSION = 2
@@ -424,7 +425,10 @@ def restore_namespace(
 
 
 def _client() -> Redis:
-    return Redis.from_url(settings.agent_redis_url, decode_responses=True)
+    return create_redis_client(
+        settings.agent_redis_url,
+        password_file=settings.agent_redis_password_file,
+    )
 
 
 def _write_payload(payload: dict[str, Any], output: str) -> None:

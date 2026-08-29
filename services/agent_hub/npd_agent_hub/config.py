@@ -14,6 +14,7 @@ class HubSettings:
     request_timeout_seconds: float = 30.0
     store_backend: str = "memory"
     agent_redis_url: str = "redis://redis:6379/1"
+    agent_redis_password_file: str = field(default="", repr=False)
     store_namespace: str = "npd:agent-hub:v1"
     auth_mode: str = "disabled"
     viewer_token: str = ""
@@ -74,6 +75,9 @@ class HubSettings:
             request_timeout_seconds=float(os.getenv("AGENT_TOOL_TIMEOUT_SECONDS", "30")),
             store_backend=os.getenv("AGENT_STORE_BACKEND", "memory").strip().lower(),
             agent_redis_url=os.getenv("AGENT_REDIS_URL", "redis://redis:6379/1").strip(),
+            agent_redis_password_file=os.getenv(
+                "AGENT_REDIS_PASSWORD_FILE", ""
+            ).strip(),
             store_namespace=os.getenv("AGENT_STORE_NAMESPACE", "npd:agent-hub:v1").strip(),
             auth_mode=os.getenv("AGENT_AUTH_MODE", "disabled").strip().lower(),
             viewer_token=os.getenv("AGENT_VIEWER_TOKEN", "").strip(),

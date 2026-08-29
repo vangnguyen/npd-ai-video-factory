@@ -1,6 +1,6 @@
 # Agent Hub Redis ownership migration plan
 
-Status: **M0 offline tooling PASS; production migration not accepted or executed**
+Status: **AH-R01 offline candidate PASS; production M1/M2/M3 not accepted or executed**
 
 This plan separates Agent Hub data ownership from the Redis container owned by Video Factory V1.
 It does not authorize a deployment, write pause, export, restore, network change, container action,
@@ -82,6 +82,11 @@ namespace.
 
 Gate: owner approves the production deployment and secret/config changes.
 
+Candidate result: **offline PASS; production NOT RUN**. The AH-R01 override, external password-file
+contract, exact-image/commit preflight and guarded empty-target provisioner are implemented. See
+[`AH_R01_REDIS_INDEPENDENCE_GATE.md`](AH_R01_REDIS_INDEPENDENCE_GATE.md). Their presence in Git is
+not an M1 approval.
+
 ### M2 — Restore rehearsal outside production
 
 Create the owner-approved encrypted DB1 logical export, restore it to an isolated target, and verify:
@@ -95,6 +100,10 @@ Create the owner-approved encrypted DB1 logical export, restore it to an isolate
 
 Gate: signed restore report and rollback rehearsal accepted by the Agent Hub data owner.
 
+Candidate result: the namespace-only age streaming exporter and identity-safe read-model probe are
+prepared, but no production export, decryption or restore has run. Portable recovery identity
+access remains a separate owner/custody gate.
+
 ### M3 — Quiesced cutover
 
 This stage requires a separately approved change window. Stop or block Agent Hub writers only;
@@ -105,6 +114,9 @@ mock-only writes.
 
 Abort on any source drift, unsupported type, positive TTL without explicit handling, count/hash
 mismatch, target persistence failure, or Agent Hub health regression.
+
+Candidate result: **not automated, not approved and not run**. The action-time owner must review a
+fresh snapshot and exact cutover/rollback commands; the readiness PR cannot authorize M3.
 
 ### M4 — Rollback window
 
@@ -117,9 +129,11 @@ dataset. V1 Redis still cannot be stopped until all other V1 gates pass.
 
 ## Acceptance checklist
 
-- [ ] Target architecture/security design accepted.
-- [x] TTL-aware or fail-closed export behavior implemented and locally tested; merge pending.
+- [ ] Target architecture/security design accepted at the production M1 owner gate.
+- [x] TTL-aware or fail-closed export behavior implemented, merged and locally tested.
 - [x] Synthetic isolated Redis restore PASS.
+- [x] Dedicated Redis topology/password-file/AOF candidate PASS offline.
+- [ ] Agent Hub-owned production Redis target provisioned and verified empty.
 - [ ] Encrypted production DB1 export captured outside production.
 - [ ] Production export restored and verified outside production.
 - [ ] Source/target key, type, checksum and application read-model parity PASS.
