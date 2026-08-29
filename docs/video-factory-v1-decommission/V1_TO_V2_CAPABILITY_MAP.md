@@ -153,7 +153,8 @@ paths, or database identifiers that are not part of the external contract.
 4. The Agent Hub client, HMAC signer, nonce/idempotency store, webhook verifier and contract tests
    do not yet exist.
 5. Production bridge deployment and Caddy exposure are separate owner/acceptance gates.
-6. The V1 renderer still has an unknown direct caller.
+6. The observed V1 renderer request is attributed, but identity-safe telemetry and the required
+   zero-unexplained-use observation window do not yet exist.
 
 Until these gaps are resolved through reviewed versioned contracts, V1 create cannot be safely
 proxied and V1 runtime cannot be disabled.

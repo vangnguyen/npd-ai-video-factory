@@ -7,8 +7,9 @@
 AH-01 found Redis AOF persistence and an older protected environment backup, but did not find a
 complete, independent, restore-tested set covering V1 DB0, storage, exact images, configuration and
 queue order. The running API/worker/renderer images are local `:latest` builds without git revision
-labels or registry digests. `v1-backup-restore-coverage` and `v1-image-provenance` remain
-`UNKNOWN`.
+labels or registry digests. AH-01B recorded exact image IDs and matched all 43 copied source inputs,
+so source provenance is resolved. `v1-backup-restore-coverage` remains `UNKNOWN` because no exact
+image export or real restore drill exists.
 
 This document defines the required future procedure. It is not permission to execute it. Any
 production restore, container recreation, route change, queue mutation or data replacement requires
@@ -121,8 +122,9 @@ tool.
 6. Do not alter Caddy: the baseline has no V1 Caddy route.
 
 If public-port containment is rolled back, restore only the reviewed listener/firewall state and
-record why the exposure is necessary. Because the renderer had an unknown caller, network rollback
-requires caller-owner participation.
+record why the exposure is necessary. The observed renderer request was an attributed Codex V3
+owner-review call, but network rollback still requires telemetry evidence and caller-owner
+participation for any newly observed use.
 
 ## Restore the renderer
 
