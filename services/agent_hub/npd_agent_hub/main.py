@@ -109,6 +109,7 @@ from .google_login import (
     logout_response,
 )
 from .orchestrator import hub
+from .routers.journeys import router as journeys_router
 from .routers.provider_health import router as provider_health_router
 from .tool_registry import ToolCapability, list_tool_capabilities
 from .video_factory.router import (
@@ -133,6 +134,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(provider_health_router)
+app.include_router(journeys_router)
 app.include_router(video_factory_router)
 app.state.video_factory_boundary = disabled_video_factory_boundary
 schema_reader = EspoSchemaReader()
