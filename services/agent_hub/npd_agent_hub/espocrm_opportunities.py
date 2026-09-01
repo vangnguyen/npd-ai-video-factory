@@ -13,6 +13,7 @@ from .attribution_models import (
 )
 from .campaign_models import CAMPAIGN_ID_PATTERN
 from .config import HubSettings, settings as default_settings
+from .currency import normalize_vnd_currency
 
 
 ESPO_OPPORTUNITY_SAFE_FIELDS = (
@@ -100,8 +101,12 @@ class EspoOpportunityReader:
 
     @staticmethod
     def _currency(value: object) -> str:
-        currency = str(value or "VND").strip().upper()
-        return currency if re.fullmatch(r"[A-Z]{3}", currency) else "VND"
+        try:
+            return normalize_vnd_currency(value)
+        except ValueError as exc:
+            raise EspoOpportunityError(
+                "EspoCRM Opportunity currency is unsupported; only VND is accepted"
+            ) from exc
 
     def _observation(self, record: dict[str, Any]) -> OpportunityObservation | None:
         opportunity_id = str(record.get("id") or "").strip()
