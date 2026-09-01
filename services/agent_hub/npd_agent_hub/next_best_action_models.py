@@ -35,6 +35,11 @@ class RecommendedAction(str, Enum):
     REVIEW_REENGAGEMENT = "review_reengagement"
 
 
+class NextBestActionPreviewRequest(BaseModel):
+    subject_ref: str = Field(min_length=3, max_length=120)
+    as_of: datetime | None = None
+
+
 class NextBestActionRecommendation(BaseModel):
     model_config = ConfigDict(frozen=True)
 
