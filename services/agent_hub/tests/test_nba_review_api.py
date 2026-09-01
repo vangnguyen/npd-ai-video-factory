@@ -68,6 +68,7 @@ def test_nba_review_api_records_judgement_not_execution():
         )
         assert created.status_code == 201
         body = created.json()
+        assert body["recommendation_version"] == "phase-9a-nba-v1"
         assert body["disposition"] == "not_relevant"
         assert body["false_positive"] is True
         assert body["reviewer_role"] == "operator"
@@ -83,6 +84,7 @@ def test_nba_review_api_records_judgement_not_execution():
         )
         assert listed.status_code == 200
         assert len(listed.json()) == 1
+        assert listed.json()[0]["recommendation_version"] == "phase-9a-nba-v1"
 
         summary = client.get(
             "/api/v1/next-best-actions/reviews/summary",
@@ -109,7 +111,7 @@ def test_nba_review_api_records_judgement_not_execution():
         hub.journeys = previous_journeys
 
 
-def test_nba_review_openapi_has_telemetry_routes_but_no_accept_or_execute_route():
+def test_nba_review_openapi_has_version_bound_telemetry_routes_but_no_execution_route():
     paths = app.openapi()["paths"]
     review_paths = {
         path: set(operations)
@@ -120,6 +122,8 @@ def test_nba_review_openapi_has_telemetry_routes_but_no_accept_or_execute_route(
     assert review_paths == {
         "/api/v1/next-best-actions/reviews": {"get", "post"},
         "/api/v1/next-best-actions/reviews/summary": {"get"},
+        "/api/v1/next-best-actions/reviews/sales": {"get", "post"},
+        "/api/v1/next-best-actions/reviews/sales/summary": {"get"},
     }
     forbidden = ("accept", "execute", "send", "contact")
     assert not any(any(word in path for word in forbidden) for path in review_paths)
