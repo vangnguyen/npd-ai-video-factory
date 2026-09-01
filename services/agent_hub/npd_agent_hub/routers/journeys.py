@@ -5,12 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..auth import Principal, require_viewer
 from ..journey_models import JourneyProjection, JourneyTransition
 from ..orchestrator import hub
+from .lead_scoring import router as lead_scoring_router
 
 
-router = APIRouter(prefix="/api/v1/journeys", tags=["journeys"])
+journey_router = APIRouter(prefix="/api/v1/journeys", tags=["journeys"])
 
 
-@router.get("/{subject_ref}", response_model=JourneyProjection)
+@journey_router.get("/{subject_ref}", response_model=JourneyProjection)
 def get_journey_projection(
     subject_ref: str,
     _principal: Principal = Depends(require_viewer),
@@ -23,7 +24,7 @@ def get_journey_projection(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.get("/{subject_ref}/history", response_model=list[JourneyTransition])
+@journey_router.get("/{subject_ref}/history", response_model=list[JourneyTransition])
 def get_journey_history(
     subject_ref: str,
     _principal: Principal = Depends(require_viewer),
@@ -34,3 +35,8 @@ def get_journey_history(
         raise HTTPException(status_code=404, detail="journey subject not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+router = APIRouter()
+router.include_router(journey_router)
+router.include_router(lead_scoring_router)
