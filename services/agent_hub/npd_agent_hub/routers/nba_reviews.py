@@ -10,6 +10,8 @@ from ..sales_nba_review import SalesNBAReviewService
 from ..sales_nba_review_models import SalesNBAReviewCreate
 
 
+NBA_V1_VERSION = "phase-9a-nba-v1"
+
 router = APIRouter(
     prefix="/api/v1/next-best-actions/reviews",
     tags=["next-best-action-review"],
@@ -75,7 +77,10 @@ def get_nba_review_summary(
     _principal: Principal = Depends(require_viewer),
 ) -> NBAReviewSummary:
     try:
-        return NBAReviewService(hub.store, hub.journeys).summary(subject_ref=subject_ref)
+        return NBAReviewService(hub.store, hub.journeys).summary(
+            subject_ref=subject_ref,
+            recommendation_version=NBA_V1_VERSION,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -89,6 +94,7 @@ def list_nba_reviews(
     try:
         return NBAReviewService(hub.store, hub.journeys).list(
             subject_ref=subject_ref,
+            recommendation_version=NBA_V1_VERSION,
             limit=limit,
         )
     except ValueError as exc:
