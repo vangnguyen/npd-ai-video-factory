@@ -9,6 +9,7 @@ from .campaigns import CampaignService
 from .delivery_observability import AttributionDeliveryService
 from .espocrm_opportunities import EspoOpportunityReader
 from .experiments import ExperimentService
+from .journeys import JourneyService
 from .models import (
     ActionStatus,
     AgentDescriptor,
@@ -40,6 +41,7 @@ class AgentHub:
     store: HubStore = field(default_factory=build_store)
     campaigns: CampaignService = field(init=False)
     attribution: AttributionService = field(init=False)
+    journeys: JourneyService = field(init=False)
     delivery: AttributionDeliveryService = field(init=False)
     provider_health: ProviderHealthService = field(init=False)
     provider_health_scheduler: ProviderHealthScheduler = field(init=False)
@@ -51,6 +53,7 @@ class AgentHub:
         # stays false even when the legacy n8n executor URL exists.
         self.campaigns = CampaignService(self.store, execution_enabled=False)
         self.attribution = AttributionService(self.store)
+        self.journeys = JourneyService(self.store)
         marketing_sources = getattr(self.executor, "marketing_sources", None)
         self.delivery = AttributionDeliveryService(
             self.store,
