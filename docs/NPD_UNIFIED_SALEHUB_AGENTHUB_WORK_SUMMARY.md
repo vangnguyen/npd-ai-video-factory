@@ -2,15 +2,16 @@
 
 ## Document status
 
-- Snapshot: `2026-08-26 13:06 Asia/Ho_Chi_Minh`.
+- Snapshot: `2026-08-29 00:49 Asia/Ho_Chi_Minh`.
 - Repository: `vangnguyen/npd-ai-video-factory`.
-- Documentation branch: `docs/unified-salehub-agenthub-handoff`.
+- Documentation branch: `docs/stabilization-closeout-20260826`.
 - Stable source revision: `400899ba82501beeea469f4a33dc169a9a09bb8e`.
 - Agent Hub release: `0.13.0`.
 - Production acceptance: **PASS** for the fixed 24-hour window from
   `2026-08-25T05:11:00Z` through `2026-08-26T05:11:00Z`.
-- This change set is documentation-only. It does not merge, tag, deploy, rotate a key,
-  reload Caddy or enable an execution capability.
+- This change set is documentation-only. It records separately authorized production
+  maintenance and reliability actions; it does not merge a feature PR, tag, deploy a new
+  application version, reload Caddy or enable an execution capability.
 
 ## Executive summary
 
@@ -31,6 +32,14 @@ receipt and the live Agent Hub container all identify the same commit, Agent Hub
 completed its 24-hour observation window without an unexplained outage, and all
 marketing/customer write boundaries remain fail-closed. Concurrent SaleHub maintenance
 was correlated separately and did not invalidate the Agent Hub acceptance window.
+
+The 2026-08-26 closeout also completed the owner-gated HMAC rotation drill, the one-shot
+WordPress pricing synchronization accepted under the owner's existing WAF-rule decision,
+three separate AgentHub god-file extraction PRs, the VND-only contract PR, and clean
+replacement PRs for both divergent Video Factory branches. The SEO publisher received a
+bounded structured-output retry and passed a real dry-run. The next eight natural
+scheduled executions on 2026-08-27 and 2026-08-28 completed successfully and their
+WordPress publication contract was independently verified.
 
 ## Evidence vocabulary
 
@@ -60,6 +69,11 @@ owner gate or an intentional limitation.
 | Phase 8B — 8.9 | Deterministic alert-routing preview | Live in Agent Hub 0.13.0; external delivery remains disabled |
 | SaleHub VSP policy | V07 giãn xây and V01 HĐCN thô/hoàn thiện policy release | Promoted on 2026-08-25; post-change shared-route smoke passed |
 | SaleHub position-image maintenance | Automatic unit-position image synchronization fix | Release `releases/20260826-position-image-autosync-v1` accepted on representative live inventory; timer and first-party image index verified |
+| SaleHub pricing sync | One-shot VPS-to-WordPress policy synchronization | PASS; issue #28 closed after the owner accepted the current WAF exception scope |
+| Reliability closeout | HMAC active-key rotation from v1 to v2 | Live; v1 retained as verify-only and both receipt generations verified |
+| SEO publisher | Structured-output parse recovery | Live in `content-publisher`; direct `force=true,dry_run=true` acceptance plus eight natural scheduled executions on 2026-08-27 and 2026-08-28 passed |
+| Video Factory legacy cleanup | Clean ports for PR #8 and then PR #6 | Draft PRs #34 and #35; legacy PRs closed without merge |
+| Video Factory owner voice | V2 rejected; V3 regenerated without overwriting V2 | V3 technical QC passed; issue #5 remains open for explicit human listening acceptance |
 
 The detailed phase contracts remain in [Campaign Operating System](./PHASE_6B_CAMPAIGN_OPERATING_SYSTEM.md),
 [Attribution & Revenue OS](./PHASE_7_ATTRIBUTION_REVENUE_OS.md),
@@ -89,6 +103,20 @@ the useful documentation in PR #22 without carrying its obsolete workflow change
 | [#22](https://github.com/vangnguyen/npd-ai-video-factory/pull/22) | Historical stabilization/governance bundle | Superseded; useful docs clean-ported through #26, obsolete workflow diff not merged |
 | [#27](https://github.com/vangnguyen/npd-ai-video-factory/pull/27) | Run protected-branch CI gates for every PR | Merged as `084ce84`; governance-only, no runtime change |
 | [#26](https://github.com/vangnguyen/npd-ai-video-factory/pull/26) | Unified SaleHub–AgentHub summary and handoff | This documentation milestone; no runtime change |
+
+Post-baseline work remains isolated in reviewable PRs and is not part of the current
+AgentHub production image:
+
+| Pull request | Scope | Current disposition |
+|---:|---|---|
+| [#30](https://github.com/vangnguyen/npd-ai-video-factory/pull/30) | Extract delivery/heartbeat routes from `main.py` | Draft; API-preserving; checks green |
+| [#31](https://github.com/vangnguyen/npd-ai-video-factory/pull/31) | Extract the store protocol from `store.py` | Draft; stable re-export; checks green |
+| [#32](https://github.com/vangnguyen/npd-ai-video-factory/pull/32) | Extract dashboard response/security shell | Draft; byte-contract parity; checks green |
+| [#33](https://github.com/vangnguyen/npd-ai-video-factory/pull/33) | Enforce VND-only new business contracts | Draft; non-VND fails closed; checks green |
+| [#34](https://github.com/vangnguyen/npd-ai-video-factory/pull/34) | Clean-port useful Sprint 1/media-QC work from legacy PR #8 | Draft; full CI and Docker E2E green |
+| [#35](https://github.com/vangnguyen/npd-ai-video-factory/pull/35) | Clean-port production-pilot/TTS work from legacy PR #6 | Draft stacked on #34; applicable GitHub checks and local full Docker E2E green; human voice gate open |
+
+None of #30–#35 has been merged or deployed by this closeout.
 
 The production deployment receipt and live AgentHub runtime resolve to
 `400899ba82501beeea469f4a33dc169a9a09bb8e`. The annotated tag
@@ -137,6 +165,12 @@ window.
 | Public routes | Agent Hub ready, auth gate, n8n, CRM and SaleHub routes passed HTTPS/TLS smoke |
 | Production writes | Disabled |
 | External notifications | Disabled |
+
+The organization-level currency decision is now **VND only** for new Campaign OS,
+Opportunity and attribution contracts. PR #33 implements that decision by rejecting
+explicit non-VND provider data rather than relabeling or applying an implicit exchange
+rate. It is still draft and therefore is not represented as live in AgentHub 0.13.0;
+historical USD records remain immutable audit evidence only.
 
 Lead activity freshness was evaluated separately from producer health. A quiet lead
 stream was not misreported as a heartbeat outage, and no synthetic customer record was
@@ -203,6 +237,20 @@ or customer-system writes and was not expanded by this stabilization.
   observation window.
 - SaleHub VSP policy and position-image changes were separated from Agent Hub incident
   evidence by timestamp, component and owner authorization.
+- The owner-gated HMAC drill moved active signing to `npd-attribution-v2`, retained
+  `npd-attribution-v1` as verify-only, and verified old delivery/heartbeat receipts plus
+  a new v2 heartbeat without exposing secret material.
+- WordPress pricing synchronization ran exactly once from the VPS and passed the public
+  contract check; issue #28 is closed. The owner explicitly accepted the existing WAF
+  exception scope and chose not to pursue a narrower rule in this milestone.
+- The SEO publisher's repeated structured-output failures were traced through n8n
+  execution records. A fence-tolerant parser plus one bounded retry was deployed only to
+  `content-publisher`; a real dry-run passed without a WordPress post side effect. The
+  next eight natural scheduled calls returned HTTP 200 and produced eight independently
+  verified published WordPress posts with featured media.
+- Legacy PR #8 and PR #6 were replaced in order by clean draft PRs #34 and #35, then
+  closed without merge. Issue #7 was closed as not planned because its generic content
+  network conflicts with the accepted NPD real-estate roadmap.
 
 ## Backup and rollback evidence
 
@@ -211,6 +259,17 @@ or customer-system writes and was not expanded by this stabilization.
 - Pre-deploy namespace backup:
   `/var/backups/npd-agent-hub/agent-hub-20260825T050536Z.json`.
 - Rollback image: `npd-agent-hub:rollback-20260825T050536Z`.
+- HMAC rotation namespace backup:
+  `/var/backups/npd-agent-hub/hmac-rotation-20260826T100000Z/agent-hub-before-rotation.json`
+  (`4002` AgentHub Redis keys at capture time).
+- HMAC configuration backup:
+  `/var/backups/npd-agent-hub/hmac-rotation-20260826T100000Z/config/agent-hub.env-20260826T095854Z`.
+- HMAC drill deploy receipt:
+  `/var/lib/npd-ai/agent-hub-deployments/deploy-20260826T095855Z.json`; rollback image
+  `npd-agent-hub:rollback-20260826T095855Z`.
+- SEO publisher backup:
+  `/var/backups/npd-content-publisher/seo-json-retry-20260826T102459Z`; rollback image
+  `n8n-marketing-content-publisher:rollback-20260826T102459Z`.
 - Agent Hub rollback remains namespace-scoped; Redis restoration is never automatic.
 - SaleHub uses atomic release directories under `/opt/salehub/releases` and the
   `/opt/salehub/current` symlink. Its rollback must be coordinated with the SaleHub
@@ -219,28 +278,57 @@ or customer-system writes and was not expanded by this stabilization.
   `n8n-marketing-caddy-1`; configuration must be backed up and validated in that
   container before any owner-approved reload/recreation.
 
+## Natural SEO schedule acceptance follow-up
+
+The remaining scheduled-execution evidence gate is **PASS**. No workflow, container,
+credential, publication setting or execution-retention setting was changed during this
+read-only follow-up.
+
+- n8n kept `BDS - 08 Biên tập và đăng bài SEO tự động` active with cron
+  `0 8,10,12,14 * * *`; the n8n startup log recorded activation of workflow
+  `c18ac267-3f70-49e0-8e0c-d216df31ae8c`.
+- `content-publisher` received four natural `POST /run` calls on 2026-08-27 at
+  `08:01`, `10:01`, `12:01` and `14:01` Asia/Ho_Chi_Minh, then the same four slots on
+  2026-08-28. All eight returned HTTP 200.
+- Persisted `/data/content-state.json` advanced to 54 runs, `last_error=null`; the eight
+  new entries were `ok=true`, used two to eight cited sources, and recorded WordPress
+  post IDs `28068`, `28070`, `28072`, `28074`, `28076`, `28078`, `28080` and `28082`.
+- WordPress REST independently returned `status=publish` plus a non-zero
+  `featured_media` for all eight IDs. The first 2026-08-27 page and the latest
+  2026-08-28 page also returned public HTTPS 200 with valid TLS.
+- n8n intentionally has `EXECUTIONS_DATA_SAVE_ON_SUCCESS=none`, so successful execution
+  rows and IDs are not retained in `execution_entity`. The acceptance evidence is the
+  registered schedule and activation log, timestamped downstream access log, durable
+  publisher state and independently queried WordPress contract. The absence of a
+  retained n8n success row is not represented as an execution failure.
+
+This is evidence for the pre-existing authorized SEO publication workflow. It does not
+enable an AgentHub write, external-notification or WordPress landing-page publication
+capability and does not widen any accepted safety boundary.
+
 ## Technical debt and remaining work
 
-Remaining work count at this handoff: **6 tracked items**.
+Remaining closeout work count: **3 tracked review/owner/monitoring gates**.
 
-1. Legacy Video Factory PRs [#6](https://github.com/vangnguyen/npd-ai-video-factory/pull/6)
-   and [#8](https://github.com/vangnguyen/npd-ai-video-factory/pull/8) remain draft and
-   divergent. Clean-port #8 media QC before #6 production TTS; human Vietnamese voice
-   listening remains a hard acceptance gate.
-2. Continue incremental extraction from `main.py`, `store.py` and dashboard code in
-   small API-parity PRs. Do not perform a rewrite or change Redis key formats.
-3. Exercise the documented HMAC rotation procedure under an owner-approved maintenance
-   window. The accepted production deployment was not rotated by this milestone.
-4. Preserve the known currency limitation: do not aggregate USD/VND executive revenue
-   totals without a defined exchange-rate policy.
-5. Re-check the historical SEO automation warning through execution evidence; an active
-   workflow alone is not proof of health.
-6. Complete issue [#28](https://github.com/vangnguyen/npd-ai-video-factory/issues/28):
-   whitelist the VPS automation IP for the WordPress pricing-sync route in Imunify360,
-   or move that single writer behind an explicitly approved machine-to-machine origin
-   contract. Until then, policy sync remains fail-closed and reports
-   `blocked_by_imunify360`; do not treat the successful image timer as proof that pricing
-   refresh succeeded.
+1. Review and merge the isolated PRs in dependency-safe order. #30, #31 and #32 are
+   independent refactors; #33 is the VND-only behavior change; #34 must precede stacked
+   #35. Re-run the required protected-branch checks after any rebase/retarget.
+2. Keep issue [#5](https://github.com/vangnguyen/npd-ai-video-factory/issues/5) open until
+   the owner listens to and explicitly accepts the Vietnamese production-pilot voice.
+   The owner rejected V2 on 2026-08-29 because “Ngọc” still sounded like “nọc”. A new,
+   versioned V3 was generated with OpenAI `gpt-4o-mini-tts` voice `nova`, targeting a
+   female Vietnamese voice around 25–30 with a soft, warm and professional delivery.
+   To remove the nasal coarticulation in “Nhắn Ngọc”, the CTA was changed without changing
+   intent to “Liên hệ với Ngọc Phương Đông để đặt lịch xem mô hình dự án.” Narration,
+   headline and subtitle use the same text. The 30.059-second 1080x1920 H.264/AAC render
+   passed black-frame, six-scene audio, loudness and manifest-sync checks; both
+   `gpt-4o-transcribe` and `whisper-1` recognized “Ngọc Phương Đông” from the muxed MP4.
+   Video SHA-256 is
+   `9add7bf1b94b1d0a34eddb3a3acd6392d627c4342a3e67c14251f268094bddaf`.
+   Automated media QC still cannot satisfy the human timbre/quality gate.
+3. Treat the current pricing-sync WAF exception as an owner-accepted security decision.
+   Do not claim it was narrowed; monitor the route and revisit only if the owner changes
+   that decision or new evidence shows collateral exposure.
 
 ## Evidence versus inference
 
@@ -251,15 +339,21 @@ Remaining work count at this handoff: **6 tracked items**.
 - SaleHub position-image release promotion, timer execution and the representative 4/4
   VSP image sample are confirmed. Coverage for units whose current code has no exact
   source image remains a data-availability limitation, not an inferred match.
+- The SEO production change, direct dry-run and eight natural scheduled publications are
+  confirmed. Because n8n does not retain successful executions, the scheduled result is
+  established by correlated trigger/access timestamps, durable publisher state and the
+  live WordPress REST/public contract rather than inferred from service health.
+- VND-only behavior is confirmed in PR #33 tests and CI, but remains draft/unmerged and
+  is not claimed as production behavior.
 - Phase 9 business value is a roadmap decision; no Phase 9 engine was implemented in
   this stabilization milestone.
 
 ## Exact next milestone
 
-After this handoff is merged and the WordPress/Imunify360 pricing-sync gate is either
-resolved or explicitly accepted as a separately tracked SaleHub dependency, the next
-business milestone is **Phase 9 — Customer Journey & Sales Intelligence**, delivered in
-three owner-reviewable increments:
+After the owner reviews the isolated closeout PRs and dispositions the remaining Video
+Factory voice gate, the next business milestone is **Phase 9 — Customer Journey & Sales
+Intelligence**, delivered in three
+owner-reviewable increments:
 
 1. read-only Customer Journey Projection;
 2. deterministic, explainable Lead Scoring;
