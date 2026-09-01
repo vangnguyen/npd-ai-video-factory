@@ -34,8 +34,8 @@ class EspoJourneyEvidencePreview(BaseModel):
     configured_stage_count: int = Field(ge=0)
     records_read: int = Field(ge=0)
     candidates: list[SourceTouchpointEvent] = Field(default_factory=list)
-    skipped_unmapped: int = Field(ge=0)
-    skipped_missing_campaign_identity: int = Field(ge=0)
+    skipped_unmapped: int = Field(default=0, ge=0)
+    skipped_missing_campaign_identity: int = Field(default=0, ge=0)
     stage_mapping: dict[str, JourneyState] = Field(default_factory=dict)
     caveats: list[str] = Field(default_factory=list)
     ingest_enabled: bool = False
