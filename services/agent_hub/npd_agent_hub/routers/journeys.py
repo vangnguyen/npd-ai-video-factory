@@ -9,6 +9,7 @@ from .espocrm_journey_evidence import router as espocrm_journey_evidence_router
 from .lead_scoring import router as lead_scoring_router
 from .nba_reviews import router as nba_reviews_router
 from .next_best_action import router as next_best_action_router
+from .phase9_shadow_evaluation import router as phase9_shadow_evaluation_router
 
 
 journey_router = APIRouter(prefix="/api/v1/journeys", tags=["journeys"])
@@ -48,3 +49,4 @@ router.include_router(lead_scoring_router)
 # Static review routes must be registered before /next-best-actions/{subject_ref}.
 router.include_router(nba_reviews_router)
 router.include_router(next_best_action_router)
+router.include_router(phase9_shadow_evaluation_router)
