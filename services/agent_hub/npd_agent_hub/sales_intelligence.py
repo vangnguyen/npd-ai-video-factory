@@ -4,7 +4,9 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from .attribution_models import TouchpointEvent, TouchpointType
+from .delivery_observability import AttributionDeliveryService
 from .journeys import JourneyService
+from .sales_completeness import CompletenessAssessment, SalesCompletenessVerifier
 from .sales_intelligence_models import (
     SalesActivityObservation,
     SalesActivityType,
@@ -21,11 +23,17 @@ SALES_HUB_SOURCES = {"sales hub", "salehub", "npd sales hub"}
 
 
 class SalesIntelligenceService:
-    """Deterministic Phase 9B SLA/funnel preview over immutable journey evidence plus supplied sales activity evidence."""
+    """Deterministic Phase 9B SLA/funnel preview with optional signed source-completeness proof."""
 
-    def __init__(self, store: HubStore, journeys: JourneyService | None = None) -> None:
+    def __init__(
+        self,
+        store: HubStore,
+        journeys: JourneyService | None = None,
+        delivery: AttributionDeliveryService | None = None,
+    ) -> None:
         self.store = store
         self.journeys = journeys or JourneyService(store)
+        self.completeness = SalesCompletenessVerifier(delivery)
 
     @staticmethod
     def _normalize_source(value: str) -> str:
@@ -122,11 +130,13 @@ class SalesIntelligenceService:
     def _window(
         *,
         name: str,
+        activity_type: SalesActivityType,
         start_at: datetime | None,
         target_minutes: int | None,
         observed: SalesActivityObservation | None,
         evidence_refs: list[str],
         as_of: datetime,
+        completeness: CompletenessAssessment,
     ) -> SalesSLAWindow:
         if start_at is None or target_minutes is None:
             return SalesSLAWindow(
@@ -161,24 +171,40 @@ class SalesIntelligenceService:
                 evidence_refs=evidence_refs,
             )
 
-        status = (
-            SalesSLAStatus.PENDING
-            if as_of <= deadline
-            else SalesSLAStatus.OVERDUE_MISSING_EVIDENCE
-        )
-        caveats: list[str] = []
-        if status == SalesSLAStatus.OVERDUE_MISSING_EVIDENCE:
-            caveats.append(
-                "The deadline passed without supplied Sales Hub activity evidence, but source completeness is not proven; this is not a confirmed SLA breach."
+        if as_of <= deadline:
+            return SalesSLAWindow(
+                name=name,
+                target_minutes=target_minutes,
+                status=SalesSLAStatus.PENDING,
+                clock_start_at=start_at,
+                deadline_at=deadline,
+                evidence_refs=evidence_refs,
             )
+
+        if completeness.covers(activity_type, deadline):
+            return SalesSLAWindow(
+                name=name,
+                target_minutes=target_minutes,
+                status=SalesSLAStatus.BREACHED,
+                clock_start_at=start_at,
+                deadline_at=deadline,
+                evidence_refs=evidence_refs,
+                completeness_receipt_id=completeness.receipt_id,
+                caveats=[
+                    "The SLA deadline is covered by a verified signed Sales Hub completeness attestation and the bound activity batch contains no qualifying event."
+                ],
+            )
+
         return SalesSLAWindow(
             name=name,
             target_minutes=target_minutes,
-            status=status,
+            status=SalesSLAStatus.OVERDUE_MISSING_EVIDENCE,
             clock_start_at=start_at,
             deadline_at=deadline,
             evidence_refs=evidence_refs,
-            caveats=caveats,
+            caveats=[
+                "The deadline passed without supplied Sales Hub activity evidence, but signed source completeness does not cover this SLA deadline; this is not a confirmed SLA breach."
+            ],
         )
 
     def preview(self, request: SalesIntelligencePreviewRequest) -> SalesIntelligenceSnapshot:
@@ -216,6 +242,17 @@ class SalesIntelligenceService:
                 untrusted += len(before_start)
                 accepted = [item for item in accepted if item.occurred_at >= start_at]
 
+        completeness = self.completeness.verify(
+            request.completeness_proof,
+            subject_ref=request.subject_ref,
+            campaign_id=policy_campaign_id,
+            observations=request.observations,
+            as_of=evaluation_time,
+            lead_start_at=start_at,
+            duplicate_count=duplicates,
+            untrusted_count=untrusted,
+        )
+
         first_response = self._first(accepted, SalesActivityType.FIRST_RESPONSE)
         appointment = self._first(accepted, SalesActivityType.APPOINTMENT_BOOKED)
         site_visit = self._first(accepted, SalesActivityType.SITE_VISIT_COMPLETED)
@@ -224,7 +261,9 @@ class SalesIntelligenceService:
         appointment_refs = self._refs(accepted, SalesActivityType.APPOINTMENT_BOOKED)
         site_visit_refs = self._refs(accepted, SalesActivityType.SITE_VISIT_COMPLETED)
 
-        missing_inputs = ["sales_activity_source_completeness"]
+        missing_inputs: list[str] = []
+        if not completeness.source_complete:
+            missing_inputs.append("sales_activity_source_completeness")
         if start_at is None:
             missing_inputs.append("lead_start")
         if campaign is None:
@@ -245,19 +284,23 @@ class SalesIntelligenceService:
             lead_start_basis=start_basis,
             first_response_sla=self._window(
                 name="first_response",
+                activity_type=SalesActivityType.FIRST_RESPONSE,
                 start_at=start_at,
                 target_minutes=first_response_target,
                 observed=first_response,
                 evidence_refs=first_response_refs,
                 as_of=evaluation_time,
+                completeness=completeness,
             ),
             visit_booking_sla=self._window(
                 name="visit_booking",
+                activity_type=SalesActivityType.APPOINTMENT_BOOKED,
                 start_at=start_at,
                 target_minutes=visit_booking_target,
                 observed=appointment,
                 evidence_refs=appointment_refs,
                 as_of=evaluation_time,
+                completeness=completeness,
             ),
             funnel=SalesFunnelEvidence(
                 first_response_at=(first_response.occurred_at if first_response else None),
@@ -271,4 +314,9 @@ class SalesIntelligenceService:
             duplicate_activity_count=duplicates,
             untrusted_activity_count=untrusted,
             missing_inputs=sorted(set(missing_inputs)),
+            completeness_verified=completeness.verified,
+            completeness_receipt_id=completeness.receipt_id,
+            completeness_complete_through=completeness.complete_through,
+            completeness_detail=completeness.detail,
+            source_complete=completeness.source_complete,
         )

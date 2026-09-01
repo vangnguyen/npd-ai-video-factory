@@ -20,7 +20,11 @@ def preview_sales_intelligence(
     _principal: Principal = Depends(require_operator),
 ) -> SalesIntelligenceSnapshot:
     try:
-        return SalesIntelligenceService(hub.store, hub.journeys).preview(request)
+        return SalesIntelligenceService(
+            hub.store,
+            hub.journeys,
+            hub.delivery,
+        ).preview(request)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="sales-intelligence subject not found") from exc
     except ValueError as exc:
