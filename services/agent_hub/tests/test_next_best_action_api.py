@@ -115,7 +115,7 @@ def test_nba_get_and_preview_are_viewer_only_and_non_persisting():
         hub.journeys = previous_journeys
 
 
-def test_nba_openapi_has_read_and_preview_but_no_execution_accept_or_contact_route():
+def test_nba_openapi_preserves_v1_and_allows_only_static_sales_preview():
     paths = app.openapi()["paths"]
     core_nba_paths = {
         path: set(operations)
@@ -127,6 +127,7 @@ def test_nba_openapi_has_read_and_preview_but_no_execution_accept_or_contact_rou
     assert core_nba_paths == {
         "/api/v1/next-best-actions/{subject_ref}": {"get"},
         "/api/v1/next-best-actions/preview": {"post"},
+        "/api/v1/next-best-actions/sales-preview": {"post"},
     }
     forbidden = ("execute", "accept", "send", "contact")
     assert not any(any(word in path for word in forbidden) for path in core_nba_paths)
