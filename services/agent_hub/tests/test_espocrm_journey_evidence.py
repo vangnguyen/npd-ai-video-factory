@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 
 import httpx
@@ -27,8 +28,7 @@ def settings(stage_map: dict[str, str] | str) -> HubSettings:
     )
 
 
-@pytest.mark.asyncio
-async def test_preview_emits_only_explicit_mapped_candidates_with_campaign_identity():
+def test_preview_emits_only_explicit_mapped_candidates_with_campaign_identity():
     requested_select = ""
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -91,10 +91,12 @@ async def test_preview_emits_only_explicit_mapped_candidates_with_campaign_ident
         config,
         transport=httpx.MockTransport(handler),
     )
-    preview = await EspoJourneyEvidenceReader(
-        opportunity_reader=opportunity_reader,
-        settings=config,
-    ).preview()
+    preview = asyncio.run(
+        EspoJourneyEvidenceReader(
+            opportunity_reader=opportunity_reader,
+            settings=config,
+        ).preview()
+    )
 
     assert preview.status == "partial"
     assert preview.records_read == 4
@@ -129,8 +131,7 @@ async def test_preview_emits_only_explicit_mapped_candidates_with_campaign_ident
     assert preview.external_writes_enabled is False
 
 
-@pytest.mark.asyncio
-async def test_missing_stage_map_returns_not_configured_without_provider_request():
+def test_missing_stage_map_returns_not_configured_without_provider_request():
     called = False
 
     def handler(_request: httpx.Request) -> httpx.Response:
@@ -147,15 +148,14 @@ async def test_missing_stage_map_returns_not_configured_without_provider_request
         settings=config,
     )
 
-    preview = await reader.preview()
+    preview = asyncio.run(reader.preview())
 
     assert preview.status == "not_configured"
     assert preview.candidates == []
     assert called is False
 
 
-@pytest.mark.asyncio
-async def test_invalid_stage_mapping_fails_before_network_and_does_not_infer_base_states():
+def test_invalid_stage_mapping_fails_before_network_and_does_not_infer_base_states():
     called = False
 
     def handler(_request: httpx.Request) -> httpx.Response:
@@ -178,13 +178,12 @@ async def test_invalid_stage_mapping_fails_before_network_and_does_not_infer_bas
             settings=config,
         )
         with pytest.raises(EspoJourneyEvidenceError):
-            await reader.preview()
+            asyncio.run(reader.preview())
 
     assert called is False
 
 
-@pytest.mark.asyncio
-async def test_stage_matching_is_normalized_but_mapping_remains_explicit():
+def test_stage_matching_is_normalized_but_mapping_remains_explicit():
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
@@ -204,13 +203,15 @@ async def test_stage_matching_is_normalized_but_mapping_remains_explicit():
         )
 
     config = settings({"Appointment Booked": "appointment"})
-    preview = await EspoJourneyEvidenceReader(
-        opportunity_reader=EspoOpportunityReader(
-            config,
-            transport=httpx.MockTransport(handler),
-        ),
-        settings=config,
-    ).preview()
+    preview = asyncio.run(
+        EspoJourneyEvidenceReader(
+            opportunity_reader=EspoOpportunityReader(
+                config,
+                transport=httpx.MockTransport(handler),
+            ),
+            settings=config,
+        ).preview()
+    )
 
     assert preview.status == "available"
     assert len(preview.candidates) == 1
