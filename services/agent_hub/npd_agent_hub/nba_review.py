@@ -59,14 +59,33 @@ class NBAReviewService:
         self,
         *,
         subject_ref: str | None = None,
+        recommendation_version: str | None = None,
         limit: int = 100,
     ) -> list[NBAReviewRecord]:
         if subject_ref is not None:
             JourneyService.parse_subject_ref(subject_ref)
-        return self.repository.list(subject_ref=subject_ref, limit=limit)
+        if recommendation_version is None:
+            return self.repository.list(subject_ref=subject_ref, limit=limit)
 
-    def summary(self, *, subject_ref: str | None = None) -> NBAReviewSummary:
-        rows = self.list(subject_ref=subject_ref, limit=1000)
+        # Repository retention is bounded. Fetch a larger read-only superset,
+        # then filter by recommendation version without changing Redis schema/indexes.
+        rows = self.repository.list(subject_ref=subject_ref, limit=1000)
+        filtered = [
+            item for item in rows if item.recommendation_version == recommendation_version
+        ]
+        return filtered[: max(1, min(limit, 1000))]
+
+    def summary(
+        self,
+        *,
+        subject_ref: str | None = None,
+        recommendation_version: str | None = None,
+    ) -> NBAReviewSummary:
+        rows = self.list(
+            subject_ref=subject_ref,
+            recommendation_version=recommendation_version,
+            limit=1000,
+        )
         relevant = sum(item.disposition == NBAReviewDisposition.RELEVANT for item in rows)
         not_relevant = sum(
             item.disposition == NBAReviewDisposition.NOT_RELEVANT for item in rows
@@ -75,9 +94,7 @@ class NBAReviewService:
             item.disposition == NBAReviewDisposition.NEEDS_MORE_CONTEXT for item in rows
         )
         decided = relevant + not_relevant
-        false_positive_rate = (
-            round(not_relevant / decided, 4) if decided else None
-        )
+        false_positive_rate = round(not_relevant / decided, 4) if decided else None
         return NBAReviewSummary(
             total_reviews=len(rows),
             relevant=relevant,
