@@ -7,10 +7,11 @@ from pydantic import BaseModel, Field, model_validator
 from .attribution_models import assert_no_raw_pii
 from .journey_models import JourneyState
 from .next_best_action_models import RecommendationPriority, RecommendedAction
+from .phase9_shadow_evaluation_models import Phase9ReviewAggregate
 from .sales_intelligence_models import SalesIntelligencePreviewRequest, SalesSLAStatus
 
 
-PHASE9_SALES_SHADOW_EVAL_VERSION = "phase-9b-sales-shadow-eval-v1"
+PHASE9_SALES_SHADOW_EVAL_VERSION = "phase-9b-sales-shadow-eval-v2"
 
 
 class Phase9SalesShadowEvaluationRequest(BaseModel):
@@ -56,6 +57,8 @@ class Phase9SalesShadowEvaluationReport(BaseModel):
     missing_input_counts: dict[str, int] = Field(default_factory=dict)
     subjects_with_untrusted_journey_evidence: int = Field(ge=0)
     cases_with_untrusted_sales_activity: int = Field(ge=0)
+    reviewed_subject_count: int = Field(ge=0)
+    review_aggregate: Phase9ReviewAggregate = Field(default_factory=Phase9ReviewAggregate)
     caveats: list[str] = Field(default_factory=list)
     aggregate_only: bool = True
     contains_subject_ids: bool = False
@@ -91,6 +94,7 @@ class Phase9SalesShadowEvaluationReport(BaseModel):
             (self.verified_late_subject_count, "verified_late_subject_count"),
             (self.subjects_with_untrusted_journey_evidence, "subjects_with_untrusted_journey_evidence"),
             (self.cases_with_untrusted_sales_activity, "cases_with_untrusted_sales_activity"),
+            (self.reviewed_subject_count, "reviewed_subject_count"),
         ):
             if count > self.evaluated_subject_count:
                 raise ValueError(f"{label} cannot exceed evaluated_subject_count")
@@ -98,6 +102,8 @@ class Phase9SalesShadowEvaluationReport(BaseModel):
             raise ValueError("source_complete_count cannot exceed completeness_verified_count")
         if self.verified_breach_subject_count + self.verified_late_subject_count > self.completeness_verified_count:
             raise ValueError("verified SLA negative-signal counts cannot exceed completeness_verified_count")
+        if self.review_aggregate.total_reviews < self.reviewed_subject_count:
+            raise ValueError("review total cannot be lower than reviewed subject count")
         if (
             not self.aggregate_only
             or self.contains_subject_ids
