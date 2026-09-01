@@ -23,6 +23,10 @@ STATE_POINTS: dict[JourneyState, float] = {
     JourneyState.REENGAGEMENT: 25,
 }
 ENGAGEMENT_TYPES = {TouchpointType.AD_CLICK, TouchpointType.LANDING_VIEW}
+TRUSTED_AUTHORITY = {
+    JourneyEvidenceAuthority.NOT_REQUIRED,
+    JourneyEvidenceAuthority.ACCEPTED,
+}
 
 
 class LeadScoringService:
@@ -63,6 +67,12 @@ class LeadScoringService:
             raise ValueError("as_of must be timezone-aware")
         evaluation_time = evaluation_time.astimezone(timezone.utc)
 
+        trusted_evidence = [
+            item for item in projection.evidence if item.authority_status in TRUSTED_AUTHORITY
+        ]
+        if not trusted_evidence:
+            raise ValueError("lead score requires at least one trusted journey evidence record")
+
         stage_refs = [
             transition.evidence_event_id for transition in projection.transitions[-1:]
         ]
@@ -78,9 +88,8 @@ class LeadScoringService:
             evidence_refs=stage_refs,
         )
 
-        if projection.latest_event_at is None:
-            raise ValueError("journey projection has no latest event timestamp")
-        latest = projection.latest_event_at
+        latest_trusted = max(trusted_evidence, key=lambda item: (item.occurred_at, item.event_id))
+        latest = latest_trusted.occurred_at
         if latest.tzinfo is None:
             latest = latest.replace(tzinfo=timezone.utc)
         age_hours = max(
@@ -92,12 +101,14 @@ class LeadScoringService:
             status=ScoreFactorStatus.OBSERVED,
             contribution=self._recency_points(age_hours),
             max_points=20,
-            reason=f"Latest observed journey evidence is {round(age_hours, 2)} hours old.",
-            evidence_refs=[projection.evidence[-1].event_id],
+            reason=f"Latest trusted journey evidence is {round(age_hours, 2)} hours old.",
+            evidence_refs=[latest_trusted.event_id],
         )
 
         engagement_refs = [
-            item.event_id for item in projection.evidence if item.event_type in ENGAGEMENT_TYPES
+            item.event_id
+            for item in trusted_evidence
+            if item.event_type in ENGAGEMENT_TYPES
         ]
         if engagement_refs:
             engagement_factor = LeadScoreFactor(
@@ -105,7 +116,7 @@ class LeadScoringService:
                 status=ScoreFactorStatus.OBSERVED,
                 contribution=self._engagement_points(len(engagement_refs)),
                 max_points=10,
-                reason=f"Observed {len(engagement_refs)} explicit ad-click/landing-view engagement events.",
+                reason=f"Observed {len(engagement_refs)} trusted ad-click/landing-view engagement events.",
                 evidence_refs=engagement_refs,
             )
         else:
@@ -115,7 +126,7 @@ class LeadScoringService:
                 contribution=None,
                 max_points=10,
                 reason=(
-                    "No explicit engagement events are available; missing coverage is excluded "
+                    "No trusted explicit engagement events are available; missing coverage is excluded "
                     "from the score denominator rather than treated as zero engagement."
                 ),
                 evidence_refs=[],
@@ -136,9 +147,9 @@ class LeadScoringService:
         if engagement_factor.status == ScoreFactorStatus.MISSING:
             missing_inputs.append("engagement_frequency")
 
-        distinct_sources = len(projection.source_systems)
+        distinct_sources = len({item.source_system for item in trusted_evidence})
         confidence = 0.45
-        confidence += min(0.20, projection.evidence_count * 0.04)
+        confidence += min(0.20, len(trusted_evidence) * 0.04)
         confidence += min(0.10, distinct_sources * 0.03)
         if engagement_factor.status == ScoreFactorStatus.OBSERVED:
             confidence += 0.05
@@ -154,7 +165,7 @@ class LeadScoringService:
         ]
         if projection.untrusted_evidence_count:
             caveats.append(
-                "Untrusted or invalid journey evidence is retained for audit and caps confidence without changing the score directly."
+                "Untrusted or invalid journey evidence is retained for audit, excluded from score inputs, and caps confidence."
             )
         if any(
             item.authority_status == JourneyEvidenceAuthority.INVALID_CONTRACT
