@@ -10,6 +10,7 @@ from .lead_scoring import router as lead_scoring_router
 from .nba_reviews import router as nba_reviews_router
 from .next_best_action import router as next_best_action_router
 from .phase9_shadow_evaluation import router as phase9_shadow_evaluation_router
+from .sales_intelligence import router as sales_intelligence_router
 
 
 journey_router = APIRouter(prefix="/api/v1/journeys", tags=["journeys"])
@@ -50,3 +51,4 @@ router.include_router(lead_scoring_router)
 router.include_router(nba_reviews_router)
 router.include_router(next_best_action_router)
 router.include_router(phase9_shadow_evaluation_router)
+router.include_router(sales_intelligence_router)
