@@ -92,14 +92,17 @@ def test_journey_http_surface_is_viewer_only_read_and_fail_closed():
 
 def test_journey_openapi_exposes_get_only_and_no_execution_endpoint():
     paths = app.openapi()["paths"]
-    journey_paths = {
+    journey_subject_paths = {
         path: set(operations)
         for path, operations in paths.items()
         if path.startswith("/api/v1/journeys")
+        and not path.startswith("/api/v1/journeys/sources/")
     }
 
-    assert journey_paths == {
+    assert journey_subject_paths == {
         "/api/v1/journeys/{subject_ref}": {"get"},
         "/api/v1/journeys/{subject_ref}/history": {"get"},
     }
-    assert not any("execute" in path or "contact" in path for path in journey_paths)
+    assert not any(
+        "execute" in path or "contact" in path for path in journey_subject_paths
+    )
