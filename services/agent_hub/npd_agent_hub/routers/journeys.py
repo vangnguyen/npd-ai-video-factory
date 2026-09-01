@@ -6,6 +6,7 @@ from ..auth import Principal, require_viewer
 from ..journey_models import JourneyProjection, JourneyTransition
 from ..orchestrator import hub
 from .lead_scoring import router as lead_scoring_router
+from .next_best_action import router as next_best_action_router
 
 
 journey_router = APIRouter(prefix="/api/v1/journeys", tags=["journeys"])
@@ -40,3 +41,4 @@ def get_journey_history(
 router = APIRouter()
 router.include_router(journey_router)
 router.include_router(lead_scoring_router)
+router.include_router(next_best_action_router)
