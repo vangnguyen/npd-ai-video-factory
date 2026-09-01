@@ -6,6 +6,7 @@ from ..auth import Principal, require_viewer
 from ..journey_models import JourneyProjection, JourneyTransition
 from ..orchestrator import hub
 from .lead_scoring import router as lead_scoring_router
+from .nba_reviews import router as nba_reviews_router
 from .next_best_action import router as next_best_action_router
 
 
@@ -41,4 +42,6 @@ def get_journey_history(
 router = APIRouter()
 router.include_router(journey_router)
 router.include_router(lead_scoring_router)
+# Static review routes must be registered before /next-best-actions/{subject_ref}.
+router.include_router(nba_reviews_router)
 router.include_router(next_best_action_router)
