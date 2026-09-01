@@ -17,6 +17,7 @@ from npd_agent_hub.delivery_models import AttributionProducerHeartbeat
 from npd_agent_hub.delivery_observability import AttributionDeliveryService
 from npd_agent_hub.journeys import JourneyService
 from npd_agent_hub.main import app
+from npd_agent_hub.nba_review_models import NBAReviewDisposition
 from npd_agent_hub.orchestrator import hub
 from npd_agent_hub.phase9_sales_shadow_evaluation import Phase9SalesShadowEvaluationService
 from npd_agent_hub.phase9_sales_shadow_evaluation_models import Phase9SalesShadowEvaluationRequest
@@ -32,6 +33,8 @@ from npd_agent_hub.sales_intelligence_models import (
     SalesActivityType,
     SalesIntelligencePreviewRequest,
 )
+from npd_agent_hub.sales_nba_review import SalesNBAReviewService
+from npd_agent_hub.sales_nba_review_models import SalesNBAReviewCreate
 from npd_agent_hub.store import MemoryHubStore
 
 
@@ -189,11 +192,46 @@ def build_request(store: MemoryHubStore, campaign_id: str, delivery: Attribution
     )
 
 
+def record_v2_reviews(
+    store: MemoryHubStore,
+    journeys: JourneyService,
+    delivery: AttributionDeliveryService,
+    request: Phase9SalesShadowEvaluationRequest,
+) -> None:
+    by_subject = {case.subject_ref: case for case in request.cases}
+    service = SalesNBAReviewService(store, journeys, delivery)
+    service.record(
+        SalesNBAReviewCreate(
+            evaluation=by_subject["lead:lead-001"],
+            disposition=NBAReviewDisposition.NOT_RELEVANT,
+            note="SLA breach escalation is too aggressive in this shadow case.",
+        ),
+        reviewer_role="operator",
+    )
+    service.record(
+        SalesNBAReviewCreate(
+            evaluation=by_subject["lead:lead-002"],
+            disposition=NBAReviewDisposition.RELEVANT,
+            note="Recommendation matches the verified sales evidence.",
+        ),
+        reviewer_role="owner",
+    )
+    service.record(
+        SalesNBAReviewCreate(
+            evaluation=by_subject["lead:lead-002"],
+            disposition=NBAReviewDisposition.NEEDS_MORE_CONTEXT,
+            note="Need additional project context before final judgement.",
+        ),
+        reviewer_role="operator",
+    )
+
+
 def test_sales_shadow_evaluation_is_deterministic_aggregate_only_and_non_mutating():
     store, campaign = build_store()
     delivery = delivery_service(store)
     journeys = JourneyService(store)
     request = build_request(store, campaign.campaign_id, delivery)
+    record_v2_reviews(store, journeys, delivery, request)
     service = Phase9SalesShadowEvaluationService(store, journeys, delivery)
 
     before_touchpoints = [item.model_dump(mode="json") for item in store.list_touchpoints(limit=100)]
@@ -207,6 +245,7 @@ def test_sales_shadow_evaluation_is_deterministic_aggregate_only_and_non_mutatin
     second = service.evaluate(request)
 
     assert first.model_dump(mode="json") == second.model_dump(mode="json")
+    assert first.evaluation_version == "phase-9b-sales-shadow-eval-v2"
     assert first.requested_case_count == 5
     assert first.unique_subject_count == 4
     assert first.duplicate_case_count == 1
@@ -244,6 +283,12 @@ def test_sales_shadow_evaluation_is_deterministic_aggregate_only_and_non_mutatin
     }
     assert first.subjects_with_untrusted_journey_evidence == 0
     assert first.cases_with_untrusted_sales_activity == 0
+    assert first.reviewed_subject_count == 2
+    assert first.review_aggregate.total_reviews == 3
+    assert first.review_aggregate.relevant == 1
+    assert first.review_aggregate.not_relevant == 1
+    assert first.review_aggregate.needs_more_context == 1
+    assert first.review_aggregate.false_positive_rate == 0.5
     assert first.aggregate_only is True
     assert first.contains_subject_ids is False
     assert first.persisted is False
@@ -251,7 +296,7 @@ def test_sales_shadow_evaluation_is_deterministic_aggregate_only_and_non_mutatin
     assert first.external_writes_enabled is False
     assert first.customer_contact_enabled is False
     assert first.contains_raw_pii is False
-    assert any("review telemetry is not yet connected" in caveat for caveat in first.caveats)
+    assert any("phase-9b-nba-v2" in caveat for caveat in first.caveats)
 
     serialized = json.dumps(first.model_dump(mode="json"), ensure_ascii=False)
     for value in ("lead-001", "lead-002", "lead-003", "lead:missing"):
@@ -314,6 +359,7 @@ def test_sales_shadow_api_is_operator_only_aggregate_and_preserves_phase9a_endpo
     delivery = delivery_service(store)
     journeys = JourneyService(store)
     request = build_request(store, campaign.campaign_id, delivery)
+    record_v2_reviews(store, journeys, delivery, request)
     hub.store = store
     hub.journeys = journeys
     hub.delivery = delivery
@@ -337,9 +383,11 @@ def test_sales_shadow_api_is_operator_only_aggregate_and_preserves_phase9a_endpo
         )
         assert response.status_code == 200
         body = response.json()
-        assert body["evaluation_version"] == "phase-9b-sales-shadow-eval-v1"
+        assert body["evaluation_version"] == "phase-9b-sales-shadow-eval-v2"
         assert body["evaluated_subject_count"] == 3
         assert body["verified_breach_subject_count"] == 1
+        assert body["reviewed_subject_count"] == 2
+        assert body["review_aggregate"]["false_positive_rate"] == 0.5
         assert body["contains_subject_ids"] is False
         assert body["persisted"] is False
         assert body["execution_enabled"] is False
@@ -349,7 +397,7 @@ def test_sales_shadow_api_is_operator_only_aggregate_and_preserves_phase9a_endpo
         assert "lead-001" not in serialized
         assert "lead-002" not in serialized
 
-        # Existing Phase 9A endpoint remains independently available.
+        # Existing Phase 9A endpoint remains independently available and v1-only.
         old = client.post(
             "/api/v1/phase9/shadow-evaluation/preview",
             headers=operator,
@@ -360,6 +408,7 @@ def test_sales_shadow_api_is_operator_only_aggregate_and_preserves_phase9a_endpo
         )
         assert old.status_code == 200
         assert old.json()["evaluation_version"] == "phase-9a-shadow-eval-v1"
+        assert old.json()["review_aggregate"]["total_reviews"] == 0
     finally:
         authorizer.settings = previous_auth
         hub.store = previous_store
