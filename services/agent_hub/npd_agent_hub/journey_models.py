@@ -5,10 +5,11 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .attribution_models import TouchpointType, assert_no_raw_pii
+from .attribution_models import TouchpointType, assert_no_raw_pii, assert_pseudonymous_reference
 
 
 JOURNEY_REPLAY_VERSION = "phase-9a-v1"
+JOURNEY_SALES_EVIDENCE_VERSION = "phase-9a-sales-v1"
 
 
 class JourneyState(str, Enum):
@@ -26,6 +27,45 @@ class JourneyState(str, Enum):
     REENGAGEMENT = "reengagement"
 
 
+class JourneyEvidenceAuthority(str, Enum):
+    NOT_REQUIRED = "not_required"
+    ACCEPTED = "accepted"
+    REJECTED_SOURCE = "rejected_source"
+    INVALID_CONTRACT = "invalid_contract"
+
+
+SALES_EVIDENCE_STATES = {
+    JourneyState.MQL,
+    JourneyState.APPOINTMENT,
+    JourneyState.SITE_VISIT,
+    JourneyState.LOST,
+    JourneyState.CUSTOMER,
+    JourneyState.REENGAGEMENT,
+}
+
+
+class JourneyStageEvidence(BaseModel):
+    """Versioned PII-free stage declaration carried inside TouchpointEvent.metadata."""
+
+    contract_version: str = Field(
+        default=JOURNEY_SALES_EVIDENCE_VERSION,
+        pattern=r"^phase-9a-sales-v1$",
+    )
+    state: JourneyState
+    source_record_ref: str = Field(min_length=2, max_length=120)
+    external_writes_enabled: bool = False
+
+    @model_validator(mode="after")
+    def validate_contract(self) -> "JourneyStageEvidence":
+        if self.state not in SALES_EVIDENCE_STATES:
+            raise ValueError("journey sales evidence state is not supported by this contract")
+        assert_pseudonymous_reference(self.source_record_ref)
+        if self.external_writes_enabled:
+            raise ValueError("journey evidence contract cannot enable external writes")
+        assert_no_raw_pii(self.model_dump(mode="python"), path="journey_stage_evidence")
+        return self
+
+
 class JourneyEvidence(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -36,6 +76,9 @@ class JourneyEvidence(BaseModel):
     source_system: str
     channel: str
     campaign_id: str
+    declared_state: JourneyState | None = None
+    authority_status: JourneyEvidenceAuthority = JourneyEvidenceAuthority.NOT_REQUIRED
+    authority_detail: str | None = Field(default=None, max_length=500)
 
 
 class JourneyTransition(BaseModel):
@@ -58,6 +101,7 @@ class JourneyProjection(BaseModel):
     evidence_count: int = Field(ge=0)
     transition_count: int = Field(ge=0)
     suppressed_transition_count: int = Field(ge=0)
+    untrusted_evidence_count: int = Field(default=0, ge=0)
     evidence: list[JourneyEvidence] = Field(default_factory=list)
     transitions: list[JourneyTransition] = Field(default_factory=list)
     campaign_ids: list[str] = Field(default_factory=list)
@@ -79,5 +123,15 @@ class JourneyProjection(BaseModel):
             raise ValueError("transition_count must match transitions")
         if self.evidence_count != len(self.evidence):
             raise ValueError("evidence_count must match evidence")
+        counted_untrusted = sum(
+            item.authority_status
+            in {
+                JourneyEvidenceAuthority.REJECTED_SOURCE,
+                JourneyEvidenceAuthority.INVALID_CONTRACT,
+            }
+            for item in self.evidence
+        )
+        if self.untrusted_evidence_count != counted_untrusted:
+            raise ValueError("untrusted_evidence_count must match rejected evidence")
         assert_no_raw_pii(self.model_dump(mode="python"), path="journey_projection")
         return self
