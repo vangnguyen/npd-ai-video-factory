@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import timezone
+from datetime import datetime, timezone
 
 from .journeys import JourneyService
 from .lead_scoring import LeadScoringService
@@ -16,8 +16,11 @@ from .phase9_shadow_evaluation_models import (
 from .store import HubStore
 
 
+NBA_V1_VERSION = "phase-9a-nba-v1"
+
+
 class Phase9ShadowEvaluationService:
-    """Aggregate-only evaluation over Journey, Lead Score, NBA and shadow reviews."""
+    """Aggregate-only evaluation over Journey, Lead Score v1, NBA v1 and v1 review telemetry."""
 
     def __init__(self, store: HubStore, journeys: JourneyService):
         self.store = store
@@ -42,13 +45,41 @@ class Phase9ShadowEvaluationService:
             return "no_trusted_evidence"
         return "evaluation_error"
 
+    def _review_aggregate(self, subject_refs: list[str]) -> Phase9ReviewAggregate:
+        rows = []
+        for subject_ref in subject_refs:
+            rows.extend(
+                self.reviews.list(
+                    subject_ref=subject_ref,
+                    recommendation_version=NBA_V1_VERSION,
+                    limit=1000,
+                )
+            )
+        # A review_id is globally unique; de-duplicate defensively in case a future
+        # subject alias causes the same immutable review to appear twice.
+        unique = {row.review_id: row for row in rows}.values()
+        relevant = sum(row.disposition == NBAReviewDisposition.RELEVANT for row in unique)
+        not_relevant = sum(
+            row.disposition == NBAReviewDisposition.NOT_RELEVANT for row in unique
+        )
+        needs_context = sum(
+            row.disposition == NBAReviewDisposition.NEEDS_MORE_CONTEXT for row in unique
+        )
+        decided = relevant + not_relevant
+        return Phase9ReviewAggregate(
+            total_reviews=relevant + not_relevant + needs_context,
+            relevant=relevant,
+            not_relevant=not_relevant,
+            needs_more_context=needs_context,
+            false_positive_rate=(round(not_relevant / decided, 4) if decided else None),
+        )
+
     def evaluate(
         self,
         request: Phase9ShadowEvaluationRequest,
     ) -> Phase9ShadowEvaluationReport:
         as_of = request.as_of.astimezone(timezone.utc)
         unique_subjects = list(dict.fromkeys(request.subject_refs))
-
         failures: Counter[str] = Counter()
         states: Counter = Counter()
         score_bands: Counter[str] = Counter()
@@ -57,7 +88,7 @@ class Phase9ShadowEvaluationService:
         missing_inputs: Counter[str] = Counter()
         scores: list[float] = []
         confidences: list[float] = []
-        subjects_with_untrusted_evidence = 0
+        untrusted_count = 0
 
         for subject_ref in unique_subjects:
             try:
@@ -75,38 +106,11 @@ class Phase9ShadowEvaluationService:
             scores.append(score.score)
             confidences.append(recommendation.confidence)
             if projection.untrusted_evidence_count:
-                subjects_with_untrusted_evidence += 1
+                untrusted_count += 1
             for name in score.missing_inputs:
                 missing_inputs[name] += 1
 
-        review_rows = []
-        for subject_ref in unique_subjects:
-            review_rows.extend(
-                self.reviews.list(subject_ref=subject_ref, limit=1000)
-            )
-        relevant = sum(
-            row.disposition == NBAReviewDisposition.RELEVANT for row in review_rows
-        )
-        not_relevant = sum(
-            row.disposition == NBAReviewDisposition.NOT_RELEVANT for row in review_rows
-        )
-        needs_context = sum(
-            row.disposition == NBAReviewDisposition.NEEDS_MORE_CONTEXT
-            for row in review_rows
-        )
-        decided = relevant + not_relevant
-        false_positive_rate = (
-            round(not_relevant / decided, 4) if decided else None
-        )
-
         evaluated_count = len(scores)
-        caveats = [
-            "This is an aggregate shadow-evaluation preview, not a production decision or conversion forecast.",
-            "The response intentionally contains no subject IDs; failures are grouped only by bounded reason category.",
-            "Lead Score and NBA retain their existing missing-data, confidence and recommendation-only boundaries.",
-            "Review false-positive rate excludes needs_more_context from its denominator.",
-        ]
-
         return Phase9ShadowEvaluationReport(
             as_of=as_of,
             requested_subject_count=len(request.subject_refs),
@@ -128,13 +132,12 @@ class Phase9ShadowEvaluationService:
             recommendation_action_counts=dict(actions),
             recommendation_priority_counts=dict(priorities),
             missing_input_counts=dict(sorted(missing_inputs.items())),
-            subjects_with_untrusted_evidence=subjects_with_untrusted_evidence,
-            review_aggregate=Phase9ReviewAggregate(
-                total_reviews=len(review_rows),
-                relevant=relevant,
-                not_relevant=not_relevant,
-                needs_more_context=needs_context,
-                false_positive_rate=false_positive_rate,
-            ),
-            caveats=caveats,
+            subjects_with_untrusted_evidence=untrusted_count,
+            review_aggregate=self._review_aggregate(unique_subjects),
+            caveats=[
+                "This is an aggregate Phase 9A shadow-evaluation preview, not a production decision or conversion forecast.",
+                "The response intentionally contains no subject IDs or per-subject outcomes; failures are grouped only by bounded category.",
+                "Lead Score remains a deterministic journey-momentum index and NBA remains recommendation-only with execution disabled.",
+                "Review aggregates are explicitly limited to phase-9a-nba-v1 records and exclude Phase 9B NBA v2 telemetry.",
+            ],
         )
