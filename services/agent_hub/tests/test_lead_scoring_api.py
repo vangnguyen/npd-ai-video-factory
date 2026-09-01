@@ -71,6 +71,11 @@ def test_lead_score_api_is_viewer_only_read_and_auditable():
         assert body["methodology"] == "journey_momentum_v1"
         assert body["score_version"] == "phase-9a-score-v1"
         assert body["current_state"] == "engaged"
+        assert [item["name"] for item in body["factors"]] == [
+            "journey_state",
+            "recency",
+            "engagement_frequency",
+        ]
         assert body["execution_enabled"] is False
         assert body["external_writes_enabled"] is False
         assert body["contains_raw_pii"] is False
@@ -109,7 +114,7 @@ def test_lead_score_api_is_viewer_only_read_and_auditable():
         hub.journeys = previous_journeys
 
 
-def test_lead_score_openapi_is_get_only():
+def test_lead_score_openapi_preserves_v1_get_and_allows_only_static_sales_preview_post():
     paths = app.openapi()["paths"]
     score_paths = {
         path: set(operations)
@@ -118,6 +123,8 @@ def test_lead_score_openapi_is_get_only():
     }
 
     assert score_paths == {
+        "/api/v1/lead-scores/sales-preview": {"post"},
         "/api/v1/lead-scores/{subject_ref}": {"get"},
     }
-    assert not any("execute" in path or "contact" in path for path in score_paths)
+    forbidden = ("execute", "contact", "send", "accept")
+    assert not any(any(word in path for word in forbidden) for path in score_paths)
