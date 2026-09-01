@@ -38,7 +38,7 @@ from npd_agent_hub.store import MemoryHubStore
 
 UTC = timezone.utc
 CAMPAIGN_ID = "CMP-VGP-VINHTIEN-202609-01"
-AS_OF = datetime(2026, 9, 1, 12, tzinfo=UTC)
+AS_OF = datetime(2026, 9, 2, 12, tzinfo=UTC)
 SIGNING_KEY = "q" * 48
 KEY_ID = "sales-score-test-v1"
 
@@ -157,7 +157,7 @@ def test_sla_met_factors_are_observed_and_extend_denominator_only_in_v2():
         ),
     )
 
-    assert baseline.score == 44.0
+    assert baseline.score == 40.0
     assert baseline.available_points == 100
     assert baseline.score_version == "phase-9a-score-v1"
     assert [item.name for item in baseline.factors] == [
@@ -169,7 +169,7 @@ def test_sla_met_factors_are_observed_and_extend_denominator_only_in_v2():
     assert enhanced.score_version == "phase-9b-score-v2"
     assert enhanced.methodology == "journey_momentum_with_sales_sla_v2"
     assert enhanced.available_points == 115
-    assert enhanced.score == 51.3
+    assert enhanced.score == 47.83
     assert [item.name for item in enhanced.factors] == [
         "journey_state",
         "recency",
@@ -196,7 +196,7 @@ def test_verified_breach_is_zero_point_observed_factor_and_can_lower_score():
     )
 
     assert result.available_points == 115
-    assert result.score == 38.26
+    assert result.score == 34.78
     sla_factors = [item for item in result.factors if item.name.endswith("_sla")]
     assert all(item.status == ScoreFactorStatus.OBSERVED for item in sla_factors)
     assert [item.contribution for item in sla_factors] == [0, 0]
@@ -237,7 +237,7 @@ def test_overdue_without_coverage_remains_missing_and_never_becomes_negative():
         ),
     )
 
-    assert result.score == 44.0
+    assert result.score == 40.0
     assert result.available_points == 100
     sla_factors = [item for item in result.factors if item.name.endswith("_sla")]
     assert all(item.status == ScoreFactorStatus.MISSING for item in sla_factors)
