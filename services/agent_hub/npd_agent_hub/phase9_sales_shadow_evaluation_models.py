@@ -58,7 +58,7 @@ class Phase9SalesShadowEvaluationReport(BaseModel):
     subjects_with_untrusted_journey_evidence: int = Field(ge=0)
     cases_with_untrusted_sales_activity: int = Field(ge=0)
     reviewed_subject_count: int = Field(ge=0)
-    review_aggregate: Phase9ReviewAggregate = Field(default_factory=Phase9ReviewAggregate)
+    review_aggregate: Phase9ReviewAggregate
     caveats: list[str] = Field(default_factory=list)
     aggregate_only: bool = True
     contains_subject_ids: bool = False
