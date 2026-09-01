@@ -6,6 +6,7 @@ from .attribution_models import TouchpointType
 from .journey_models import JourneyEvidenceAuthority, JourneyState
 from .journeys import JourneyService
 from .lead_scoring_models import ExplainableLeadScore, LeadScoreFactor, ScoreFactorStatus
+from .sales_intelligence_models import SalesIntelligenceSnapshot, SalesSLAStatus, SalesSLAWindow
 
 
 STATE_POINTS: dict[JourneyState, float] = {
@@ -26,6 +27,14 @@ ENGAGEMENT_TYPES = {TouchpointType.AD_CLICK, TouchpointType.LANDING_VIEW}
 TRUSTED_AUTHORITY = {
     JourneyEvidenceAuthority.NOT_REQUIRED,
     JourneyEvidenceAuthority.ACCEPTED,
+}
+SLA_FACTOR_CAPACITY = {
+    "first_response_sla": 6.0,
+    "visit_booking_sla": 9.0,
+}
+SLA_LATE_POINTS = {
+    "first_response_sla": 2.0,
+    "visit_booking_sla": 3.0,
 }
 
 
@@ -55,17 +64,94 @@ class LeadScoringService:
             return 7
         return 4
 
+    @staticmethod
+    def _sales_sla_factor(
+        *,
+        name: str,
+        window: SalesSLAWindow,
+        sales_intelligence: SalesIntelligenceSnapshot,
+    ) -> LeadScoreFactor:
+        max_points = SLA_FACTOR_CAPACITY[name]
+        if not sales_intelligence.completeness_verified:
+            return LeadScoreFactor(
+                name=name,
+                status=ScoreFactorStatus.MISSING,
+                contribution=None,
+                max_points=max_points,
+                reason=(
+                    "Sales SLA evidence is excluded because the Sales Hub activity batch is not bound to a verified signed completeness proof."
+                ),
+                evidence_refs=[],
+            )
+
+        evidence_refs = list(window.evidence_refs)
+        if sales_intelligence.completeness_receipt_id:
+            evidence_refs.append(sales_intelligence.completeness_receipt_id)
+        evidence_refs = list(dict.fromkeys(evidence_refs))
+
+        if window.status == SalesSLAStatus.MET:
+            return LeadScoreFactor(
+                name=name,
+                status=ScoreFactorStatus.OBSERVED,
+                contribution=max_points,
+                max_points=max_points,
+                reason=(
+                    "The observed Sales Hub activity met the Campaign OS SLA and is bound to a verified signed activity batch."
+                ),
+                evidence_refs=evidence_refs,
+            )
+        if window.status == SalesSLAStatus.LATE:
+            return LeadScoreFactor(
+                name=name,
+                status=ScoreFactorStatus.OBSERVED,
+                contribution=SLA_LATE_POINTS[name],
+                max_points=max_points,
+                reason=(
+                    "The observed Sales Hub activity occurred after the Campaign OS SLA and is bound to a verified signed activity batch."
+                ),
+                evidence_refs=evidence_refs,
+            )
+        if window.status == SalesSLAStatus.BREACHED:
+            return LeadScoreFactor(
+                name=name,
+                status=ScoreFactorStatus.OBSERVED,
+                contribution=0,
+                max_points=max_points,
+                reason=(
+                    "The SLA deadline passed without qualifying activity and a verified signed Sales Hub completeness attestation covers that deadline."
+                ),
+                evidence_refs=evidence_refs,
+            )
+
+        return LeadScoreFactor(
+            name=name,
+            status=ScoreFactorStatus.MISSING,
+            contribution=None,
+            max_points=max_points,
+            reason=(
+                "The SLA state is pending, not evaluable, or overdue without completeness coverage; it is excluded from the score denominator rather than treated as a negative signal."
+            ),
+            evidence_refs=evidence_refs,
+        )
+
     def score(
         self,
         subject_ref: str,
         *,
         as_of: datetime | None = None,
+        sales_intelligence: SalesIntelligenceSnapshot | None = None,
     ) -> ExplainableLeadScore:
         projection = self.journeys.project(subject_ref)
         evaluation_time = as_of or datetime.now(timezone.utc)
         if evaluation_time.tzinfo is None:
             raise ValueError("as_of must be timezone-aware")
         evaluation_time = evaluation_time.astimezone(timezone.utc)
+
+        if sales_intelligence is not None:
+            if sales_intelligence.subject_ref != subject_ref:
+                raise ValueError("sales intelligence subject must match lead score subject")
+            if sales_intelligence.as_of.astimezone(timezone.utc) != evaluation_time:
+                raise ValueError("sales intelligence as_of must match lead score as_of")
 
         trusted_evidence = [
             item for item in projection.evidence if item.authority_status in TRUSTED_AUTHORITY
@@ -133,17 +219,52 @@ class LeadScoringService:
             )
 
         factors = [stage_factor, recency_factor, engagement_factor]
+        if sales_intelligence is not None:
+            factors.extend(
+                [
+                    self._sales_sla_factor(
+                        name="first_response_sla",
+                        window=sales_intelligence.first_response_sla,
+                        sales_intelligence=sales_intelligence,
+                    ),
+                    self._sales_sla_factor(
+                        name="visit_booking_sla",
+                        window=sales_intelligence.visit_booking_sla,
+                        sales_intelligence=sales_intelligence,
+                    ),
+                ]
+            )
+
         observed = [item for item in factors if item.status == ScoreFactorStatus.OBSERVED]
         available_points = sum(item.max_points for item in observed)
         raw_points = sum(item.contribution or 0 for item in observed)
         normalized_score = round(raw_points / available_points * 100, 2)
 
-        missing_inputs = [
-            "source_quality",
-            "project_fit",
-            "budget_fit",
-            "sales_sla",
-        ]
+        if sales_intelligence is None:
+            # Preserve Phase 9A v1 behavior exactly for the existing GET API and NBA service.
+            missing_inputs = [
+                "source_quality",
+                "project_fit",
+                "budget_fit",
+                "sales_sla",
+            ]
+        else:
+            missing_inputs = [
+                "source_quality",
+                "project_fit",
+                "budget_fit",
+            ]
+            sla_factors = {
+                item.name: item
+                for item in factors
+                if item.name in SLA_FACTOR_CAPACITY
+            }
+            if not sales_intelligence.completeness_verified:
+                missing_inputs.append("sales_sla_completeness")
+            for name in ("first_response_sla", "visit_booking_sla"):
+                if sla_factors[name].status == ScoreFactorStatus.MISSING:
+                    missing_inputs.append(name)
+
         if engagement_factor.status == ScoreFactorStatus.MISSING:
             missing_inputs.append("engagement_frequency")
 
@@ -172,9 +293,35 @@ class LeadScoringService:
             for item in projection.evidence
         ):
             caveats.append("At least one journey evidence declaration failed the versioned contract.")
+        if sales_intelligence is not None:
+            caveats.append(
+                "Sales SLA factors are included numerically only when the activity batch is bound to a verified signed Sales Hub completeness proof."
+            )
+            if not sales_intelligence.completeness_verified:
+                caveats.append(
+                    "Sales SLA factors are excluded because the supplied completeness proof is absent or invalid."
+                )
+            if any(
+                item.name in SLA_FACTOR_CAPACITY
+                and item.status == ScoreFactorStatus.MISSING
+                for item in factors
+            ):
+                caveats.append(
+                    "Pending, not-evaluable, or overdue-without-completeness SLA states remain missing data and do not reduce the score."
+                )
 
         return ExplainableLeadScore(
             subject_ref=subject_ref,
+            methodology=(
+                "journey_momentum_v1"
+                if sales_intelligence is None
+                else "journey_momentum_with_sales_sla_v2"
+            ),
+            score_version=(
+                "phase-9a-score-v1"
+                if sales_intelligence is None
+                else "phase-9b-score-v2"
+            ),
             score=normalized_score,
             confidence=confidence,
             available_points=available_points,
