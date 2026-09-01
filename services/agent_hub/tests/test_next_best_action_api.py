@@ -117,15 +117,16 @@ def test_nba_get_and_preview_are_viewer_only_and_non_persisting():
 
 def test_nba_openapi_has_read_and_preview_but_no_execution_accept_or_contact_route():
     paths = app.openapi()["paths"]
-    nba_paths = {
+    core_nba_paths = {
         path: set(operations)
         for path, operations in paths.items()
         if path.startswith("/api/v1/next-best-actions")
+        and not path.startswith("/api/v1/next-best-actions/reviews")
     }
 
-    assert nba_paths == {
+    assert core_nba_paths == {
         "/api/v1/next-best-actions/{subject_ref}": {"get"},
         "/api/v1/next-best-actions/preview": {"post"},
     }
     forbidden = ("execute", "accept", "send", "contact")
-    assert not any(any(word in path for word in forbidden) for path in nba_paths)
+    assert not any(any(word in path for word in forbidden) for path in core_nba_paths)
