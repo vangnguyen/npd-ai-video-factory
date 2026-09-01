@@ -10,6 +10,7 @@ class HubSettings:
     espocrm_url: str = ""
     espocrm_api_key: str = ""
     espocrm_opportunity_campaign_field: str = ""
+    espocrm_journey_stage_map_json: str = ""
     n8n_executor_webhook_url: str = ""
     request_timeout_seconds: float = 30.0
     store_backend: str = "memory"
@@ -70,6 +71,9 @@ class HubSettings:
             espocrm_api_key=os.getenv("ESPOCRM_API_KEY", "").strip(),
             espocrm_opportunity_campaign_field=os.getenv(
                 "ESPOCRM_OPPORTUNITY_CAMPAIGN_FIELD", ""
+            ).strip(),
+            espocrm_journey_stage_map_json=os.getenv(
+                "ESPOCRM_JOURNEY_STAGE_MAP_JSON", ""
             ).strip(),
             n8n_executor_webhook_url=os.getenv("N8N_AGENT_EXECUTOR_WEBHOOK_URL", "").strip(),
             request_timeout_seconds=float(os.getenv("AGENT_TOOL_TIMEOUT_SECONDS", "30")),
