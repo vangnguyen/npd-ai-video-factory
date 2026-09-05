@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import fakeredis
 import pytest
@@ -82,6 +82,7 @@ def test_pilot_routes_existing_roles_and_returns_actual_phase9_evidence():
     assert item.priority == "high"
     assert item.details["recommendation_version"] == "phase-9b-nba-v2"
     assert item.details["first_response_sla"] == "breached"
+    assert item.details["completeness_proof_status"] == "verified"
     assert item.details["completeness_verified"] is True
     assert item.details["customer_contact_enabled"] is False
     assert item.reason
@@ -95,7 +96,6 @@ def test_pilot_routes_existing_roles_and_returns_actual_phase9_evidence():
     # The normal Commander task/report/audit persistence is intentional.
     assert hub.store.get_task(task.task_id) == task
     assert hub.store.get_report(task.task_id) == result
-    assert [row.event_type for row in hub.list_audit(task.task_id)]
     assert any(row.event_type == AuditEventType.ANSWER_GENERATED for row in hub.list_audit(task.task_id))
 
 
@@ -113,6 +113,7 @@ def test_missing_completeness_is_not_converted_to_verified_breach_or_escalation(
     assert answer.metrics["high_priority_reviews"] == 0
     item = answer.items[0]
     assert item.details["first_response_sla"] == "overdue_missing_evidence"
+    assert item.details["completeness_proof_status"] == "not_supplied"
     assert item.details["completeness_verified"] is False
     assert "sales_sla_completeness" in item.details["missing_inputs"]
     assert executor.calls == 0
@@ -145,9 +146,7 @@ def test_duplicate_cases_are_reviewed_once_and_failures_do_not_get_a_fake_score(
 def test_empty_evidence_store_fails_the_business_answer_without_crm_fallback():
     executor = ForbiddenExternalExecutor()
     hub = AgentHub(store=MemoryHubStore(), executor=executor)
-    case = SalesIntelligencePreviewRequest(
-        subject_ref="lead:missing", observations=[], as_of=AS_OF
-    )
+    case = SalesIntelligencePreviewRequest(subject_ref="lead:missing", observations=[], as_of=AS_OF)
     result = analyze(hub, pilot_task(case))
     assert result.answer.status == AnswerStatus.FAILED
     assert result.answer.metrics["evaluated_subjects"] == 0
@@ -156,16 +155,17 @@ def test_empty_evidence_store_fails_the_business_answer_without_crm_fallback():
     assert executor.calls == 0
 
 
-def test_invalid_signed_sales_evidence_fails_closed_without_error_detail_leak():
+def test_invalid_supplied_proof_retains_existing_policy_and_cannot_confirm_breach():
     hub, case, executor = prepared_hub()
-    # Keep the shape valid but invalidate the signed receipt binding.
     raw = case.model_dump(mode="json")
     raw["completeness_proof"]["claim"]["record_count"] = 1
     task = AgentTask(objective="Rà soát evidence", context={"phase9_review": {"cases": [raw]}})
     result = analyze(hub, task)
-    assert result.answer.status == AnswerStatus.FAILED
-    assert result.answer.items[0].details["evaluation_status"] == "invalid_evidence"
-    assert "lead_score" not in result.answer.items[0].details
+    assert result.answer.status == AnswerStatus.PARTIAL
+    assert result.answer.metrics["verified_breach_subjects"] == 0
+    assert result.answer.metrics["high_priority_reviews"] == 0
+    assert result.answer.items[0].details["completeness_proof_status"] == "unverified"
+    assert result.answer.items[0].details["first_response_sla"] == "overdue_missing_evidence"
     assert executor.calls == 0
 
 
@@ -174,6 +174,8 @@ def test_invalid_signed_sales_evidence_fails_closed_without_error_detail_leak():
     [
         {"cases": []},
         {"cases": [{"subject_ref": "lead:user@example.com", "observations": [], "as_of": AS_OF.isoformat()}]},
+        {"cases": [{"subject_ref": "lead:+84 912 345 678", "observations": [], "as_of": AS_OF.isoformat()}]},
+        {"cases": [{"subject_ref": "customer:unknown", "observations": [], "as_of": AS_OF.isoformat()}]},
         {"cases": [{"subject_ref": "lead:lead-001", "observations": [], "as_of": "2026-09-02T14:00:00"}]},
         {"cases": [{"subject_ref": "lead:lead-001", "observations": [], "as_of": AS_OF.isoformat()}] * 21},
     ],
@@ -183,19 +185,33 @@ def test_invalid_context_is_rejected_before_task_persistence(payload):
         AgentTask(objective="Rà soát evidence", context={"phase9_review": payload})
 
 
+def test_pilot_does_not_accept_unrelated_tool_context():
+    _hub, case, _executor = prepared_hub()
+    context = pilot_task(case).context
+    with pytest.raises(ValidationError, match="other tool/provider context"):
+        AgentTask(objective="Rà soát evidence", context={**context, "video_job": {"requested": True}})
+
+
+def test_upper_batch_boundary_is_supported_and_deduplicated():
+    hub, case, executor = prepared_hub()
+    result = analyze(hub, pilot_task(*([case] * 20)))
+    assert result.answer.metrics["requested_cases"] == 20
+    assert result.answer.metrics["duplicate_cases"] == 19
+    assert len(result.answer.items) == 1
+    assert executor.calls == 0
+
+
 def test_conflicting_duplicate_and_mixed_as_of_are_rejected():
     _hub, case, _executor = prepared_hub()
     changed = case.model_copy(update={"as_of": case.as_of + timedelta(minutes=1)})
     with pytest.raises(ValidationError):
         pilot_task(case, changed)
-    unsigned = SalesIntelligencePreviewRequest(
-        subject_ref=case.subject_ref, observations=[], as_of=case.as_of
-    )
+    unsigned = SalesIntelligencePreviewRequest(subject_ref=case.subject_ref, observations=[], as_of=case.as_of)
     with pytest.raises(ValidationError):
         pilot_task(case, unsigned)
 
 
-def test_repeat_analyze_recomputes_the_same_evidence_without_creating_review_votes():
+def test_repeat_analyze_recomputes_without_creating_review_votes():
     hub, case, executor = prepared_hub()
     task = pilot_task(case)
     first = analyze(hub, task).answer.model_dump(mode="json", exclude={"generated_at"})
@@ -212,9 +228,7 @@ def test_redis_task_and_report_recover_without_changing_evidence_contract():
     store = RedisHubStore(client=client, namespace="phase9-marketing-pilot-test")
     for row in source_store.list_touchpoints(limit=100):
         store.append_touchpoint(row)
-    unsigned = SalesIntelligencePreviewRequest(
-        subject_ref=signed_case.subject_ref, observations=[], as_of=signed_case.as_of
-    )
+    unsigned = SalesIntelligencePreviewRequest(subject_ref=signed_case.subject_ref, observations=[], as_of=signed_case.as_of)
     task = pilot_task(unsigned)
     first_hub = AgentHub(store=store, executor=ForbiddenExternalExecutor())
     first = analyze(first_hub, task)
@@ -228,9 +242,7 @@ def test_redis_task_and_report_recover_without_changing_evidence_contract():
 
 def test_other_agent_task_modes_preserve_existing_routing():
     hub = AgentHub(store=MemoryHubStore(), executor=ForbiddenExternalExecutor())
-    task = AgentTask(
-        objective="Chuẩn bị nội dung video", preferred_agents=[AgentName.CONTENT_TREND]
-    )
+    task = AgentTask(objective="Chuẩn bị nội dung video", preferred_agents=[AgentName.CONTENT_TREND])
     result = hub.run(task)
     assert AgentName.CONTENT_TREND in result.selected_agents
     assert any(report.actions for report in result.reports)
@@ -241,14 +253,10 @@ def test_existing_task_api_exposes_pilot_with_operator_rbac_and_viewer_read(monk
     main_module = importlib.import_module("npd_agent_hub.main")
     hub, case, executor = prepared_hub()
     monkeypatch.setattr(main_module, "hub", hub)
-    monkeypatch.setattr(
-        authorizer,
-        "settings",
-        HubSettings(
-            auth_mode="static_token", viewer_token="viewer-secret",
-            operator_token="operator-secret", owner_token="owner-secret",
-        ),
-    )
+    monkeypatch.setattr(authorizer, "settings", HubSettings(
+        auth_mode="static_token", viewer_token="viewer-secret",
+        operator_token="operator-secret", owner_token="owner-secret",
+    ))
     client = TestClient(main_module.app)
     viewer = {"Authorization": "Bearer viewer-secret"}
     operator = {"Authorization": "Bearer operator-secret"}
@@ -276,10 +284,10 @@ def test_invalid_phase9_task_api_returns_422_and_does_not_save_task(monkeypatch)
     main_module = importlib.import_module("npd_agent_hub.main")
     hub = AgentHub(store=MemoryHubStore(), executor=ForbiddenExternalExecutor())
     monkeypatch.setattr(main_module, "hub", hub)
-    monkeypatch.setattr(
-        authorizer, "settings",
-        HubSettings(auth_mode="static_token", operator_token="operator-secret", owner_token="owner-secret", viewer_token="viewer-secret"),
-    )
+    monkeypatch.setattr(authorizer, "settings", HubSettings(
+        auth_mode="static_token", operator_token="operator-secret",
+        owner_token="owner-secret", viewer_token="viewer-secret",
+    ))
     client = TestClient(main_module.app)
     response = client.post(
         "/api/v1/agent-tasks",
