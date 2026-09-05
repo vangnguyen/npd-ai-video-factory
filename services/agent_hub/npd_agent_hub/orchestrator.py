@@ -25,6 +25,12 @@ from .models import (
     TaskSummary,
     ToolExecutionResult,
 )
+from .phase9_marketing_review import (
+    CONTEXT_KEY as PHASE9_REVIEW_CONTEXT_KEY,
+    WORKFLOW_VERSION as PHASE9_REVIEW_VERSION,
+    analyze_marketing_review,
+    plan_marketing_review,
+)
 from .provider_health import ProviderHealthService
 from .provider_health_scheduler import ProviderHealthScheduler
 from .store import HubStore, build_store
@@ -94,8 +100,12 @@ class AgentHub:
         return [commander, *[agent.descriptor for agent in SPECIALIST_AGENTS.values()]]
 
     def run(self, task: AgentTask) -> CommandCenterReport:
-        selected = select_agents(task)
-        reports = [SPECIALIST_AGENTS[name].plan(task) for name in selected]
+        if PHASE9_REVIEW_CONTEXT_KEY in task.context:
+            reports = plan_marketing_review(task)
+            selected = [report.agent for report in reports]
+        else:
+            selected = select_agents(task)
+            reports = [SPECIALIST_AGENTS[name].plan(task) for name in selected]
         approvals = [
             planned_action
             for report in reports
@@ -277,6 +287,32 @@ class AgentHub:
         report = self.get(task_id)
         if task is None or report is None:
             raise KeyError(task_id)
+
+        if PHASE9_REVIEW_CONTEXT_KEY in task.context:
+            # Phase 9 pilot is an explicit local-evidence mode. Do not dispatch
+            # generic CRM/analytics reads or any planned external write actions.
+            report.reports, report.answer = analyze_marketing_review(
+                task, self.store, self.journeys, self.delivery
+            )
+            report.executive_summary = report.answer.summary
+            report.approvals_required = []
+            self.store.save_report(report)
+            self.store.append_audit(
+                AuditEvent(
+                    task_id=task_id,
+                    event_type=AuditEventType.ANSWER_GENERATED,
+                    actor="commander",
+                    detail="Phase 9 marketing review composed from existing local evidence.",
+                    metadata={
+                        "workflow_version": PHASE9_REVIEW_VERSION,
+                        "status": report.answer.status.value,
+                        "item_count": len(report.answer.items),
+                        "external_writes_enabled": False,
+                        "customer_contact_enabled": False,
+                    },
+                )
+            )
+            return report
 
         for agent_report in report.reports:
             for action in agent_report.actions:
