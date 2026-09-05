@@ -84,7 +84,7 @@ def analyze_marketing_review(
     journeys: JourneyService,
     delivery: AttributionDeliveryService,
 ) -> tuple[list[AgentReport], BusinessAnswer]:
-    """Run the existing Phase 9 services once per unique subject, with no providers.
+    """Compose existing Phase 9 services once per unique subject, with no providers.
 
     This is deterministic, service-backed coordination of existing roles, not a new
     LLM agent runtime. Only the caller (AgentHub) persists its normal task/report/audit.
@@ -145,6 +145,10 @@ def analyze_marketing_review(
             in {sales.first_response_sla.status, sales.visit_booking_sla.status}
         )
         evidence_refs.update(recommendation.evidence_refs)
+        proof_status = (
+            "verified" if sales.completeness_verified else
+            "not_supplied" if case.completeness_proof is None else "unverified"
+        )
         items.append(
             BusinessAnswerItem(
                 entity_id=case.subject_ref,
@@ -160,6 +164,7 @@ def analyze_marketing_review(
                     "confidence": recommendation.confidence,
                     "first_response_sla": sales.first_response_sla.status.value,
                     "visit_booking_sla": sales.visit_booking_sla.status.value,
+                    "completeness_proof_status": proof_status,
                     "completeness_verified": sales.completeness_verified,
                     "source_complete": sales.source_complete,
                     "internal_review_minutes": recommendation.sla_minutes,
@@ -226,6 +231,7 @@ def analyze_marketing_review(
         ),
         metrics={
             "workflow_version": WORKFLOW_VERSION,
+            "as_of": as_of.isoformat(),
             "requested_cases": len(request.cases),
             "unique_subjects": len(cases),
             "duplicate_cases": len(request.cases) - len(cases),
@@ -248,6 +254,5 @@ def analyze_marketing_review(
         ],
         caveats=caveats,
         evidence=[WORKFLOW_VERSION, "phase-9b-nba-v2", *sorted(evidence_refs)],
-        generated_at=as_of,
     )
     return reports, answer
