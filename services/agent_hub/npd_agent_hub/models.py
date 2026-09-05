@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AgentName(str, Enum):
@@ -64,6 +64,29 @@ class AgentTask(BaseModel):
     context: dict[str, object] = Field(default_factory=dict)
     constraints: list[str] = Field(default_factory=list)
     preferred_agents: list[AgentName] = Field(default_factory=list)
+
+    @field_validator("context")
+    @classmethod
+    def validate_phase9_review_context(cls, value: dict[str, object]) -> dict[str, object]:
+        if "phase9_review" not in value:
+            return value
+        # Import at validation time: the shared task model must not introduce an
+        # import-time cycle through the Phase 9 service/model dependencies.
+        from .attribution_models import assert_pseudonymous_reference
+        from .phase9_sales_shadow_evaluation_models import Phase9SalesShadowEvaluationRequest
+
+        if set(value) != {"phase9_review"}:
+            raise ValueError("phase9_review cannot be combined with other tool/provider context")
+        request = Phase9SalesShadowEvaluationRequest.model_validate(value["phase9_review"])
+        if len(request.cases) > 20:
+            raise ValueError("phase9_review accepts at most 20 cases per pilot task")
+        for case in request.cases:
+            kind, separator, identifier = case.subject_ref.partition(":")
+            if separator != ":" or kind not in {"lead", "opportunity"} or not identifier:
+                raise ValueError("phase9_review subject_ref must use lead:<id> or opportunity:<id>")
+            assert_pseudonymous_reference(identifier)
+        # Persist the validated existing contract, not unvalidated caller extras.
+        return {"phase9_review": request.model_dump(mode="json")}
 
 
 class PlannedAction(BaseModel):
