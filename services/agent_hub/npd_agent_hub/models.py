@@ -72,13 +72,21 @@ class AgentTask(BaseModel):
             return value
         # Import at validation time: the shared task model must not introduce an
         # import-time cycle through the Phase 9 service/model dependencies.
+        from .attribution_models import assert_pseudonymous_reference
         from .phase9_sales_shadow_evaluation_models import Phase9SalesShadowEvaluationRequest
 
+        if set(value) != {"phase9_review"}:
+            raise ValueError("phase9_review cannot be combined with other tool/provider context")
         request = Phase9SalesShadowEvaluationRequest.model_validate(value["phase9_review"])
         if len(request.cases) > 20:
             raise ValueError("phase9_review accepts at most 20 cases per pilot task")
+        for case in request.cases:
+            kind, separator, identifier = case.subject_ref.partition(":")
+            if separator != ":" or kind not in {"lead", "opportunity"} or not identifier:
+                raise ValueError("phase9_review subject_ref must use lead:<id> or opportunity:<id>")
+            assert_pseudonymous_reference(identifier)
         # Persist the validated existing contract, not unvalidated caller extras.
-        return {**value, "phase9_review": request.model_dump(mode="json")}
+        return {"phase9_review": request.model_dump(mode="json")}
 
 
 class PlannedAction(BaseModel):
