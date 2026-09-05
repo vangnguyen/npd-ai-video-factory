@@ -23,8 +23,11 @@ Agent Hub `0.13.0` at commit
 `400899ba82501beeea469f4a33dc169a9a09bb8e`, tagged
 `agent-hub-v0.13.0`. Phase 8.5–8.9 and their reliability prerequisites are merged;
 the fixed 48-hour Phase 8.8 gate and the later 24-hour 0.13.0 post-deploy window passed.
-Later commits on `main` are documentation/CI-governance only and remain runtime-equivalent
-to the tagged production source. Alert routing is live as a deterministic preview, while
+This is historical release evidence, not a claim that the current live runtime has
+been inspected. Later `main` includes Phase 9 source through PR #61 at
+`82fd18a3e524b13b479bb73d66c962620c6e8d9b`; these changes are not documentation-only.
+Phase 9 production-shadow activation and business acceptance are separate from source
+merge. Alert routing in the accepted release is a deterministic preview, while
 external delivery remains disabled.
 
 ## Phase 9 — Customer Journey and Sales Intelligence
@@ -35,9 +38,17 @@ external delivery remains disabled.
 - sales SLA and funnel evidence;
 - no automatic customer contact.
 
-Phase 9 begins only after the stabilization handoff is merged, full CI is green and the
-WordPress/Imunify360 pricing-sync blocker in issue #28 is either resolved or explicitly
-accepted as a separately tracked SaleHub dependency. Phase 9A remains read-only.
+The original entry prerequisites are the stabilization handoff, green CI and resolution
+or explicit separate disposition of the WordPress/Imunify360 pricing-sync issue #28.
+Issue #28 is now closed as completed in GitHub; do not report its historical description
+as an open blocker. Historical draft PR dispositions are not implicitly approved.
+Phase 9A remains read-only.
+
+Phase 9A/9B core services and version-bound NBA v2 review telemetry are on `main` through
+PR #61. The next product milestone is an evidence-backed internal marketing/sales pilot,
+not Phase 10 execution. See [Phase 9 marketing pilot](PHASE_9_MARKETING_PILOT.md) for the
+opt-in Commander workflow, input contract, UAT and remaining live-data/UI work. Source
+checks, fixture results, deployment state and business acceptance must stay distinct.
 
 ## Phase 10 — Controlled Channel Execution
 
