@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AgentName(str, Enum):
@@ -64,6 +64,21 @@ class AgentTask(BaseModel):
     context: dict[str, object] = Field(default_factory=dict)
     constraints: list[str] = Field(default_factory=list)
     preferred_agents: list[AgentName] = Field(default_factory=list)
+
+    @field_validator("context")
+    @classmethod
+    def validate_phase9_review_context(cls, value: dict[str, object]) -> dict[str, object]:
+        if "phase9_review" not in value:
+            return value
+        # Import at validation time: the shared task model must not introduce an
+        # import-time cycle through the Phase 9 service/model dependencies.
+        from .phase9_sales_shadow_evaluation_models import Phase9SalesShadowEvaluationRequest
+
+        request = Phase9SalesShadowEvaluationRequest.model_validate(value["phase9_review"])
+        if len(request.cases) > 20:
+            raise ValueError("phase9_review accepts at most 20 cases per pilot task")
+        # Persist the validated existing contract, not unvalidated caller extras.
+        return {**value, "phase9_review": request.model_dump(mode="json")}
 
 
 class PlannedAction(BaseModel):
