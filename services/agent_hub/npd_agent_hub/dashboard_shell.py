@@ -24,8 +24,8 @@ def render_dashboard_html(
             "if(!r.ok){let d;try{d=await r.json()}catch{d={detail:r.statusText}};throw new Error((d&&d.detail)||('HTTP '+r.status))}",
             "if(r.status===401){location.href='/login';throw new Error('login required')}if(!r.ok){let d;try{d=await r.json()}catch{d={detail:r.statusText}};throw new Error((d&&d.detail)||('HTTP '+r.status))}",
         ).replace(
-            "setStatus('Đã xác thực: '+me.role+' · storage: '+s.storage_backend,'ok');render(s);renderSources(sources)",
-            "$('identity').textContent=me.subject+' · '+me.role;setStatus('Đã xác thực: '+me.subject+' · '+me.role+' · storage: '+s.storage_backend,'ok');render(s);renderSources(sources)",
+            "setStatus('Đã xác thực: '+me.role+' · storage: '+s.storage_backend,'ok');setPhase9Access(me.role);render(s);renderSources(sources)",
+            "$('identity').textContent=me.subject+' · '+me.role;setStatus('Đã xác thực: '+me.subject+' · '+me.role+' · storage: '+s.storage_backend,'ok');setPhase9Access(me.role);render(s);renderSources(sources)",
         ).replace(
             "renderQuestions();if(token)refreshAll();",
             "renderQuestions();refreshAll();",

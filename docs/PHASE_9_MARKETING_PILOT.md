@@ -7,7 +7,8 @@ services usable through the existing Commander task/report flow. Do not replace 
 Agent Hub architecture, add another agent platform, or turn V1 deployment scheduling
 into a prerequisite for this source-only product slice.
 
-Source baseline inspected: `82fd18a3e524b13b479bb73d66c962620c6e8d9b` (PR #61).
+Source baseline inspected: `78d85647b4fd3e7d6e4fdae49925f205c459a22d`
+(actual merge commit of PR #62).
 This document describes a source candidate and proposed business pilot, not a live
 production release or proof that production data is ready.
 
@@ -67,9 +68,25 @@ probability. `generated_at` is report creation time; `as_of` is evaluation time 
 existing Phase 9 semantics, not an immutable historical snapshot.
 
 Existing `GET /api/v1/agent-tasks/{task_id}`, re-analyze and Command Center report rendering
-remain the read surfaces. The first slice is API-led; it does not yet add a dedicated
-Phase 9 task-input preset to the browser composer. Do not claim click-only onboarding
-until that input flow has been implemented and browser-tested.
+remain the read surfaces. The stacked browser increment adds a small Phase 9 preset to
+the existing Commander composer. An operator or owner supplies up to 20 pseudonymous
+`lead:<id>`/`opportunity:<id>` references and a timezone-aware evaluation instant; the
+browser submits the same validated `context.phase9_review` contract with empty observations
+so the server reads existing Journey evidence. Viewer sessions remain read-only. The
+result surface explicitly calls out missing evidence instead of inferring it. It also
+filters the opened result by priority or missing evidence/context, scopes the displayed
+NBA v2 review summary to the exact subject refs in that report, and lets the user reopen
+recent task reports.
+
+For an evaluated item, operator/owner may explicitly submit
+`relevant`/`not_relevant`/`needs_more_context` through the existing version-bound NBA v2
+review endpoint. The browser rebuilds the evaluation from the opened report's
+pseudonymous subject ref and evaluation instant; the server recomputes NBA v2. The UI
+blocks concurrent double-submit, rejects obvious raw contact text, and verifies that the
+receipt remains shadow-only. Viewer can read the report and scoped summary but cannot
+create, re-analyze or submit feedback. Feedback is reviewer telemetry, not an execution
+approval. Source and route tests do not replace authenticated browser UAT in the eventual
+pilot environment.
 
 ## Persistence and execution boundaries
 
@@ -77,10 +94,12 @@ The existing internal task/report/audit records are written. Evidence inputs in 
 are normalized through the existing model before task persistence. Never place customer
 names, phones, emails or credentials in task free text/context.
 
-The review services do not ingest touchpoints, issue heartbeat receipts, record reviewer
-votes, call providers or dispatch ToolExecutor actions. They propose no executable
-contact/Ads/CMS actions. `execution_enabled`, `external_writes_enabled` and
-`customer_contact_enabled` remain false in this pilot result.
+The analysis path does not ingest touchpoints, issue heartbeat receipts, record reviewer
+votes, call providers or dispatch ToolExecutor actions. An explicit operator/owner
+feedback click may write one internal NBA v2 review record through the existing review
+service; it does not alter Journey evidence or a source system. The workflow proposes no
+executable contact/Ads/CMS actions. `execution_enabled`, `external_writes_enabled` and
+`customer_contact_enabled` remain false in both the pilot result and review receipt.
 
 No source-system CRM write, message, advertising change, CMS publication, render job,
 production deployment or scheduler/clock modification is part of this change. This
@@ -93,6 +112,8 @@ From the repository checkout with its existing development dependencies:
 ```sh
 cd services/agent_hub
 python -m pytest tests/test_phase9_marketing_review.py -q
+python -m pytest tests/test_phase9_browser_preset.py -q
+python -m pytest tests/test_sales_nba_review.py tests/test_dashboard_shell_parity.py -q
 python -m pytest tests -q
 agent-hub-eval
 ```
@@ -101,19 +122,22 @@ The focused tests use the existing signed-sales fixture and real Phase 9 service
 MemoryHubStore/fakeredis, and the real FastAPI task routes. The external executor raises
 on any dispatch. Tests cover signed breach, missing/unverified completeness, missing
 Journey, duplicate/conflicting inputs, input privacy, bounded batch size, role routing,
-RBAC, re-analysis, internal persistence and Redis recovery. No real customer data or
-provider credentials are required.
+RBAC, re-analysis, internal persistence, scoped NBA v2 feedback/summary, double-submit
+guarding, output escaping, dashboard byte parity and Redis recovery. No real customer
+data or provider credentials are required.
 
 CI results must be reported from the actual run, separately from business UAT and live
 production acceptance. A fixture PASS is not production-quality acceptance.
 
 ## Next steps within Phase 9
 
-- Review this source change and its protected CI; do not merge unrelated refactor or
-  Video Factory draft PRs as a side effect.
-- Add a small browser input preset for the same validated task contract, rather than a
-  second dashboard/service. Test operator input, viewer read-only access, missing-data
-  display and an end-to-end report view.
+- Review the API-led source PR first, then this stacked browser preset and their protected
+  CI; do not merge unrelated refactor or Video Factory draft PRs as a side effect.
+- Run authenticated browser UAT for operator input/feedback, viewer read-only access,
+  priority/missing-data filters, scoped review summary, reopen/history, desktop and mobile
+  layouts. A local SAMPLE-fixture UAT is source evidence only. Do not describe the preset
+  as production-live before a separately authorized deployment and pilot-environment UAT
+  pass.
 - For an owner-approved pilot environment, verify real EspoCRM stage mapping and Sales
   Hub evidence availability. Start with an approved pseudonymous cohort of up to 20
   cases. Keep source access and deployment permissions separate from this code change.
