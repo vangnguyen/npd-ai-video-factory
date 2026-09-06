@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, model_validator
 
+from .currency import DEFAULT_CURRENCY, VndCurrency
+
 
 CAMPAIGN_ID_PATTERN = re.compile(
     r"^CMP-[A-Z0-9]{2,12}-[A-Z0-9]{2,20}-\d{6}-\d{2}$"
@@ -94,7 +96,7 @@ class CampaignBudget(BaseModel):
     # sources such as existing customers, referrals and organic demand. This
     # keeps attribution truthful without inventing a nominal media cost.
     amount: int = Field(ge=0)
-    currency: str = Field(default="VND", pattern=r"^[A-Z]{3}$")
+    currency: VndCurrency = DEFAULT_CURRENCY
 
 
 class KPITarget(BaseModel):
