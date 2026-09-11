@@ -1,12 +1,13 @@
 {
   "schema": "npd.repository-handoff.v1",
-  "updated_at_utc": "2026-09-11T13:00:48.8155182Z",
+  "updated_at_utc": "2026-09-11T13:16:14.1810582Z",
   "repository": {
     "name": "vangnguyen/npd-ai-video-factory",
     "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
     "branch": "docs/handoff-receipt-protocol",
     "source_baseline_sha": "43a1cca354d12893ee33b6e43cd9117794f78e04",
-    "layout": "shared_repository_separate_workstreams"
+    "layout": "agent_hub_and_legacy_video_factory_integration",
+    "active_video_factory_repository": "https://github.com/vangnguyen/npd-video-factory-v2.git"
   },
   "receipt_policy": {
     "required_after_each_task_or_milestone": true,
@@ -64,20 +65,21 @@
       "operation_reusable": false
     },
     "video_factory": {
-      "state": "UNCHANGED_BY_THIS_MILESTONE",
+      "state": "LEGACY_INTEGRATION_ONLY",
+      "active_v2_v3_repository": "vangnguyen/npd-video-factory-v2",
       "production_write": false,
       "real_provider_call": false,
       "next_action_requires_fresh_state_and_authority": true
     }
   },
   "latest_milestone": {
-    "task": "Execute exact approved Limited Phase 9 Pilot Fresh V2 operation",
-    "verdict": "BLOCKED",
+    "task": "Create consolidated Agent Hub handoff, implementation inventory and roadmap",
+    "verdict": "PASS",
     "production_writes": 0,
     "real_provider_calls": 0,
     "actual_cost": 0,
     "scope_drift": "PASS",
-    "reason_code": "REMOTE_PREFLIGHT_FAILED_e3b0c44298fc1c14",
+    "underlying_execution_blocker": "REMOTE_PREFLIGHT_FAILED_e3b0c44298fc1c14",
     "next_safe_action": "WAIT_FOR_SEPARATE_READ_ONLY_RCA_TASK"
   },
   "evidence_pointers": [
@@ -85,6 +87,7 @@
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-owner-approval-20260911-d55d6333",
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-owner-approval-20260911-d55d6333/LIMITED_PHASE9_PILOT_ABORTED_20260911.json",
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-owner-approval-20260911-d55d6333/LIMITED_PHASE9_PILOT_ABORT_REPORT_20260911.md",
+    "docs/AGENT_HUB_HANDOFF_AND_ROADMAP_20260911.md",
     "docs/NPD_UNIFIED_SALEHUB_AGENTHUB_FULL_HANDOFF.md",
     "docs/technical-handoff.md"
   ]

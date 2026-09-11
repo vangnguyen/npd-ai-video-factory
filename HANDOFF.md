@@ -2,16 +2,19 @@
 
 ## Purpose
 
-This is the canonical repository-level handoff for the Agent Hub and Video
-Factory workstreams in `vangnguyen/npd-ai-video-factory`. The two workstreams
-share this repository but retain separate runtime, approval, evidence, and
-production-mutation boundaries.
+This is the canonical repository-level handoff for Agent Hub and its legacy
+Video Factory integration in `vangnguyen/npd-ai-video-factory`. Active Video
+Factory V2/V3 acceptance is maintained separately in
+`vangnguyen/npd-video-factory-v2`; it has its own `HANDOFF.md` and
+`handoff.json`. The workstreams retain separate runtime, approval, evidence,
+and production-mutation boundaries.
 
 The structured companion is [`handoff.json`](handoff.json). Detailed historical
 and architectural context remains in:
 
 - [`docs/NPD_UNIFIED_SALEHUB_AGENTHUB_FULL_HANDOFF.md`](docs/NPD_UNIFIED_SALEHUB_AGENTHUB_FULL_HANDOFF.md)
 - [`docs/technical-handoff.md`](docs/technical-handoff.md)
+- [`docs/AGENT_HUB_HANDOFF_AND_ROADMAP_20260911.md`](docs/AGENT_HUB_HANDOFF_AND_ROADMAP_20260911.md)
 
 ## Required operating protocol
 
@@ -74,13 +77,11 @@ NEXT_SAFE_ACTION:
 
 ### Video Factory
 
-- No Video Factory code, runtime, provider, publishing, or production action was
+- This repository retains legacy Video Factory integration and V1
+  decommission evidence. Active V2/V3 acceptance belongs to the separate
+  `vangnguyen/npd-video-factory-v2` repository.
+- No Video Factory runtime, provider, publishing, or production action was
   performed in this documentation milestone.
-- Video Factory remains an independently gated workstream even though it shares
-  this repository with Agent Hub.
-- Before any future Video Factory action, revalidate its current branch/RC,
-  provider authority, CI provenance, production state, and the relevant owner
-  gate. Historical health or handoff evidence is not current execution authority.
 
 ## Shared safety boundaries
 
@@ -102,12 +103,15 @@ NEXT_SAFE_ACTION:
   `docs/NPD_UNIFIED_SALEHUB_AGENTHUB_FULL_HANDOFF.md`
 - Video Factory technical history:
   `docs/technical-handoff.md`
+- Consolidated Agent Hub status and roadmap:
+  `docs/AGENT_HUB_HANDOFF_AND_ROADMAP_20260911.md`
 
 ## Latest milestone
 
-- Task: execute the exact approved Limited Phase 9 Pilot Fresh V2 operation.
-- Result: terminal fail-closed abort during the first remote read-only preflight,
-  before claim, staging, or target mutation.
+- Task: create the consolidated Agent Hub handoff, implementation inventory and
+  gated roadmap after the terminal pilot abort.
+- Result: source/history/evidence reconciled and the remaining product,
+  telemetry, Redis, custody and V1-deprecation work separated by owner gate.
 - Production writes: none.
 - Real provider calls: none.
 - Next safe action: wait for a separate owner task authorizing read-only RCA of
