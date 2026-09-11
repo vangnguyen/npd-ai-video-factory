@@ -57,8 +57,8 @@ NEXT_SAFE_ACTION:
   `43a1cca354d12893ee33b6e43cd9117794f78e04`.
 - Approved operation:
   `PHASE9-LIMITED-PILOT-FRESH-V2-20260911-d55d6333-c18f-4069-91bb-00ebee26abb5`.
-- State at this handoff milestone:
-  `APPROVED_WAITING_FOR_AUTHORIZED_WINDOW`.
+- Terminal state of the approved operation:
+  `LIMITED_PHASE9_PILOT_ABORTED`.
 - Approved operator-controlled window: 20:00-22:00 ICT on 11 September
   2026; local dispatcher must start before 20:05 ICT and target mutation must
   start before 20:20 ICT.
@@ -66,8 +66,11 @@ NEXT_SAFE_ACTION:
   `npd-agent-hub-prod/agent-hub`. No scheduler, automation, Run Now, second
   claim, or whole-stack Compose action is authorized.
 - Phase 10 and AH-R01 are not authorized. AH-03 and AH-04 remain NO-GO.
-- This documentation milestone did not access or mutate production and did not
-  create an execution claim or stage the candidate.
+- The sealed dispatcher started at `20:00:19.4406767 ICT` and its remote
+  read-only preflight invocation failed closed with
+  `REMOTE_PREFLIGHT_FAILED_e3b0c44298fc1c14`. No final preflight receipt,
+  local/remote claim, candidate staging, target mutation, deployment, UAT, or
+  rollback occurred. The operation must not be retried or reused.
 
 ### Video Factory
 
@@ -102,10 +105,11 @@ NEXT_SAFE_ACTION:
 
 ## Latest milestone
 
-- Task: adopt repository handoff persistence and response receipt protocol.
-- Result: canonical `HANDOFF.md` and `handoff.json` added on a documentation-only
-  branch isolated from the exact-main pilot execution worktree.
+- Task: execute the exact approved Limited Phase 9 Pilot Fresh V2 operation.
+- Result: terminal fail-closed abort during the first remote read-only preflight,
+  before claim, staging, or target mutation.
 - Production writes: none.
 - Real provider calls: none.
-- Next safe action: wait for a new user task; do not infer authority from this
-  handoff entry.
+- Next safe action: wait for a separate owner task authorizing read-only RCA of
+  the remote preflight failure. Do not retry this operation or infer authority
+  to create a replacement gate.

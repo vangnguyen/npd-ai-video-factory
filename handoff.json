@@ -1,6 +1,6 @@
 {
   "schema": "npd.repository-handoff.v1",
-  "updated_at_utc": "2026-09-11T03:21:22Z",
+  "updated_at_utc": "2026-09-11T13:00:48.8155182Z",
   "repository": {
     "name": "vangnguyen/npd-ai-video-factory",
     "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
@@ -44,7 +44,7 @@
   },
   "workstreams": {
     "agent_hub": {
-      "state": "APPROVED_WAITING_FOR_AUTHORIZED_WINDOW",
+      "state": "LIMITED_PHASE9_PILOT_ABORTED",
       "operation_id": "PHASE9-LIMITED-PILOT-FRESH-V2-20260911-d55d6333-c18f-4069-91bb-00ebee26abb5",
       "execution_window_ict": "2026-09-11T20:00:00+07:00/2026-09-11T22:00:00+07:00",
       "latest_dispatch_start_ict_exclusive": "2026-09-11T20:05:00+07:00",
@@ -54,7 +54,14 @@
       "phase10_authorized": false,
       "ah_r01_authorized": false,
       "ah_03": "NO_GO",
-      "ah_04": "NO_GO"
+      "ah_04": "NO_GO",
+      "terminal_reason_code": "REMOTE_PREFLIGHT_FAILED_e3b0c44298fc1c14",
+      "dispatch_started_at_utc": "2026-09-11T13:00:19.4406767Z",
+      "final_readonly_preflight_recorded": false,
+      "operation_claim_created": false,
+      "candidate_staged": false,
+      "target_mutation_started": false,
+      "operation_reusable": false
     },
     "video_factory": {
       "state": "UNCHANGED_BY_THIS_MILESTONE",
@@ -64,17 +71,20 @@
     }
   },
   "latest_milestone": {
-    "task": "Adopt repository handoff persistence and response receipt protocol",
-    "verdict": "PASS",
+    "task": "Execute exact approved Limited Phase 9 Pilot Fresh V2 operation",
+    "verdict": "BLOCKED",
     "production_writes": 0,
     "real_provider_calls": 0,
     "actual_cost": 0,
     "scope_drift": "PASS",
-    "next_safe_action": "WAIT_FOR_NEW_USER_TASK"
+    "reason_code": "REMOTE_PREFLIGHT_FAILED_e3b0c44298fc1c14",
+    "next_safe_action": "WAIT_FOR_SEPARATE_READ_ONLY_RCA_TASK"
   },
   "evidence_pointers": [
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-gate-20260910-d55d6333",
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-owner-approval-20260911-d55d6333",
+    "outputs/agent-hub-phase9-limited-pilot-fresh-v2-owner-approval-20260911-d55d6333/LIMITED_PHASE9_PILOT_ABORTED_20260911.json",
+    "outputs/agent-hub-phase9-limited-pilot-fresh-v2-owner-approval-20260911-d55d6333/LIMITED_PHASE9_PILOT_ABORT_REPORT_20260911.md",
     "docs/NPD_UNIFIED_SALEHUB_AGENTHUB_FULL_HANDOFF.md",
     "docs/technical-handoff.md"
   ]
