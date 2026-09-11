@@ -1,0 +1,81 @@
+{
+  "schema": "npd.repository-handoff.v1",
+  "updated_at_utc": "2026-09-11T03:21:22Z",
+  "repository": {
+    "name": "vangnguyen/npd-ai-video-factory",
+    "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
+    "branch": "docs/handoff-receipt-protocol",
+    "source_baseline_sha": "43a1cca354d12893ee33b6e43cd9117794f78e04",
+    "layout": "shared_repository_separate_workstreams"
+  },
+  "receipt_policy": {
+    "required_after_each_task_or_milestone": true,
+    "owner_attachment_required_each_turn": false,
+    "full_evidence_required_when": [
+      "REVIEW_REQUIRED",
+      "HASH_MISMATCH",
+      "SCOPE_DRIFT",
+      "PRODUCTION_WRITE_PREPARATION",
+      "PAID_PROVIDER_CALL_PREPARATION",
+      "MERGE_RELEASE_OR_RC_GATE",
+      "DEEP_AUDIT"
+    ],
+    "execute_next_safe_action_automatically": false,
+    "required_fields": [
+      "WORKSTREAM",
+      "TASK",
+      "VERDICT",
+      "REPO",
+      "BRANCH",
+      "HEAD SHA",
+      "PR",
+      "TESTS",
+      "CI",
+      "PRODUCTION WRITES",
+      "REAL PROVIDER CALLS",
+      "ACTUAL COST",
+      "HANDOFF UPDATED",
+      "HANDOFF SHA-256",
+      "EVIDENCE POINTER",
+      "SCOPE DRIFT",
+      "BLOCKERS",
+      "NEXT_SAFE_ACTION"
+    ]
+  },
+  "workstreams": {
+    "agent_hub": {
+      "state": "APPROVED_WAITING_FOR_AUTHORIZED_WINDOW",
+      "operation_id": "PHASE9-LIMITED-PILOT-FRESH-V2-20260911-d55d6333-c18f-4069-91bb-00ebee26abb5",
+      "execution_window_ict": "2026-09-11T20:00:00+07:00/2026-09-11T22:00:00+07:00",
+      "latest_dispatch_start_ict_exclusive": "2026-09-11T20:05:00+07:00",
+      "latest_target_mutation_start_ict_exclusive": "2026-09-11T20:20:00+07:00",
+      "authorized_target": "npd-agent-hub-prod/agent-hub",
+      "automation_authorized": false,
+      "phase10_authorized": false,
+      "ah_r01_authorized": false,
+      "ah_03": "NO_GO",
+      "ah_04": "NO_GO"
+    },
+    "video_factory": {
+      "state": "UNCHANGED_BY_THIS_MILESTONE",
+      "production_write": false,
+      "real_provider_call": false,
+      "next_action_requires_fresh_state_and_authority": true
+    }
+  },
+  "latest_milestone": {
+    "task": "Adopt repository handoff persistence and response receipt protocol",
+    "verdict": "PASS",
+    "production_writes": 0,
+    "real_provider_calls": 0,
+    "actual_cost": 0,
+    "scope_drift": "PASS",
+    "next_safe_action": "WAIT_FOR_NEW_USER_TASK"
+  },
+  "evidence_pointers": [
+    "outputs/agent-hub-phase9-limited-pilot-fresh-v2-gate-20260910-d55d6333",
+    "outputs/agent-hub-phase9-limited-pilot-fresh-v2-owner-approval-20260911-d55d6333",
+    "docs/NPD_UNIFIED_SALEHUB_AGENTHUB_FULL_HANDOFF.md",
+    "docs/technical-handoff.md"
+  ]
+}
