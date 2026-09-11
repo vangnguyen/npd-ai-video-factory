@@ -74,6 +74,21 @@ NEXT_SAFE_ACTION:
   `REMOTE_PREFLIGHT_FAILED_e3b0c44298fc1c14`. No final preflight receipt,
   local/remote claim, candidate staging, target mutation, deployment, UAT, or
   rollback occurred. The operation must not be retried or reused.
+- Read-only RCA `AH-P9-RCA-01` identified the underlying remote reason as
+  `PROTECTED_SERVICE_DRIFT`: the protected SaleHub service
+  `n8n-marketing-pricing-policy-sync-1` had been recreated before the pilot
+  window, changing the protected-set digest from the sealed
+  `dafe99c16a9f3059cb20d5d5e746c35ae5438668fe8155d5df034a87b02d9302`
+  to `6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e`.
+- The visible `e3b0c44298fc1c14` suffix is the empty-stderr SHA-256 prefix. The
+  remote runtime wrote its sanitized failure reason to stdout, while the local
+  launcher derived its error label from stderr and did not persist the child
+  stdout, child return code, or generated invocation UUID. This capture gap
+  makes the RCA disposition `REVIEW_REQUIRED` even though the causal chain is
+  strongly identified.
+- Repository binding is `VALID`: Agent Hub Phase 9 lives in this intentional
+  Agent Hub/legacy Video Factory integration monorepo. No code was moved or
+  copied between repositories during the RCA.
 
 ### Video Factory
 
@@ -105,15 +120,20 @@ NEXT_SAFE_ACTION:
   `docs/technical-handoff.md`
 - Consolidated Agent Hub status and roadmap:
   `docs/AGENT_HUB_HANDOFF_AND_ROADMAP_20260911.md`
+- Read-only RCA bundle for `AH-P9-RCA-01`:
+  `C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-rca-01-20260911`
 
 ## Latest milestone
 
-- Task: create the consolidated Agent Hub handoff, implementation inventory and
-  gated roadmap after the terminal pilot abort.
-- Result: source/history/evidence reconciled and the remaining product,
-  telemetry, Redis, custody and V1-deprecation work separated by owner gate.
+- Task: `AH-P9-RCA-01`, read-only RCA of the terminal Phase 9 remote preflight
+  failure.
+- Result: `REVIEW_REQUIRED`. The fail-closed condition was protected-service
+  drift caused by a pre-window SaleHub pricing-policy worker rollout; a launcher
+  capture defect masked that reason with the digest of empty stderr.
+- Tests: 12/12 RCA evidence tests passed; all structured evidence parsed; both
+  read-only diagnostic tools compiled.
 - Production writes: none.
 - Real provider calls: none.
-- Next safe action: wait for a separate owner task authorizing read-only RCA of
-  the remote preflight failure. Do not retry this operation or infer authority
-  to create a replacement gate.
+- Next safe action: Owner audits the RCA and, if accepted, issues a separate
+  source-only remediation task for failure-stream capture and protected-set
+  invalidation/freeze coordination. This is not a pilot-retry action.
