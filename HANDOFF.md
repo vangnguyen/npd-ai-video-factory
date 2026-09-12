@@ -58,14 +58,14 @@ NEXT_SAFE_ACTION:
 
 - Source baseline recorded for the current Phase 9 pilot package:
   `43a1cca354d12893ee33b6e43cd9117794f78e04`.
-- Approved operation:
+- Historical approved operation (terminal, window expired):
   `PHASE9-LIMITED-PILOT-FRESH-V2-20260911-d55d6333-c18f-4069-91bb-00ebee26abb5`.
 - Terminal state of the approved operation:
   `LIMITED_PHASE9_PILOT_ABORTED`.
 - Approved operator-controlled window: 20:00-22:00 ICT on 11 September
   2026; local dispatcher must start before 20:05 ICT and target mutation must
   start before 20:20 ICT.
-- Scope of the approved mutation is only
+- Historical scope of the expired approval was only
   `npd-agent-hub-prod/agent-hub`. No scheduler, automation, Run Now, second
   claim, or whole-stack Compose action is authorized.
 - Phase 10 and AH-R01 are not authorized. AH-03 and AH-04 remain NO-GO.
@@ -89,6 +89,25 @@ NEXT_SAFE_ACTION:
 - Repository binding is `VALID`: Agent Hub Phase 9 lives in this intentional
   Agent Hub/legacy Video Factory integration monorepo. No code was moved or
   copied between repositories during the RCA.
+- Read-only follow-up `AH-P9-RCA-02` on 12 September revalidated the same
+  protected digest, the same single changed service, unchanged Agent Hub target
+  signature/config hashes, and absent claim/attempt/state/stage paths. A real
+  strict-SSH sentinel independently reproduced child exit `2`, reason JSON on
+  stdout and empty stderr. Observation remains `NOT_STARTED`.
+- New branch `fix/agent-hub-p9-preflight-capture-20260912` contains a source-only
+  capture library and 19 passing regression tests. The candidate atomically
+  retains sanitized failure stdout, separate stream hashes/lengths, child return
+  code and invocation UUID before raising a bounded reason. Wrapped transport
+  timeouts/start failures also produce receipts. It has no execution authority
+  and has not been adopted into a pilot dispatcher; the old sealed package is
+  unchanged.
+- Fresh gate preparation is `HOLD_EVIDENCE_INSUFFICIENT`: primary historical
+  child stdout/return code/UUID remain unrecoverable, owner RCA/candidate review
+  is pending, and a freshly sealed dispatcher, protected-set snapshot/change
+  coordination and new bindings are required. No new operation, approval,
+  confirmation token or window was prepared.
+- Phase 9 UAT/business acceptance remains incomplete. Its completion precedes
+  Sales SLA + Backup Copy 2, then AH-T01B, AH-R01 and AH-03. Phase 10 is `NO-GO`.
 
 ### Video Factory
 
@@ -122,18 +141,27 @@ NEXT_SAFE_ACTION:
   `docs/AGENT_HUB_HANDOFF_AND_ROADMAP_20260911.md`
 - Read-only RCA bundle for `AH-P9-RCA-01`:
   `C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-rca-01-20260911`
+- Follow-up RCA and source capture candidate:
+  `docs/AH_P9_REMOTE_PREFLIGHT_RCA_20260912.md`
+- Follow-up evidence bundle for `AH-P9-RCA-02`:
+  `C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an/outputs/ah-p9-rca-20260912`
 
 ## Latest milestone
 
-- Task: `AH-P9-RCA-01`, read-only RCA of the terminal Phase 9 remote preflight
-  failure.
-- Result: `REVIEW_REQUIRED`. The fail-closed condition was protected-service
-  drift caused by a pre-window SaleHub pricing-policy worker rollout; a launcher
-  capture defect masked that reason with the digest of empty stderr.
-- Tests: 12/12 RCA evidence tests passed; all structured evidence parsed; both
-  read-only diagnostic tools compiled.
+- Task: `AH-P9-RCA-02`, read-only RCA revalidation, independent local/remote
+  reproductions and minimal source-only capture candidate.
+- Result: `REVIEW_REQUIRED`. Protected-service drift is independently confirmed;
+  the exact extracted old launcher/verifier behavior reproduces the masked
+  error. The candidate is tested; the immutable historical capture gap remains.
+- Tests: new capture regressions 19/19 PASS; historical RCA tests 12/12 PASS;
+  exact extracted old behavior 2/2 PASS; independent remote sentinel and local
+  exit-code wrapper PASS; historical manifest 14/14 and sealed hashes 4/4 PASS.
+- CI: source exact-main 7/7 PASS reverified; candidate branch CI NOT_RUN.
 - Production writes: none.
 - Real provider calls: none.
-- Next safe action: Owner audits the RCA and, if accepted, issues a separate
-  source-only remediation task for failure-stream capture and protected-set
-  invalidation/freeze coordination. This is not a pilot-retry action.
+- Actual cost: zero.
+- Fresh gate: HOLD; no retry, replacement operation or executable gate prepared.
+- Next safe action: Owner reviews the RCA and source capture candidate. A
+  subsequent source-only task may adopt/reseal a fresh dispatcher and prepare a
+  new gate after protected-set snapshot/change coordination and fresh bindings
+  are sufficient. No pilot execution follows automatically.
