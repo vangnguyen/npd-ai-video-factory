@@ -1,6 +1,6 @@
 {
   "schema": "npd.repository-handoff.v1",
-  "updated_at_utc": "2026-09-12T08:15:56.254993+00:00",
+  "updated_at_utc": "2026-09-12T09:09:39.594327+00:00",
   "repository": {
     "name": "vangnguyen/npd-ai-video-factory",
     "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
@@ -11,7 +11,10 @@
     "handoff_review_base_sha": "00521f72b40cf1ddec6901c2415ef01a0de7844a",
     "initial_rca02_candidate_sha": "9eed9fb69d547726a18d13b517d4230272e9d0eb",
     "review_hardening_code_sha": "4a3ab94ca72398afd11aa10e1509741f5866da91",
-    "rca04_starting_candidate_sha": "fd33418fd8e5b83b6326cc2a80bcbefce5ea58ac"
+    "rca04_starting_candidate_sha": "fd33418fd8e5b83b6326cc2a80bcbefce5ea58ac",
+    "rca05_starting_candidate_sha": "118f91abfacfd24f1f73f2e0781b70590f75ee1f",
+    "rca05_pilot_binding_code_sha": "726bc9c93818d098703aa3f7774197e8590599a4",
+    "rca05_final_exact_head_source": "EXTERNAL_HANDOFF_RECEIPT_WITH_VERIFIED_COMMIT_BLOBS"
   },
   "receipt_policy": {
     "required_after_each_task_or_milestone": true,
@@ -49,30 +52,23 @@
   },
   "workstreams": {
     "agent_hub": {
-      "state": "RCA04_FRESH_EVIDENCE_FULL_SNAPSHOT_SCOPE_BLOCKED",
-      "operation_id": "PHASE9-LIMITED-PILOT-FRESH-V2-20260911-d55d6333-c18f-4069-91bb-00ebee26abb5",
-      "execution_window_ict": "2026-09-11T20:00:00+07:00/2026-09-11T22:00:00+07:00",
-      "latest_dispatch_start_ict_exclusive": "2026-09-11T20:05:00+07:00",
-      "latest_target_mutation_start_ict_exclusive": "2026-09-11T20:20:00+07:00",
+      "state": "RCA05_FULL_SNAPSHOT_PASS_FRESH_GATE_OWNER_REVIEW_FINAL_EXTERNAL_RECEIPT_REQUIRED",
       "authorized_target": "npd-agent-hub-prod/agent-hub",
       "automation_authorized": false,
       "phase10_authorized": false,
       "ah_r01_authorized": false,
       "ah_03": "NO_GO",
       "ah_04": "NO_GO",
-      "terminal_reason_code": "REMOTE_PREFLIGHT_FAILED_e3b0c44298fc1c14",
-      "rca_task": "AH-P9-RCA-04",
+      "rca_task": "AH-P9-RCA-05",
       "rca_underlying_reason": "PROTECTED_SERVICE_DRIFT",
       "rca_failure_layer": [
         "ENVIRONMENT_CONFIG_BINDING",
         "PARSER_WRAPPER_OBSERVABILITY"
       ],
-      "sealed_protected_service_sha256": "dafe99c16a9f3059cb20d5d5e746c35ae5438668fe8155d5df034a87b02d9302",
       "observed_protected_service_sha256": "6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e",
       "changed_protected_service": "n8n-marketing-pricing-policy-sync-1",
       "repository_binding": "VALID",
       "rca_capture_gap": "Historical SSH-child stdout, child return code, and generated invocation UUID were not persisted",
-      "dispatch_started_at_utc": "2026-09-11T13:00:19.4406767Z",
       "final_readonly_preflight_recorded": false,
       "operation_claim_created": false,
       "candidate_staged": false,
@@ -80,17 +76,18 @@
       "operation_reusable": false,
       "observation": "NOT_STARTED",
       "phase9_uat_business_acceptance": "NOT_COMPLETED",
-      "current_authority": "OWNER_DISPOSITION_PREPARATION_RESEAL_ONLY_NOT_EXECUTION",
+      "current_authority": "PREPARATION_ONLY_WITH_EXACT_FOUR_DB0_READ_EVIDENCE_EXCEPTION",
       "historical_execution_window_expired": true,
       "source_capture_candidate": {
         "path": "scripts/ops/agent_hub_phase9/remote_preflight_capture.py",
         "status": "REVIEW_HARDENED_LOCAL_AND_SCOPED_CI_PASS",
-        "adopted_into_pilot_dispatcher": false,
+        "adopted_into_pilot_dispatcher": true,
         "old_sealed_package_modified": false,
         "success_verifier_required": true,
-        "adopted_into_readonly_evidence_collectors": true
+        "adopted_into_readonly_evidence_collectors": true,
+        "full_snapshot_and_package_binding_required": true
       },
-      "fresh_gate_preparation": "HOLD_NOT_PREPARED",
+      "fresh_gate_preparation": "PREPARED_ONLY_IF_CURRENT_HEAD_FINAL_RECEIPT_AND_PACKAGE_PASS",
       "fresh_operation_created": false,
       "fresh_approval_created": false,
       "fresh_confirmation_token_created": false,
@@ -105,13 +102,13 @@
         "AH_R01",
         "AH_03"
       ],
-      "root_cause_disposition": "CONFIRMED_NEW_PROTECTED_BASELINE_AND_FRESH_SUBSTITUTION_ACCEPTED_PREPARATION_ONLY",
+      "root_cause_disposition": "PROTECTED_DRIFT_CONFIRMED_ACCEPTED_NEW_BASELINE_FRESH_SUBSTITUTION_NO_HISTORICAL_CAPTURE_RECOVERY",
       "fresh_passive_snapshot_id": "AH-P9-RCA-03-SNAPSHOT-247cd494-a466-426a-956a-983f01c009af",
-      "full_execution_snapshot_complete": false,
-      "fresh_execution_dependencies_resealed": false,
+      "full_execution_snapshot_complete": true,
+      "fresh_execution_dependencies_resealed": "VERIFY_CURRENT_HEAD_EXTERNAL_FINAL_SEAL",
       "review_package_seal_authorizes_execution": false,
       "candidate_code_head": "4a3ab94ca72398afd11aa10e1509741f5866da91",
-      "fresh_pilot_dispatcher_created": false,
+      "fresh_pilot_dispatcher_created": true,
       "owner_disposition_sha256": "5119b51224d70bfb553f0c5a10727e1b9c8e1cd55ec8cdbdccc063641ef6cb8c",
       "fresh_evidence_sha256": {
         "OWNER_DISPOSITION.json": "5119b51224d70bfb553f0c5a10727e1b9c8e1cd55ec8cdbdccc063641ef6cb8c",
@@ -123,7 +120,36 @@
         "FULL_EXECUTION_SNAPSHOT.json": "693863efb0c9d78b5c668369b17913ef41ef60992d181e2ad055820006d9929a",
         "DISPATCHER_ADOPTION_REVIEW.json": "97bc67b32cb894e6a6044bd7e713cc433c61ee23d25d9e3064f9e0102f440ce0"
       },
-      "owner_execution_approval": "NOT_GRANTED"
+      "owner_execution_approval": "NOT_GRANTED",
+      "immutable_terminal_operation_provenance": {
+        "operation_id": "PHASE9-LIMITED-PILOT-FRESH-V2-20260911-d55d6333-c18f-4069-91bb-00ebee26abb5",
+        "execution_window_ict": "2026-09-11T20:00:00+07:00/2026-09-11T22:00:00+07:00",
+        "latest_dispatch_start_ict_exclusive": "2026-09-11T20:05:00+07:00",
+        "latest_target_mutation_start_ict_exclusive": "2026-09-11T20:20:00+07:00",
+        "terminal_reason_code": "REMOTE_PREFLIGHT_FAILED_e3b0c44298fc1c14",
+        "sealed_protected_service_sha256": "dafe99c16a9f3059cb20d5d5e746c35ae5438668fe8155d5df034a87b02d9302",
+        "dispatch_started_at_utc": "2026-09-11T13:00:19.4406767Z"
+      },
+      "operation_id": "PHASE9-LIMITED-PILOT-RCA05-29db0877-9203-4796-bf3a-8046ab19a0f5",
+      "operation_execution": "NONE",
+      "execution_window": "UNBOUND",
+      "owner_evidence_only_exception_sha256": "f523cc2a7df00459fab545e1a4d8e3a82733555efe09acf93fa819fbf247e4e6",
+      "video_factory_workstream_opened": false,
+      "fresh_evidence_pointers": {
+        "receipt": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\HANDOFF_RECEIPT.json",
+        "dependencies": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\RESEALED_DEPENDENCIES.json",
+        "package_manifest": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\pilot-package\\PACKAGE_MANIFEST.json",
+        "ci": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\CI_EVIDENCE.json"
+      },
+      "fresh_preparation_proof_code_sha": "726bc9c93818d098703aa3f7774197e8590599a4",
+      "current_protected_canonical_sha256": "6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e",
+      "claim": "NONE",
+      "stage": "NONE",
+      "deploy": "NONE",
+      "production_writes": 0,
+      "video_factory_writes": 0,
+      "provider_calls": 0,
+      "actual_cost": 0
     },
     "video_factory": {
       "state": "LEGACY_INTEGRATION_ONLY",
@@ -134,63 +160,52 @@
     }
   },
   "latest_milestone": {
-    "task": "AH-P9-RCA-04",
-    "verdict": "BLOCKED",
-    "owner_dispositions": "ACCEPTED_PREPARATION_ONLY",
-    "root_cause": "PROTECTED_SERVICE_DRIFT_CONFIRMED",
-    "historical_capture": "UNAVAILABLE_FRESH_SUBSTITUTION_ACCEPTED",
+    "task": "AH-P9-RCA-05",
+    "verdict": "REVIEW_REQUIRED",
+    "fresh_gate": "PREPARED_VERIFY_EXACT_FINAL_RECEIPT",
+    "operation_id": "PHASE9-LIMITED-PILOT-RCA05-29db0877-9203-4796-bf3a-8046ab19a0f5",
+    "operation_execution": "NONE",
+    "owner_execution_approval": "NOT_GRANTED",
+    "execution_window": "UNBOUND",
+    "full_execution_snapshot": "PASS_CURRENT_HEAD_FINAL_RECEIPT_REQUIRED",
     "protected_baseline": {
-      "status": "PASS",
       "services": 18,
       "canonical_sha256": "6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e"
     },
-    "backup": "PASS_FRESH_ENCRYPTED_NAMESPACE_AND_ROLLBACK_IMAGE",
-    "restore": "PASS_ACTUAL_10692_OF_10692_AND_RAM_REDIS_PROCESS_RESTART",
-    "roles_counters": "PASS_AGENT_HUB_ONLY_FULL_PILOT_COUNTER_SET_INCOMPLETE",
-    "full_execution_snapshot": "INCOMPLETE_FAIL_CLOSED",
-    "dispatcher_adoption": "READONLY_ONLY_PILOT_NOT_INTEGRATED",
-    "reseal": "FRESH_EVIDENCE_PACKAGE_ONLY_PILOT_DEPENDENCIES_NOT_RESEALED",
+    "counter_values": {
+      "video_factory_job_count": 12,
+      "video_factory_queue_count": 0,
+      "video_factory_processing_count": 0,
+      "video_factory_in_flight_count": 0
+    },
+    "owner_evidence_only_exception": "ACCEPTED_FOUR_COUNTER_READS_ONLY",
+    "exception_sha256": "f523cc2a7df00459fab545e1a4d8e3a82733555efe09acf93fa819fbf247e4e6",
+    "dispatcher": "PASS_ACTUAL_SEALED_READONLY_PREFLIGHT",
     "tests": {
-      "capture": 29,
+      "ops": 68,
       "agent_hub": 299,
-      "mock_business_eval": 20,
-      "historical_rca": 12,
-      "gate_fixtures": 31,
-      "transport_fixtures": 24,
-      "extracted_reproduction": 2,
-      "remote_fixtures": 4,
-      "all_pass": true
+      "mock_eval": 20,
+      "rca": 12,
+      "gate_fixture": 31,
+      "transport_fixture": 24,
+      "tamper": 10
     },
-    "ci": {
-      "exact_final_head_evidence": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-04-20260912\\CI_EVIDENCE.json",
-      "new_head_status": "VERIFY_EXTERNAL_RECEIPT"
-    },
-    "fresh_gate": "HOLD_NOT_PREPARED",
-    "operation": "NONE",
-    "owner_execution_approval": "NOT_GRANTED",
+    "ci": "VERIFY_ACTUAL_CURRENT_HEAD_CI_EVIDENCE_JSON",
+    "reseal": "VERIFY_RESEALED_DEPENDENCIES_JSON_AND_EXTERNAL_PACKAGE_ANCHOR",
+    "final_receipt": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\HANDOFF_RECEIPT.json",
     "claim": "NONE",
     "stage": "NONE",
     "deploy": "NONE",
     "production_writes": 0,
-    "real_provider_calls": 0,
+    "video_factory_writes": 0,
+    "provider_calls": 0,
     "actual_cost": 0,
-    "evidence_sha256": {
-      "OWNER_DISPOSITION.json": "5119b51224d70bfb553f0c5a10727e1b9c8e1cd55ec8cdbdccc063641ef6cb8c",
-      "FRESH_PROTECTED_BASELINE.json": "85bc6442c3b96e25b816c6b525041909d4923a98d78e61dab37d985060aa8cd3",
-      "FRESH_BACKUP_MANIFEST.json": "908c94dd9b6047436317c856717a4c84b5e1de8090d33de6631a32914c3d1c44",
-      "FRESH_RESTORE_VALIDATION_ACCEPTED.json": "ae77eb4cd1ed15fe609790c39389268741e7d86ff834034898bd4428af729e95",
-      "FRESH_BACKUP_RESTORE_EVIDENCE.json": "b4db2276a6c3131b497383bde4ecfb5a668c2cf76a04c6e3a057d9ce14e01c1b",
-      "FRESH_ROLE_COUNTER_BINDINGS.json": "f93f5341d6ceb106685beb781c11adb74cf06d21f1421d0a9f28fab4020cb736",
-      "FULL_EXECUTION_SNAPSHOT.json": "693863efb0c9d78b5c668369b17913ef41ef60992d181e2ad055820006d9929a",
-      "DISPATCHER_ADOPTION_REVIEW.json": "97bc67b32cb894e6a6044bd7e713cc433c61ee23d25d9e3064f9e0102f440ce0"
-    },
     "blockers": [
-      "REQUIRED_FRESH_VIDEO_FACTORY_IDLE_COUNTERS_OUTSIDE_CURRENT_AGENT_HUB_ONLY_SCOPE",
-      "FULL_EXECUTION_SNAPSHOT_INCOMPLETE",
-      "PILOT_DISPATCHER_ADOPTION_AND_EXECUTION_DEPENDENCY_RESEAL_NOT_VERIFIED",
-      "PHASE9_UAT_NOT_COMPLETED"
+      "OWNER_EXECUTION_APPROVAL_NOT_GRANTED",
+      "UTC_EXECUTION_WINDOW_UNBOUND",
+      "ACTUAL_BROWSER_UAT_PENDING"
     ],
-    "next_safe_action": "OWNER_REVIEW_SCOPE_COMPATIBLE_FRESH_IDLE_COUNTER_EVIDENCE_PLAN_THEN_ASSIGN_FRESH_FULL_SNAPSHOT_AND_PILOT_DISPATCHER_RESEAL_PREPARATION_ONLY"
+    "next_safe_action": "OWNER REVIEW + EXPLICIT FRESH EXECUTION APPROVAL"
   },
   "evidence_pointers": [
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-gate-20260910-d55d6333",
@@ -206,6 +221,8 @@
     "docs/AH_P9_CANDIDATE_REVIEW_RESEAL_20260912.md",
     "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-03-20260912\\REVIEW_SUMMARY.md",
     "docs/AH_P9_FRESH_EVIDENCE_DISPATCHER_RESEAL_20260912.md",
-    "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-04-20260912\\HANDOFF_RECEIPT.json"
+    "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-04-20260912\\HANDOFF_RECEIPT.json",
+    "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an\\work\\agent-hub-p9-rca\\docs\\AH_P9_COUNTER_EVIDENCE_BRIDGE_PILOT_RESEAL_20260912.md",
+    "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\HANDOFF_RECEIPT.json"
   ]
 }

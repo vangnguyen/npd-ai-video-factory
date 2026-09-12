@@ -184,6 +184,27 @@ NEXT_SAFE_ACTION:
 - Production writes/provider calls/actual cost: 0/0/0. Phase 9 UAT is pending.
 - Runbook: `docs/AH_P9_FRESH_EVIDENCE_DISPATCHER_RESEAL_20260912.md`.
 
+### RCA-05 counter bridge and fresh pilot preparation
+
+- Task: `AH-P9-RCA-05`; verdict `REVIEW_REQUIRED`; execution approval `NOT_GRANTED`.
+- Owner evidence-only exception authorizes exactly four existing DB0 counter
+  reads. Video Factory remains closed to all execution and mutation.
+- Observed counters: job count 12; queue/processing/in-flight 0/0/0. EVAL_RO
+  enforces read-only execution. Primary streams/exit/UUID/UTC are captured.
+- Full snapshot PASS: protected 18/6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e, roles 3/3, fresh namespace/
+  rollback-image evidence and actual 10,692/10,692 isolated restore PASS.
+- Hardened dispatcher is integrated into the actual fresh sealed preparation
+  package. Real read-only preflight and all eleven counter bindings PASS.
+  Local 454 regression checks and ten actual-package tamper cases PASS.
+- New final identity `PHASE9-LIMITED-PILOT-RCA05-29db0877-9203-4796-bf3a-8046ab19a0f5`. The final current-HEAD package/seal,
+  exact-HEAD CI and hashes are defined by the external final receipt. Missing
+  or mismatched receipt/package means HOLD; a handoff alone is not authority.
+- New confirmation is protected outside the public package. UTC window UNBOUND.
+  Historical terminal operation, gate, approval and confirmation stay immutable.
+- Owner review + explicit fresh execution approval is the only next action.
+  No pilot execution/claim/stage/deploy; production/VF writes/calls/cost 0.
+- Runbook: `docs/AH_P9_COUNTER_EVIDENCE_BRIDGE_PILOT_RESEAL_20260912.md`.
+
 ### Video Factory
 
 - This repository retains legacy Video Factory integration and V1
@@ -223,21 +244,22 @@ NEXT_SAFE_ACTION:
 
 ## Latest milestone
 
-- Task: `AH-P9-RCA-04 — Fresh Evidence & Dispatcher Reseal`.
-- Verdict: `BLOCKED`; fresh pilot gate `HOLD_NOT_PREPARED`.
-- Owner dispositions accepted for preparation only; historical capture remains
-  unavailable. Root cause `PROTECTED_SERVICE_DRIFT` remains confirmed.
-- Fresh protected baseline, encrypted namespace/image backup, actual data
-  restore and Agent Hub role/counter evidence PASS within their stated scope.
-- Full execution snapshot is incomplete: four required Video Factory DB0
-  safety counters are unavailable in this workstream's authorized scope.
-  Pilot dispatcher integration and execution dependency reseal therefore stop.
-- Evidence: `C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-rca-04-20260912`.
-- Actual exact receipt-HEAD CI and externally anchored review-package hashes
-  are recorded in that output bundle; no CI PASS is inferred for a new HEAD.
-- Operation/claim/stage/deploy: NONE. Owner execution approval: NOT_GRANTED.
-- Production writes: 0. Real provider calls: 0. Actual provider cost: 0.
-- NEXT_SAFE_ACTION: Owner reviews a way to obtain auditable fresh idle-counter
-  evidence without this task accessing Video Factory, then assigns full fresh
-  snapshot and dispatcher/pilot-dependency reseal preparation. Preserve the
-  current safety checks. No automatic continuation or execution is authorized.
+- Task: `AH-P9-RCA-05 — Cross-Workstream Counter Evidence Bridge & Pilot Reseal`.
+- Verdict: `REVIEW_REQUIRED`; fresh gate `PREPARED` only with the exact current
+  HEAD's externally sealed final receipt and verified package. Otherwise HOLD.
+- Final proposed operation: `PHASE9-LIMITED-PILOT-RCA05-29db0877-9203-4796-bf3a-8046ab19a0f5`. Execution approval: NOT_GRANTED.
+- Four-counter evidence-only exception accepted; counters 12/0/0/0. Full
+  execution snapshot, protected 18-service baseline, fresh data/image evidence,
+  actual restore, role/counter bindings and dispatcher integration PASS.
+- Preparation evidence: `C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-rca-05-20260912`. Final HEAD CI, snapshot,
+  manifests/package/payload/runner/verifier/scope hashes and tamper results
+  are in HANDOFF_RECEIPT.json and RESEALED_DEPENDENCIES.json. Verify them
+  against current Git HEAD before any owner execution decision.
+- Historical capture remains unavailable; fresh substitution is accepted for
+  preparation. The terminal operation/approval/package are immutable.
+- Execution window UNBOUND. Browser UAT/Phase 9 acceptance not complete.
+  DPAPI CurrentUser recovery only; portable copy2 not available.
+- Operation execution/claim/stage/deploy NONE. Production writes/VF writes,
+  real provider calls/actual cost: 0/0/0/0. Other workstreams remain closed.
+- NEXT_SAFE_ACTION: OWNER REVIEW + EXPLICIT FRESH EXECUTION APPROVAL.
+  Stop after gate preparation. Do not execute or open another workstream.
