@@ -141,6 +141,49 @@ NEXT_SAFE_ACTION:
   bindings; separate fresh dispatcher adoption; Phase 9 UAT remains incomplete.
 - Detailed review/runbook: `docs/AH_P9_CANDIDATE_REVIEW_RESEAL_20260912.md`.
 
+### RCA-04 fresh evidence and dispatcher reseal
+
+- Task: `AH-P9-RCA-04`; verdict `BLOCKED`; gate `HOLD_NOT_PREPARED`.
+- Owner accepted protected-service drift and substitution of fresh capture for
+  preparation/reseal only. Historical stdout/exit/UUID remain unavailable;
+  the new captures are not recovered historical primary evidence.
+- Disposition bound to exact starting HEAD `fd33418fd8e5b83b6326cc2a80bcbefce5ea58ac`;
+  receipt SHA-256 `5119b51224d70bfb553f0c5a10727e1b9c8e1cd55ec8cdbdccc063641ef6cb8c`. Execution approval is
+  `NOT_GRANTED`. No operation, token, claim, stage or deployment was created.
+- Fresh protected baseline: 18 services; canonical digest `6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e`;
+  target, file configuration and health match RCA-03. No additional drift.
+- Fresh namespace backup: 10,692 keys (10,375 strings, 302 lists, 15 zsets),
+  read-only source consistency verified and AES-256-GCM encrypted locally.
+  The exact running rollback image was freshly exported and encrypted.
+  A new CurrentUser-DPAPI key is kept outside the public review package.
+- Actual fresh restore: 10,692/10,692 values/types/absolute TTLs verified,
+  including a Redis process restart from the fixture's RAM RDB. Rollback
+  config/OCI/layer integrity PASS. Local fixture had network none, TCP port 0,
+  no published ports/bind mounts/Docker volumes and was removed. Production
+  Redis received read commands only. Application restore/browser UAT not run.
+- Fresh role assignment and whoami: 3/3 PASS. Fresh Agent Hub safety counters
+  PASS, namespace count matches backup, cohort remains negotiation.
+- Full execution snapshot `INCOMPLETE_FAIL_CLOSED`: the existing pilot contract
+  requires four Video Factory DB0 counters. They were not queried under the
+  explicit Agent Hub ONLY / no Video Factory instruction, not assumed zero,
+  and not filled from stale evidence. The guard was preserved.
+- Hardened capture was adopted for actual fresh read-only collectors with a
+  mandatory verifier. Pilot runner/dispatcher/runtime/token/approval/window
+  integration and all affected execution dependencies remain unverified and
+  `NOT_RESEALED`; no execution gate was prepared.
+- Regressions rerun: capture 29, Agent Hub 299, mock business eval 20, historical
+  RCA 12, gate fixtures 31, transport fixtures 24, extracted old behavior 2;
+  all PASS. Four independent fresh remote fail-closed fixtures PASS.
+  Historical fixture output labeled PILOT_PASS is test-only, not a real pilot.
+- Collector failures and corrections are retained: two pre-fixture BytesIO
+  cursor errors, rejected Lua numeric-precision readback, and a rejected role
+  collector import-order error. Only accepted replacements feed the seal.
+- Fresh evidence/package sealing, secret/scope/inventory/tamper results and
+  actual exact final-HEAD CI are saved externally in the RCA-04 output bundle.
+  A docs-only commit does not alter Agent Hub or any other executable tree.
+- Production writes/provider calls/actual cost: 0/0/0. Phase 9 UAT is pending.
+- Runbook: `docs/AH_P9_FRESH_EVIDENCE_DISPATCHER_RESEAL_20260912.md`.
+
 ### Video Factory
 
 - This repository retains legacy Video Factory integration and V1
@@ -180,21 +223,21 @@ NEXT_SAFE_ACTION:
 
 ## Latest milestone
 
-- Task: `AH-P9-RCA-03 — Candidate Review & Reseal Preparation`.
-- Result: `REVIEW_REQUIRED`; source/test/scoped CI/passive-snapshot review PASS,
-  with execution preparation still `HOLD_NOT_PREPARED`.
-- Root cause: protected-service drift plus old wrapper capture loss. Historical
-  primary child stdout/exit/UUID remain unavailable; Owner disposition pending.
-- Tests: capture 29, Agent Hub 299, business eval 20, historical RCA 12, historical
-  gate fixtures 31, transport fixtures 24, extracted old behavior 2; all PASS.
-- CI: real scoped candidate 3/3 PASS at hardening code head; exact-main 7/7 PASS.
-  Final receipt-head results are linked in the output `CI_EVIDENCE.json`.
-- Snapshot: accepted fresh passive snapshot and independent failure sentinel
-  PASS; full execution role/counter/backup/window bindings not collected.
-- Reseal: review package only; all pilot execution hashes explicitly unsealed.
-- Evidence: `C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-rca-03-20260912`.
+- Task: `AH-P9-RCA-04 — Fresh Evidence & Dispatcher Reseal`.
+- Verdict: `BLOCKED`; fresh pilot gate `HOLD_NOT_PREPARED`.
+- Owner dispositions accepted for preparation only; historical capture remains
+  unavailable. Root cause `PROTECTED_SERVICE_DRIFT` remains confirmed.
+- Fresh protected baseline, encrypted namespace/image backup, actual data
+  restore and Agent Hub role/counter evidence PASS within their stated scope.
+- Full execution snapshot is incomplete: four required Video Factory DB0
+  safety counters are unavailable in this workstream's authorized scope.
+  Pilot dispatcher integration and execution dependency reseal therefore stop.
+- Evidence: `C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-rca-04-20260912`.
+- Actual exact receipt-HEAD CI and externally anchored review-package hashes
+  are recorded in that output bundle; no CI PASS is inferred for a new HEAD.
+- Operation/claim/stage/deploy: NONE. Owner execution approval: NOT_GRANTED.
 - Production writes: 0. Real provider calls: 0. Actual provider cost: 0.
-- NEXT_SAFE_ACTION: Owner reviews/disposes the bounded historical gap and
-  capture candidate, provides protected-workstream coordination, then assigns
-  a source-only fresh-dispatcher adoption and complete gate-evidence task.
-  Stop here; no execution follows automatically.
+- NEXT_SAFE_ACTION: Owner reviews a way to obtain auditable fresh idle-counter
+  evidence without this task accessing Video Factory, then assigns full fresh
+  snapshot and dispatcher/pilot-dependency reseal preparation. Preserve the
+  current safety checks. No automatic continuation or execution is authorized.
