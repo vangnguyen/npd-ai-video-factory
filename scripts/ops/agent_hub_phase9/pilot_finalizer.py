@@ -10,7 +10,7 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--finalize',action='store_true',required=True)
     for name in ('manifest','head','baseline','approval','confirmation','authority','browser-evidence'):p.add_argument('--'+name,required=True)
     args=p.parse_args();package=Path(__file__).resolve().parent;authority=Path(args.authority)
-    verified=verify_package(package,args.manifest,args.head,args.baseline)
+    verified=runner.verify_followup_package(package,args.manifest,args.head,args.baseline,authority)
     profile=load(package/'RUNTIME_PROFILE.json');profile['_package']=str(package)
     approval=runner.authorize(package,verified,args.manifest,args.approval,args.confirmation,phase='decision')
     browser=load(args.browser_evidence)

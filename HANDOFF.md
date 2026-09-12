@@ -205,6 +205,19 @@ NEXT_SAFE_ACTION:
   No pilot execution/claim/stage/deploy; production/VF writes/calls/cost 0.
 - Runbook: `docs/AH_P9_COUNTER_EVIDENCE_BRIDGE_PILOT_RESEAL_20260912.md`.
 
+### RCA-06 final freshness and exact window preparation
+
+- Task `AH-P9-RCA-06`; reserved fresh identity `PHASE9-LIMITED-PILOT-RCA06-9459bd18-56a2-4bdf-8592-54b7d94abc7b`.
+- RCA-05 counter evidence has expired. Its approval/window material is not
+  execution authority; previous sealed package remains immutable provenance.
+- Exact window/hash, 600-second initial TTL, captured initial dispatch proof
+  and separate forward/UAT/recovery deadlines are enforced fail-closed.
+- Final evidence, window and hashes are defined by the exact committed HEAD's
+  external receipt/package only. Missing/mismatch/expiry means HOLD_NOT_PREPARED.
+- Immutable backup/restore/image evidence is retained; no unrelated RCA redo.
+- Owner execution approval NOT_GRANTED; no pilot/claim/stage/deploy.
+- Runbook: `docs/AH_P9_FINAL_FRESHNESS_WINDOW_BINDING_20260912.md`.
+
 ### Video Factory
 
 - This repository retains legacy Video Factory integration and V1
@@ -244,22 +257,19 @@ NEXT_SAFE_ACTION:
 
 ## Latest milestone
 
-- Task: `AH-P9-RCA-05 — Cross-Workstream Counter Evidence Bridge & Pilot Reseal`.
-- Verdict: `REVIEW_REQUIRED`; fresh gate `PREPARED` only with the exact current
-  HEAD's externally sealed final receipt and verified package. Otherwise HOLD.
-- Final proposed operation: `PHASE9-LIMITED-PILOT-RCA05-29db0877-9203-4796-bf3a-8046ab19a0f5`. Execution approval: NOT_GRANTED.
-- Four-counter evidence-only exception accepted; counters 12/0/0/0. Full
-  execution snapshot, protected 18-service baseline, fresh data/image evidence,
-  actual restore, role/counter bindings and dispatcher integration PASS.
-- Preparation evidence: `C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-rca-05-20260912`. Final HEAD CI, snapshot,
-  manifests/package/payload/runner/verifier/scope hashes and tamper results
-  are in HANDOFF_RECEIPT.json and RESEALED_DEPENDENCIES.json. Verify them
-  against current Git HEAD before any owner execution decision.
-- Historical capture remains unavailable; fresh substitution is accepted for
-  preparation. The terminal operation/approval/package are immutable.
-- Execution window UNBOUND. Browser UAT/Phase 9 acceptance not complete.
-  DPAPI CurrentUser recovery only; portable copy2 not available.
-- Operation execution/claim/stage/deploy NONE. Production writes/VF writes,
-  real provider calls/actual cost: 0/0/0/0. Other workstreams remain closed.
-- NEXT_SAFE_ACTION: OWNER REVIEW + EXPLICIT FRESH EXECUTION APPROVAL.
-  Stop after gate preparation. Do not execute or open another workstream.
+- Task: `AH-P9-RCA-06 — Final Freshness Refresh & Execution Gate Binding`.
+- Verdict `REVIEW_REQUIRED`; gate is PREPARED only when the current HEAD's
+  external final receipt and verified package/window are PASS and still fresh.
+  Otherwise HOLD_NOT_PREPARED. This handoff is not execution authority.
+- Reserved new operation: `PHASE9-LIMITED-PILOT-RCA06-9459bd18-56a2-4bdf-8592-54b7d94abc7b`. Owner execution approval NOT_GRANTED.
+- Exact UTC/ICT window, dispatcher/mutation/UAT/recovery deadlines, fresh
+  four-counter receipt and all affected hashes: `C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-rca-06-20260912`.
+- Old RCA-05 receipt is expired and cannot authorize initial dispatch. The
+  historical terminal operation and previous sealed packages remain immutable.
+- Final real CI, tests, integrity, package seal and copyable draft approval
+  are in HANDOFF_RECEIPT.json, RESEALED_DEPENDENCIES.json and OWNER_APPROVAL_TEXT.txt.
+- CurrentUser DPAPI only; portable copy2 unavailable; historical primary
+  capture unavailable; actual browser UAT/Phase 9 acceptance remain pending.
+- OPERATION_EXECUTION/CLAIM/STAGE/DEPLOY NONE; production/VF writes, real
+  provider calls and actual cost all zero. Other workstreams remain closed.
+- NEXT_SAFE_ACTION: OWNER REVIEW + EXPLICIT EXECUTION APPROVAL. Stop.

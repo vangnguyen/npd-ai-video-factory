@@ -1,6 +1,6 @@
 {
   "schema": "npd.repository-handoff.v1",
-  "updated_at_utc": "2026-09-12T09:09:39.594327+00:00",
+  "updated_at_utc": "2026-09-12T11:53:16.807294+00:00",
   "repository": {
     "name": "vangnguyen/npd-ai-video-factory",
     "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
@@ -14,7 +14,9 @@
     "rca04_starting_candidate_sha": "fd33418fd8e5b83b6326cc2a80bcbefce5ea58ac",
     "rca05_starting_candidate_sha": "118f91abfacfd24f1f73f2e0781b70590f75ee1f",
     "rca05_pilot_binding_code_sha": "726bc9c93818d098703aa3f7774197e8590599a4",
-    "rca05_final_exact_head_source": "EXTERNAL_HANDOFF_RECEIPT_WITH_VERIFIED_COMMIT_BLOBS"
+    "rca05_final_exact_head_source": "EXTERNAL_HANDOFF_RECEIPT_WITH_VERIFIED_COMMIT_BLOBS",
+    "rca06_starting_candidate_sha": "3da7d355c296658fc18e0f6fb671165b3a78b432",
+    "rca06_final_exact_head_source": "EXTERNAL_HANDOFF_RECEIPT_WITH_VERIFIED_COMMIT_BLOBS"
   },
   "receipt_policy": {
     "required_after_each_task_or_milestone": true,
@@ -52,14 +54,14 @@
   },
   "workstreams": {
     "agent_hub": {
-      "state": "RCA05_FULL_SNAPSHOT_PASS_FRESH_GATE_OWNER_REVIEW_FINAL_EXTERNAL_RECEIPT_REQUIRED",
+      "state": "RCA06_FINAL_FRESH_RECEIPT_WINDOW_AND_CURRENT_HEAD_CI_REQUIRED",
       "authorized_target": "npd-agent-hub-prod/agent-hub",
       "automation_authorized": false,
       "phase10_authorized": false,
       "ah_r01_authorized": false,
       "ah_03": "NO_GO",
       "ah_04": "NO_GO",
-      "rca_task": "AH-P9-RCA-05",
+      "rca_task": "AH-P9-RCA-06",
       "rca_underlying_reason": "PROTECTED_SERVICE_DRIFT",
       "rca_failure_layer": [
         "ENVIRONMENT_CONFIG_BINDING",
@@ -87,7 +89,7 @@
         "adopted_into_readonly_evidence_collectors": true,
         "full_snapshot_and_package_binding_required": true
       },
-      "fresh_gate_preparation": "PREPARED_ONLY_IF_CURRENT_HEAD_FINAL_RECEIPT_AND_PACKAGE_PASS",
+      "fresh_gate_preparation": "PREPARED_ONLY_IF_CURRENT_HEAD_FRESH_FINAL_RECEIPT_AND_PACKAGE_PASS",
       "fresh_operation_created": false,
       "fresh_approval_created": false,
       "fresh_confirmation_token_created": false,
@@ -130,16 +132,18 @@
         "sealed_protected_service_sha256": "dafe99c16a9f3059cb20d5d5e746c35ae5438668fe8155d5df034a87b02d9302",
         "dispatch_started_at_utc": "2026-09-11T13:00:19.4406767Z"
       },
-      "operation_id": "PHASE9-LIMITED-PILOT-RCA05-29db0877-9203-4796-bf3a-8046ab19a0f5",
+      "operation_id": "PHASE9-LIMITED-PILOT-RCA06-9459bd18-56a2-4bdf-8592-54b7d94abc7b",
       "operation_execution": "NONE",
-      "execution_window": "UNBOUND",
+      "execution_window": "EXACT_EXTERNAL_FINAL_RECEIPT_REQUIRED",
       "owner_evidence_only_exception_sha256": "f523cc2a7df00459fab545e1a4d8e3a82733555efe09acf93fa819fbf247e4e6",
       "video_factory_workstream_opened": false,
       "fresh_evidence_pointers": {
-        "receipt": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\HANDOFF_RECEIPT.json",
-        "dependencies": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\RESEALED_DEPENDENCIES.json",
-        "package_manifest": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\pilot-package\\PACKAGE_MANIFEST.json",
-        "ci": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\CI_EVIDENCE.json"
+        "receipt": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-06-20260912\\HANDOFF_RECEIPT.json",
+        "dependencies": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-06-20260912\\RESEALED_DEPENDENCIES.json",
+        "package_manifest": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-06-20260912\\pilot-package\\PACKAGE_MANIFEST.json",
+        "ci": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-06-20260912\\CI_EVIDENCE.json",
+        "window": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-06-20260912\\pilot-package\\EXECUTION_WINDOW.json",
+        "draft_approval": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-06-20260912\\OWNER_APPROVAL_TEXT.txt"
       },
       "fresh_preparation_proof_code_sha": "726bc9c93818d098703aa3f7774197e8590599a4",
       "current_protected_canonical_sha256": "6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e",
@@ -149,7 +153,14 @@
       "production_writes": 0,
       "video_factory_writes": 0,
       "provider_calls": 0,
-      "actual_cost": 0
+      "actual_cost": 0,
+      "rca05_preparation_provenance": {
+        "operation_id": "PHASE9-LIMITED-PILOT-RCA05-29db0877-9203-4796-bf3a-8046ab19a0f5",
+        "window": "UNBOUND",
+        "counter_receipt_expired": true,
+        "receipt_sha256": "cff12b170e2fe4572ea04ffb1be1a9ca87183a97febfe2389925cf993d190f29",
+        "execution_approval": "NOT_GRANTED"
+      }
     },
     "video_factory": {
       "state": "LEGACY_INTEGRATION_ONLY",
@@ -160,39 +171,14 @@
     }
   },
   "latest_milestone": {
-    "task": "AH-P9-RCA-05",
+    "task": "AH-P9-RCA-06",
     "verdict": "REVIEW_REQUIRED",
-    "fresh_gate": "PREPARED_VERIFY_EXACT_FINAL_RECEIPT",
-    "operation_id": "PHASE9-LIMITED-PILOT-RCA05-29db0877-9203-4796-bf3a-8046ab19a0f5",
-    "operation_execution": "NONE",
+    "operation_id": "PHASE9-LIMITED-PILOT-RCA06-9459bd18-56a2-4bdf-8592-54b7d94abc7b",
+    "gate": "PREPARED_ONLY_IF_CURRENT_HEAD_FRESH_FINAL_RECEIPT_AND_PACKAGE_PASS",
     "owner_execution_approval": "NOT_GRANTED",
-    "execution_window": "UNBOUND",
-    "full_execution_snapshot": "PASS_CURRENT_HEAD_FINAL_RECEIPT_REQUIRED",
-    "protected_baseline": {
-      "services": 18,
-      "canonical_sha256": "6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e"
-    },
-    "counter_values": {
-      "video_factory_job_count": 12,
-      "video_factory_queue_count": 0,
-      "video_factory_processing_count": 0,
-      "video_factory_in_flight_count": 0
-    },
-    "owner_evidence_only_exception": "ACCEPTED_FOUR_COUNTER_READS_ONLY",
-    "exception_sha256": "f523cc2a7df00459fab545e1a4d8e3a82733555efe09acf93fa819fbf247e4e6",
-    "dispatcher": "PASS_ACTUAL_SEALED_READONLY_PREFLIGHT",
-    "tests": {
-      "ops": 68,
-      "agent_hub": 299,
-      "mock_eval": 20,
-      "rca": 12,
-      "gate_fixture": 31,
-      "transport_fixture": 24,
-      "tamper": 10
-    },
-    "ci": "VERIFY_ACTUAL_CURRENT_HEAD_CI_EVIDENCE_JSON",
-    "reseal": "VERIFY_RESEALED_DEPENDENCIES_JSON_AND_EXTERNAL_PACKAGE_ANCHOR",
-    "final_receipt": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\HANDOFF_RECEIPT.json",
+    "execution_window": "EXACT_EXTERNAL_FINAL_RECEIPT_REQUIRED",
+    "final_receipt": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-06-20260912\\HANDOFF_RECEIPT.json",
+    "operation_execution": "NONE",
     "claim": "NONE",
     "stage": "NONE",
     "deploy": "NONE",
@@ -200,12 +186,7 @@
     "video_factory_writes": 0,
     "provider_calls": 0,
     "actual_cost": 0,
-    "blockers": [
-      "OWNER_EXECUTION_APPROVAL_NOT_GRANTED",
-      "UTC_EXECUTION_WINDOW_UNBOUND",
-      "ACTUAL_BROWSER_UAT_PENDING"
-    ],
-    "next_safe_action": "OWNER REVIEW + EXPLICIT FRESH EXECUTION APPROVAL"
+    "next_safe_action": "OWNER REVIEW + EXPLICIT EXECUTION APPROVAL"
   },
   "evidence_pointers": [
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-gate-20260910-d55d6333",
@@ -223,6 +204,8 @@
     "docs/AH_P9_FRESH_EVIDENCE_DISPATCHER_RESEAL_20260912.md",
     "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-04-20260912\\HANDOFF_RECEIPT.json",
     "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an\\work\\agent-hub-p9-rca\\docs\\AH_P9_COUNTER_EVIDENCE_BRIDGE_PILOT_RESEAL_20260912.md",
-    "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\HANDOFF_RECEIPT.json"
+    "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\HANDOFF_RECEIPT.json",
+    "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an\\work\\agent-hub-p9-rca\\docs\\AH_P9_FINAL_FRESHNESS_WINDOW_BINDING_20260912.md",
+    "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-06-20260912\\HANDOFF_RECEIPT.json"
   ]
 }

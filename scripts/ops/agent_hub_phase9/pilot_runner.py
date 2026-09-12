@@ -10,7 +10,7 @@ import sys
 from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gate_bindings import GateStop, HASH, load, require, sha, verify_package
+from gate_bindings import GateStop, HASH, fresh, load, require, sha, utc_time, verify_package
 from pilot_dispatcher import dispatch_preflight, verify_execution_approval
 import remote_preflight_capture as capture
 from pilot_transport import invoke, strict_argv, stage_argv
@@ -26,7 +26,7 @@ def publish(directory, name, value):
 
 def confirmation_entropy(contract):
     return ('npd.agent-hub.rca05.confirmation.v1|' + contract['operation_id'] + '|' + contract['candidate_head']
-        + '|' + contract['snapshot_sha256']).encode()
+        + '|' + contract['snapshot_sha256'] + '|' + contract.get('execution_window_sha256', '')).encode()
 
 def dpapi(raw, entropy, *, decrypt):
     import ctypes
@@ -73,6 +73,7 @@ def envelope_for(verified, profile, anchor, invocation, approval=None):
         'execution_scope_sha256':deps['EXECUTION_SCOPE.json'], 'artifact_manifest_sha256':deps['ARTIFACT_MANIFEST.json'],
         'dispatcher_sha256':deps['dispatcher.py'], 'verifier_sha256':deps['verifier.py'],
         'confirmation_contract_sha256':deps['CONFIRMATION_CONTRACT.json'], 'operation_bindings_sha256':sha(Path(profile['_package'])/'OPERATION_BINDINGS.json'),
+        'execution_window_sha256':deps['EXECUTION_WINDOW.json'],
         'final_readonly_preflight_status':'PENDING', 'final_readonly_preflight_sha256':'0'*64,
         'preflight_readonly':True, 'execution_approval':'NOT_GRANTED', 'fresh_explicit_owner_execution_approval':False}
     if approval:
@@ -80,6 +81,67 @@ def envelope_for(verified, profile, anchor, invocation, approval=None):
             'window':approval['window'], 'scope':'AGENT_HUB_ONLY_NO_PROVIDER_NO_VIDEO_FACTORY_EXECUTION',
             'approval_file_sha256':profile['_approval_file_sha256'], 'approval_verbatim_sha256':approval['owner_authorization_receipt_sha256']})
     return envelope
+
+def verify_followup_package(package, anchor, head, baseline, authority, *, current=None):
+    """Recover only a proved, already dispatched transaction; never start a pilot.
+
+    Initial freshness is proven at its captured dispatch/claim times. All package
+    integrity checks still run, and execute() independently requires the same
+    owner approval, confirmation, remote owned claim and current phase deadline.
+    """
+    def owned(name):
+        path = authority / name
+        require(path.is_file() and not path.is_symlink(), 'OWNED_DISPATCH_PROOF_MISSING')
+        return load(path)
+    previous = owned('DISPATCH_CLAIM.json'); claimed = owned('REMOTE_CLAIM.json')
+    preflight = owned('FINAL_READONLY_PREFLIGHT.json')
+    proof = owned('INITIAL_DISPATCH_CAPTURE.json')
+    capture_path = authority / 'captures' / proof.get('capture_name', '')
+    require(capture_path.parent == authority / 'captures' and capture_path.is_file()
+        and not capture_path.is_symlink() and sha(capture_path) == proof.get('sha256'), 'OWNED_CAPTURE_HASH_MISMATCH')
+    receipt = load(capture_path)
+    claimed_at = utc_time(claimed.get('claimed_at'))
+    verified = verify_package(package, anchor, head, baseline, current=claimed_at)
+    operation = verified['manifest']['operation_id']
+    require(claimed_at <= (current or datetime.now(timezone.utc)), 'OWNED_DISPATCH_IN_FUTURE')
+    require(previous.get('operation_id') == operation and previous.get('candidate_head') == head
+        and previous.get('snapshot_sha256') == verified['manifest']['snapshot_sha256']
+        and previous.get('counter_evidence_sha256') == verified['snapshot']['dependencies']['counter_receipt']['sha256']
+        and previous.get('package_manifest_sha256') == anchor
+        and previous.get('execution_window_sha256') == verified['bindings']['dependency_hashes']['EXECUTION_WINDOW.json']
+        and previous.get('window') == {name: verified['window'][name] for name in verified['window'] if name in ('start_utc', 'latest_mutation_utc', 'decision_deadline_utc', 'recovery_deadline_utc')}, 'OWNED_DISPATCH_BINDING_MISMATCH')
+    require(claimed.get('status') == 'CLAIMED' and claimed.get('claim_id') == previous.get('invocation_id')
+        and claimed.get('operation_id') == operation
+        and previous.get('execution_approval') == 'APPROVED'
+        and previous.get('fresh_explicit_owner_execution_approval') is True, 'OWNED_REMOTE_CLAIM_INVALID')
+    require(sha(authority / 'FINAL_READONLY_PREFLIGHT.json') == previous.get('final_readonly_preflight_sha256')
+        and preflight.get('status') == 'PASS' and preflight.get('operation_id') == operation
+        and preflight.get('package_manifest_sha256') == anchor, 'OWNED_PREFLIGHT_BINDING_MISMATCH')
+    require(all(preflight.get(name) == wanted for name, wanted in {'candidate_head': head,
+        'snapshot_sha256': verified['manifest']['snapshot_sha256'], 'protected_services_sha256': baseline,
+        'counter_evidence_sha256': verified['snapshot']['dependencies']['counter_receipt']['sha256'],
+        'safety_counters': verified['snapshot']['safety_counters']}.items()), 'OWNED_FULL_PREFLIGHT_BINDING_MISMATCH')
+    raw = json.dumps(preflight, sort_keys=True).encode() + b'\n'
+    require(receipt.get('binding_id') == operation and receipt.get('child_returncode') == 0
+        and type(receipt.get('child_returncode')) is int and receipt.get('timed_out') is False
+        and receipt.get('stderr', {}).get('length_bytes') == 0
+        and receipt.get('stdout', {}).get('sha256') == hashlib.sha256(raw).hexdigest()
+        and receipt.get('stdout', {}).get('length_bytes') == len(raw)
+        and receipt.get('stdin', {}).get('sha256') == verified['bindings']['dependency_hashes']['remote_runtime.py'], 'OWNED_CAPTURE_INVALID')
+    for name, artifact in {'runner_sha256': 'runner.py', 'rollback_dispatcher_sha256': 'rollback.py',
+        'finalizer_sha256': 'finalizer.py', 'remote_runtime_sha256': 'remote_runtime.py',
+        'execution_scope_sha256': 'EXECUTION_SCOPE.json', 'artifact_manifest_sha256': 'ARTIFACT_MANIFEST.json',
+        'dispatcher_sha256': 'dispatcher.py', 'verifier_sha256': 'verifier.py',
+        'confirmation_contract_sha256': 'CONFIRMATION_CONTRACT.json'}.items():
+        require(previous.get(name) == verified['bindings']['dependency_hashes'][artifact], 'OWNED_DEPENDENCY_MISMATCH')
+    require(previous.get('operation_bindings_sha256') == sha(package / 'OPERATION_BINDINGS.json'), 'OWNED_OPERATION_BINDINGS_MISMATCH')
+    try: require(str(__import__('uuid').UUID(receipt.get('invocation_id'))) == receipt.get('invocation_id'), 'OWNED_CAPTURE_UUID_INVALID')
+    except (ValueError, TypeError, AttributeError): raise GateStop('OWNED_CAPTURE_UUID_INVALID') from None
+    started = utc_time(receipt.get('started_at_utc')); completed = utc_time(receipt.get('completed_at_utc'))
+    require(utc_time(verified['window']['start_utc']) <= started < utc_time(verified['window']['latest_dispatcher_start_utc'])
+        and started <= completed <= claimed_at < utc_time(verified['window']['initial_dispatch_deadline_utc']), 'OWNED_INITIAL_DISPATCH_OUTSIDE_WINDOW')
+    fresh(verified['window']['counter_observed_at_utc'], started)
+    return verified
 
 def observe(package, verified, profile, anchor, envelope, evidence, invoker=invoke):
     argv=strict_argv(profile,['python3','-B','-','preflight',encode(envelope)])
@@ -110,11 +172,13 @@ def execute(package,verified,profile,anchor,approval_path,confirmation_path,auth
     envelope=envelope_for(verified,profile,anchor,invocation,approval)
     if action=='execute':
         require(not (authority/'DISPATCH_CLAIM.json').exists(),'LOCAL_OPERATION_ALREADY_DISPATCHED')
+        verify_execution_approval(approval,verified,anchor,phase='dispatch')
         preflight,path=observe(package,verified,profile,anchor,envelope,authority/'captures',invoker)
         preflight_path=publish(authority,'FINAL_READONLY_PREFLIGHT.json',preflight)
         envelope['final_readonly_preflight_status']='PASS';envelope['final_readonly_preflight_sha256']=sha(preflight_path)
         # Revalidate the approval window and all files after the child and before claim.
         verify_execution_approval(approval,verify_package(package,anchor,profile['candidate_head'],profile['protected_services_sha256']),anchor)
+        publish(authority,'INITIAL_DISPATCH_CAPTURE.json',{'capture_name':path.name,'sha256':sha(path)})
         publish(authority,'DISPATCH_CLAIM.json',envelope)
         claimed=invoke_mode(package,profile,envelope,'claim',authority/'captures',invoker)
         require(claimed.get('status')=='CLAIMED' and claimed.get('claim_id')==invocation,'REMOTE_CLAIM_NOT_ACCEPTED')
@@ -126,7 +190,9 @@ def execute(package,verified,profile,anchor,approval_path,confirmation_path,auth
         require(value.get('status') in {'DEPLOYED_VERIFIED_UAT_PENDING','ROLLED_BACK_VERIFIED','RECOVERY_UNVERIFIED'},'REMOTE_DEPLOY_RESULT_INVALID')
         publish(authority,'REMOTE_DEPLOYMENT.json',value)
         return value
+    verify_followup_package(package,anchor,profile['candidate_head'],profile['protected_services_sha256'],authority)
     previous=load(authority/'DISPATCH_CLAIM.json')
+    require(previous.get('approval_file_sha256') == sha(approval_path), 'OWNED_APPROVAL_CHANGED')
     require(previous.get('operation_id')==profile['operation_id'],'LOCAL_OPERATION_MISMATCH')
     if action=='uat':
         require(isinstance(browser,dict),'REAL_BROWSER_UAT_EVIDENCE_REQUIRED')
@@ -142,7 +208,7 @@ def main(action='execute'):
     parser.add_argument('--approval');parser.add_argument('--confirmation');parser.add_argument('--authority')
     args=parser.parse_args(); require(args.verify_prepared != args.execute,'EXACT_ACTION_REQUIRED')
     package=Path(__file__).resolve().parent
-    verified=verify_package(package,args.manifest,args.head,args.baseline)
+    verified=verify_followup_package(package,args.manifest,args.head,args.baseline,Path(args.authority)) if args.execute and action != 'execute' and args.authority else verify_package(package,args.manifest,args.head,args.baseline)
     if args.verify_prepared:
         print(json.dumps({'status':'PREPARED_FOR_OWNER_REVIEW','operation_id':verified['manifest']['operation_id'], 'execution_approval':'NOT_GRANTED','operation_execution':'NONE'}));return
     require(args.authority is not None,'AUTHORITY_DIRECTORY_REQUIRED')

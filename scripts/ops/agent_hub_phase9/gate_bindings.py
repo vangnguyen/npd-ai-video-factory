@@ -1,7 +1,7 @@
 """Verify a fresh Phase 9 preparation package; this module performs no writes."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
@@ -19,7 +19,8 @@ REQUIRED_PILOT_FILES = {'runner.py', 'dispatcher.py', 'verifier.py', 'remote_run
     'ARTIFACT_MANIFEST.json', 'EXECUTION_SCOPE.json', 'PILOT_PAYLOAD.json',
     'RUNTIME_PROFILE.json', 'OWNER_GATE.md', 'candidate.oci.tar', 'ROLLBACK_CUSTODY_MANIFEST.json',
     'gate_bindings.py', 'pilot_dispatcher.py', 'pilot_transport.py',
-    'evidence/FULL_EXECUTION_SNAPSHOT.json', 'evidence/COUNTER_EVIDENCE.json', 'evidence/PROTECTED_BASELINE.json'}
+    'evidence/FULL_EXECUTION_SNAPSHOT.json', 'evidence/COUNTER_EVIDENCE.json', 'evidence/PROTECTED_BASELINE.json',
+    'EXECUTION_WINDOW.json'}
 HASH = re.compile(r'[0-9a-f]{64}')
 HEAD = re.compile(r'[0-9a-f]{40}')
 
@@ -54,6 +55,34 @@ def fresh(timestamp, current):
     except (TypeError, ValueError, AttributeError): raise GateStop('COUNTER_TIMESTAMP_INVALID') from None
     require(observed.utcoffset() == timezone.utc.utcoffset(observed), 'COUNTER_TIMESTAMP_NOT_UTC')
     require(-5 <= (current - observed).total_seconds() <= MAX_COUNTER_AGE_SECONDS, 'COUNTER_RECEIPT_STALE_OR_FUTURE')
+
+WINDOW_FIELDS = ('start_utc', 'latest_mutation_utc', 'decision_deadline_utc', 'recovery_deadline_utc')
+
+def utc_time(value):
+    try: result = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except (TypeError, ValueError, AttributeError): raise GateStop('EXECUTION_WINDOW_TIMESTAMP_INVALID') from None
+    require(result.utcoffset() == timedelta(0), 'EXECUTION_WINDOW_NOT_UTC')
+    return result
+
+def verify_window(window, counter, operation, head):
+    require(isinstance(window, dict) and window.get('operation_id') == operation
+        and window.get('candidate_head') == head, 'EXECUTION_WINDOW_IDENTITY_MISMATCH')
+    require(window.get('counter_observed_at_utc') == counter.get('observed_at_utc'), 'EXECUTION_WINDOW_RECEIPT_MISMATCH')
+    start, mutation, decision, recovery = [utc_time(window.get(name)) for name in WINDOW_FIELDS]
+    dispatcher = utc_time(window.get('latest_dispatcher_start_utc'))
+    observation = utc_time(counter.get('observed_at_utc'))
+    cutoff = utc_time(window.get('initial_dispatch_deadline_utc'))
+    require(cutoff == observation + timedelta(seconds=MAX_COUNTER_AGE_SECONDS), 'EXECUTION_WINDOW_FRESHNESS_MISMATCH')
+    require(observation <= start < dispatcher <= cutoff - timedelta(seconds=240)
+        and dispatcher < mutation < decision < recovery, 'EXECUTION_WINDOW_ORDER_OR_DISPATCH_MARGIN_INVALID')
+    # Preserve the established 20/75/120-minute forward/UAT/recovery allocation.
+    require(mutation - start >= timedelta(minutes=20) and decision - mutation >= timedelta(minutes=55)
+        and recovery - decision >= timedelta(minutes=45), 'EXECUTION_WINDOW_RECOVERY_BUDGET_INSUFFICIENT')
+    require(window.get('end_utc') == window['recovery_deadline_utc'], 'EXECUTION_WINDOW_END_MISMATCH')
+    ict = timezone(timedelta(hours=7))
+    require(window.get('start_ict') == start.astimezone(ict).isoformat()
+        and window.get('end_ict') == recovery.astimezone(ict).isoformat(), 'EXECUTION_WINDOW_ICT_MISMATCH')
+    return window
 
 def safe_file(directory, relative):
     require(isinstance(relative, str) and bool(relative), 'DEPENDENCY_PATH_INVALID')
@@ -158,8 +187,8 @@ def verify_package(directory, expected_manifest, expected_head, expected_baselin
     require(manifest.get('status') == 'PREPARED_FOR_OWNER_REVIEW' and manifest.get('execution_approval') == 'NOT_GRANTED',
         'PREPARATION_AUTHORITY_INVALID')
     operation = manifest.get('operation_id', '')
-    prefix = 'PHASE9-LIMITED-PILOT-RCA05-'
-    require(operation.startswith(prefix), 'OPERATION_ID_INVALID')
+    prefix = next((p for p in ('PHASE9-LIMITED-PILOT-RCA05-', 'PHASE9-LIMITED-PILOT-RCA06-') if operation.startswith(p)), '')
+    require(bool(prefix), 'OPERATION_ID_INVALID')
     try: require(str(UUID(operation[len(prefix):])) == operation[len(prefix):], 'OPERATION_ID_INVALID')
     except (ValueError, TypeError, AttributeError): raise GateStop('OPERATION_ID_INVALID') from None
     listed = set()
@@ -199,4 +228,12 @@ def verify_package(directory, expected_manifest, expected_head, expected_baselin
         and profile.get('confirmation_token_sha256') == contract['confirmation_token_sha256'], 'CONFIRMATION_CONTRACT_INVALID')
     require(profile.get('candidate_archive_sha256') == bindings['dependency_hashes']['candidate.oci.tar']
         and profile.get('candidate_archive_size') == (directory / 'candidate.oci.tar').stat().st_size, 'CANDIDATE_ARCHIVE_PROFILE_MISMATCH')
-    return {'manifest': manifest, 'snapshot': snapshot, 'bindings': bindings, 'payload': payload}
+    window = verify_window(load(directory / 'EXECUTION_WINDOW.json'), load(directory / 'evidence/COUNTER_EVIDENCE.json'), operation, expected_head)
+    window_sha = sha(directory / 'EXECUTION_WINDOW.json')
+    for value in (manifest, bindings, payload, contract, profile, load(directory / 'EXECUTION_SCOPE.json')):
+        require(value.get('execution_window_sha256') == window_sha, 'EXECUTION_WINDOW_DEPENDENCY_MISMATCH')
+    require(profile.get('bound_window_json') == json.dumps({name: window[name] for name in WINDOW_FIELDS}, sort_keys=True, separators=(',', ':'))
+        and profile.get('initial_dispatch_deadline_utc') == window['initial_dispatch_deadline_utc']
+        and profile.get('latest_dispatcher_start_utc') == window['latest_dispatcher_start_utc']
+        and profile.get('counter_observed_at_utc') == window['counter_observed_at_utc'], 'RUNTIME_WINDOW_BINDING_MISMATCH')
+    return {'manifest': manifest, 'snapshot': snapshot, 'bindings': bindings, 'payload': payload, 'window': window}

@@ -43,7 +43,7 @@ ROLLBACK_TAG = 'npd-agent-hub:phase5'
 TOKEN_SHA = None
 FRESH_BACKUP_MANIFEST_SHA = None
 ROLLBACK_BUNDLE_MANIFEST_SHA = None
-GOVERNANCE_HASH_FIELDS = ('owner_gate_sha256', 'payload_manifest_sha256', 'package_manifest_sha256', 'approval_file_sha256', 'approval_verbatim_sha256', 'runner_sha256', 'rollback_dispatcher_sha256', 'finalizer_sha256', 'remote_runtime_sha256', 'snapshot_sha256', 'counter_evidence_sha256', 'execution_scope_sha256', 'artifact_manifest_sha256', 'dispatcher_sha256', 'verifier_sha256', 'confirmation_contract_sha256', 'operation_bindings_sha256')
+GOVERNANCE_HASH_FIELDS = ('owner_gate_sha256', 'payload_manifest_sha256', 'package_manifest_sha256', 'approval_file_sha256', 'approval_verbatim_sha256', 'runner_sha256', 'rollback_dispatcher_sha256', 'finalizer_sha256', 'remote_runtime_sha256', 'snapshot_sha256', 'counter_evidence_sha256', 'execution_scope_sha256', 'artifact_manifest_sha256', 'dispatcher_sha256', 'verifier_sha256', 'confirmation_contract_sha256', 'operation_bindings_sha256', 'execution_window_sha256')
 BASELINE_TARGET_ID = '60116e3f6ebe9220d25a764531b4742ec57e99cdd08819284636e71735b68b64'
 BASELINE_TARGET_SIGNATURE_SHA = '10231d87a7d1a7a50b4b8826e9fc542013ae3a5dc629538f0e684371244c9d2c'
 BASELINE_PROTECTED_SHA = None
@@ -68,6 +68,11 @@ CANDIDATE_HEAD = None
 SNAPSHOT_SHA = None
 COUNTER_EVIDENCE_SHA = None
 OWNER_EXCEPTION_SHA = None
+BOUND_WINDOW_JSON = None
+EXECUTION_WINDOW_SHA = None
+COUNTER_OBSERVED_AT = None
+INITIAL_DISPATCH_DEADLINE = None
+LATEST_DISPATCHER_START = None
 
 class GateStop(Exception):
     pass
@@ -353,11 +358,13 @@ def parse_envelope(value, *, require_preflight=True):
     require(re.fullmatch('[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', str(envelope.get('invocation_id', ''))) is not None, 'INVOCATION_ID_INVALID')
     expected = {'confirmation_token_sha256': TOKEN_SHA, 'fresh_backup_manifest_sha256': FRESH_BACKUP_MANIFEST_SHA, 'rollback_bundle_manifest_sha256': ROLLBACK_BUNDLE_MANIFEST_SHA, 'main_sha': MAIN_SHA, 'candidate_head': CANDIDATE_HEAD, 'snapshot_sha256': SNAPSHOT_SHA, 'counter_evidence_sha256': COUNTER_EVIDENCE_SHA, 'protected_services_sha256': BASELINE_PROTECTED_SHA, 'owner_exception_receipt_sha256': OWNER_EXCEPTION_SHA}
     require(all((isinstance(wanted, str) and envelope.get(key) == wanted for key, wanted in expected.items())), 'AUTHORIZATION_BINDING_MISMATCH')
+    require(EXECUTION_WINDOW_SHA is not None and envelope.get('execution_window_sha256') == EXECUTION_WINDOW_SHA, 'EXECUTION_WINDOW_HASH_MISMATCH')
     require(all((re.fullmatch('[0-9a-f]{64}', str(envelope.get(key, ''))) for key in GOVERNANCE_HASH_FIELDS)), 'GOVERNANCE_HASH_INVALID')
     if require_preflight:
         require(envelope.get('fresh_explicit_owner_execution_approval') is True and envelope.get('execution_approval') == 'APPROVED', 'OWNER_EXECUTION_APPROVAL_NOT_GRANTED')
         require(envelope.get('scope') == 'AGENT_HUB_ONLY_NO_PROVIDER_NO_VIDEO_FACTORY_EXECUTION', 'EXECUTION_SCOPE_INVALID')
         window = envelope.get('window')
+        require(BOUND_WINDOW_JSON is not None and window == json.loads(BOUND_WINDOW_JSON), 'EXECUTION_WINDOW_PACKAGE_MISMATCH')
         require(isinstance(window, dict) and set(window) == {'start_utc', 'latest_mutation_utc', 'decision_deadline_utc', 'recovery_deadline_utc'}, 'FRESH_EXECUTION_WINDOW_UNBOUND')
         try:
             times = [datetime.fromisoformat(window[key].replace('Z', '+00:00')) for key in ('start_utc', 'latest_mutation_utc', 'decision_deadline_utc', 'recovery_deadline_utc')]
@@ -497,13 +504,17 @@ def preflight(envelope: dict[str, object]) -> dict[str, object]:
 def claim(envelope: dict[str, object]) -> dict[str, object]:
     now = utc_now()
     require(mutation_start_allowed(now), 'CLAIM_OUTSIDE_MUTATION_START_WINDOW')
+    require(INITIAL_DISPATCH_DEADLINE is not None and now < datetime.fromisoformat(INITIAL_DISPATCH_DEADLINE), 'INITIAL_COUNTER_RECEIPT_EXPIRED')
     require(not CLAIM_PATH.exists() and (not ATTEMPT_DIR.exists()), 'OPERATION_ALREADY_CLAIMED_OR_ATTEMPTED')
     baseline = verify_baseline(exact_container=True)
     prepare_claim_parents()
     require(mutation_start_allowed(utc_now()), 'CLAIM_WINDOW_EXCEEDED_DURING_PREFLIGHT')
+    require(utc_now() < datetime.fromisoformat(INITIAL_DISPATCH_DEADLINE), 'INITIAL_COUNTER_RECEIPT_EXPIRED_DURING_PREFLIGHT')
     require(not CLAIM_PATH.exists() and (not ATTEMPT_DIR.exists()), 'OPERATION_RACED_BEFORE_CLAIM')
     claim_id = str(envelope['invocation_id'])
     claim_value = {'schema': 'npd.phase9.limited-pilot-rca05.operation-claim.v1', 'status': 'CLAIMED', 'operation_id': OPERATION, 'claim_id': claim_id, 'invocation_id': claim_id, 'operator': 'Codex', 'claimed_at': iso(now), 'target': PROJECT + '/' + SERVICE, 'owner_gate_sha256': envelope['owner_gate_sha256'], 'payload_manifest_sha256': envelope['payload_manifest_sha256'], 'package_manifest_sha256': envelope['package_manifest_sha256'], 'approval_file_sha256': envelope['approval_file_sha256'], 'approval_verbatim_sha256': envelope['approval_verbatim_sha256'], 'runner_sha256': envelope['runner_sha256'], 'rollback_dispatcher_sha256': envelope['rollback_dispatcher_sha256'], 'finalizer_sha256': envelope['finalizer_sha256'], 'remote_runtime_sha256': envelope['remote_runtime_sha256'], 'confirmation_token_sha256': TOKEN_SHA, 'fresh_backup_manifest_sha256': FRESH_BACKUP_MANIFEST_SHA, 'rollback_bundle_manifest_sha256': ROLLBACK_BUNDLE_MANIFEST_SHA, 'main_sha': MAIN_SHA, 'candidate_manifest': CANDIDATE_MANIFEST, 'candidate_config': CANDIDATE_CONFIG, 'candidate_archive_sha256': CANDIDATE_ARCHIVE_SHA, 'rollback_config': ROLLBACK_CONFIG, 'cohort': SUBJECT, 'final_readonly_preflight_sha256': envelope['final_readonly_preflight_sha256'], 'plaintext_credential_present': False, 'reset_for_retry_allowed': False, 'snapshot_sha256': envelope['snapshot_sha256'], 'counter_evidence_sha256': envelope['counter_evidence_sha256'], 'execution_scope_sha256': envelope['execution_scope_sha256'], 'artifact_manifest_sha256': envelope['artifact_manifest_sha256'], 'dispatcher_sha256': envelope['dispatcher_sha256'], 'verifier_sha256': envelope['verifier_sha256'], 'confirmation_contract_sha256': envelope['confirmation_contract_sha256'], 'operation_bindings_sha256': envelope['operation_bindings_sha256']}
+    claim_value['execution_window_sha256'] = envelope['execution_window_sha256']
+    claim_value['window'] = envelope['window']
     create_exclusive(CLAIM_PATH, json.dumps(claim_value, indent=2, sort_keys=True).encode() + b'\n')
     require(read_claim(claim_id, envelope) == claim_value, 'CLAIM_READBACK_MISMATCH')
     ATTEMPT_DIR.mkdir(mode=448)

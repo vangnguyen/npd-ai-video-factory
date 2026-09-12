@@ -7,7 +7,10 @@ BINDINGS = {'OPERATION': 'operation_id', 'TOKEN_SHA': 'confirmation_token_sha256
     'BASELINE_PROTECTED_SHA': 'protected_services_sha256', 'CANDIDATE_HEAD': 'candidate_head',
     'SNAPSHOT_SHA': 'snapshot_sha256', 'COUNTER_EVIDENCE_SHA': 'counter_evidence_sha256',
     'OWNER_EXCEPTION_SHA': 'owner_exception_receipt_sha256', 'CANDIDATE_TAG': 'candidate_tag',
-    'CANDIDATE_ARCHIVE_SHA': 'candidate_archive_sha256', 'CANDIDATE_ARCHIVE_SIZE': 'candidate_archive_size'}
+    'CANDIDATE_ARCHIVE_SHA': 'candidate_archive_sha256', 'CANDIDATE_ARCHIVE_SIZE': 'candidate_archive_size',
+    'BOUND_WINDOW_JSON': 'bound_window_json', 'EXECUTION_WINDOW_SHA': 'execution_window_sha256',
+    'COUNTER_OBSERVED_AT': 'counter_observed_at_utc', 'INITIAL_DISPATCH_DEADLINE': 'initial_dispatch_deadline_utc',
+    'LATEST_DISPATCHER_START': 'latest_dispatcher_start_utc'}
 
 def render(template, profile):
     tree = ast.parse(Path(template).read_text(encoding='utf-8'))

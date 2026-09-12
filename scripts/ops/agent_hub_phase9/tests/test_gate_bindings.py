@@ -69,23 +69,37 @@ def fixture(root):
         'dependencies': {name: {'path': f, 'sha256': gate.sha(evidence / f)} for name, f in files.items()}}
     write(evidence / 'FULL_EXECUTION_SNAPSHOT.json', snapshot)
     operation = 'PHASE9-LIMITED-PILOT-RCA05-' + str(uuid4())
+    window = {name: (NOW + timedelta(seconds=offset)).isoformat() for name, offset in
+        zip(gate.WINDOW_FIELDS, (0, 1200, 4500, 7200))}
+    window.update({'operation_id': operation, 'candidate_head': HEAD, 'counter_observed_at_utc': NOW.isoformat(),
+        'latest_dispatcher_start_utc': (NOW + timedelta(seconds=300)).isoformat(),
+        'initial_dispatch_deadline_utc': (NOW + timedelta(seconds=600)).isoformat(), 'end_utc': window['recovery_deadline_utc'],
+        'start_ict': NOW.astimezone(timezone(timedelta(hours=7))).isoformat(),
+        'end_ict': (NOW + timedelta(seconds=7200)).astimezone(timezone(timedelta(hours=7))).isoformat()})
+    write(root / 'EXECUTION_WINDOW.json', window)
     for name in gate.REQUIRED_PILOT_FILES - {'ARTIFACT_MANIFEST.json', 'PILOT_PAYLOAD.json'}:
         if not (root / name).exists():
             write(root / name, {'fixture_only': True})
+    write(root / 'EXECUTION_SCOPE.json', {'fixture_only': True, 'execution_window_sha256': gate.sha(root / 'EXECUTION_WINDOW.json')})
     payload = {'operation_id': operation, 'candidate_head': HEAD, 'snapshot_sha256': gate.sha(evidence / 'FULL_EXECUTION_SNAPSHOT.json'),
+        'execution_window_sha256': gate.sha(root / 'EXECUTION_WINDOW.json'),
         'counter_evidence_sha256': gate.sha(evidence / 'COUNTER_EVIDENCE.json'),
         'execution_scope_sha256': gate.sha(root / 'EXECUTION_SCOPE.json')}
     write(root / 'PILOT_PAYLOAD.json', payload)
     identity = {**payload, 'protected_services_sha256': baseline, 'confirmation_token_sha256': '8' * 64}
     write(root / 'CONFIRMATION_CONTRACT.json', {**identity, 'private_dpapi_blob_sha256': '9' * 64})
     write(root / 'RUNTIME_PROFILE.json', {**identity, 'candidate_archive_sha256': gate.sha(root / 'candidate.oci.tar'),
+        'bound_window_json': json.dumps({name: window[name] for name in gate.WINDOW_FIELDS}, sort_keys=True, separators=(',', ':')),
+        **{name: window[name] for name in ('initial_dispatch_deadline_utc', 'latest_dispatcher_start_utc', 'counter_observed_at_utc')},
         'candidate_archive_size': (root / 'candidate.oci.tar').stat().st_size})
     dependencies = {name: gate.sha(root / name) for name in gate.REQUIRED_PILOT_FILES - {'ARTIFACT_MANIFEST.json'}}
     write(root / 'ARTIFACT_MANIFEST.json', {'artifact_hashes': dependencies})
     dependencies['ARTIFACT_MANIFEST.json'] = gate.sha(root / 'ARTIFACT_MANIFEST.json')
     write(root / 'OPERATION_BINDINGS.json', {'operation_id': operation, 'candidate_head': HEAD,
+        'execution_window_sha256': gate.sha(root / 'EXECUTION_WINDOW.json'),
         'snapshot_sha256': payload['snapshot_sha256'], 'dependency_hashes': dependencies})
     manifest = {'operation_id': operation, 'candidate_head': HEAD, 'snapshot_sha256': payload['snapshot_sha256'],
+        'execution_window_sha256': gate.sha(root / 'EXECUTION_WINDOW.json'),
         'status': 'PREPARED_FOR_OWNER_REVIEW', 'execution_approval': 'NOT_GRANTED'}
     reseal_outer(root, manifest)
     return baseline, gate.sha(root / 'PACKAGE_MANIFEST.json')

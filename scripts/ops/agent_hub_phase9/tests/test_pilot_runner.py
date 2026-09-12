@@ -41,8 +41,8 @@ class RunnerTests(unittest.TestCase):
             'operation_id':self.verified['bindings']['operation_id'],'candidate_head':HEAD,'package_manifest_sha256':self.anchor,
             'snapshot_sha256':self.verified['bindings']['snapshot_sha256'],'counter_evidence_sha256':self.verified['snapshot']['dependencies']['counter_receipt']['sha256'],
             'dependency_hashes':self.verified['bindings']['dependency_hashes'],'preparation_disposition_used_as_execution_approval':False,
-            'window':dict(zip(('start_utc','latest_mutation_utc','decision_deadline_utc','recovery_deadline_utc'),
-                ((NOW+timedelta(seconds=x)).isoformat() for x in (-1,60,120,180))))}
+            'execution_window_sha256':self.verified['bindings']['dependency_hashes']['EXECUTION_WINDOW.json'],
+            'window':{name:self.verified['window'][name] for name in gate.WINDOW_FIELDS}}
     def test_only_fully_bound_synthetic_approval_passes_verifier(self):
         dispatcher.verify_execution_approval(self.approval(),self.verified,self.anchor,current=NOW)
     def test_historical_identity_approval_denies(self):
