@@ -87,10 +87,17 @@ try:
         evidence_directory=NEW_AUTHORITY / "remote-captures",
         binding_id=envelope["operation_id"],
         invocation_id=envelope["invocation_id"],
+        success_verifier=verify_fresh_preflight_bindings,
     )
 except CaptureStop as error:
     raise Stop(error.reason) from None
 ```
+
+RCA-03 hardening makes `verify_fresh_preflight_bindings` mandatory for success:
+the future dispatcher must define it to validate all fresh response bindings and
+return exactly `True`. A missing/failed verifier, unsafe sanitization flag or
+nonempty success stderr aborts after capture. This sketch is preparation guidance,
+not an adopted dispatcher. See `AH_P9_CANDIDATE_REVIEW_RESEAL_20260912.md`.
 
 This candidate is exercised by the independent diagnostic sentinel, but is not
 adopted into an executable pilot dispatcher. The old sealed package, operation,

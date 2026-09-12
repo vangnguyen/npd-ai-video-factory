@@ -1,6 +1,6 @@
 {
   "schema": "npd.repository-handoff.v1",
-  "updated_at_utc": "2026-09-12T03:41:35.611654+00:00",
+  "updated_at_utc": "2026-09-12T04:07:18.418080+00:00",
   "repository": {
     "name": "vangnguyen/npd-ai-video-factory",
     "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
@@ -8,7 +8,9 @@
     "source_baseline_sha": "43a1cca354d12893ee33b6e43cd9117794f78e04",
     "layout": "agent_hub_and_legacy_video_factory_integration",
     "active_video_factory_repository": "https://github.com/vangnguyen/npd-video-factory-v2.git",
-    "handoff_review_base_sha": "00521f72b40cf1ddec6901c2415ef01a0de7844a"
+    "handoff_review_base_sha": "00521f72b40cf1ddec6901c2415ef01a0de7844a",
+    "initial_rca02_candidate_sha": "9eed9fb69d547726a18d13b517d4230272e9d0eb",
+    "review_hardening_code_sha": "4a3ab94ca72398afd11aa10e1509741f5866da91"
   },
   "receipt_policy": {
     "required_after_each_task_or_milestone": true,
@@ -46,7 +48,7 @@
   },
   "workstreams": {
     "agent_hub": {
-      "state": "RCA_REVIEW_REQUIRED_SOURCE_CAPTURE_CANDIDATE_TESTED",
+      "state": "RCA03_REVIEW_PACKAGE_SEALED_EXECUTION_HOLD",
       "operation_id": "PHASE9-LIMITED-PILOT-FRESH-V2-20260911-d55d6333-c18f-4069-91bb-00ebee26abb5",
       "execution_window_ict": "2026-09-11T20:00:00+07:00/2026-09-11T22:00:00+07:00",
       "latest_dispatch_start_ict_exclusive": "2026-09-11T20:05:00+07:00",
@@ -58,7 +60,7 @@
       "ah_03": "NO_GO",
       "ah_04": "NO_GO",
       "terminal_reason_code": "REMOTE_PREFLIGHT_FAILED_e3b0c44298fc1c14",
-      "rca_task": "AH-P9-RCA-02",
+      "rca_task": "AH-P9-RCA-03",
       "rca_underlying_reason": "PROTECTED_SERVICE_DRIFT",
       "rca_failure_layer": [
         "ENVIRONMENT_CONFIG_BINDING",
@@ -77,15 +79,16 @@
       "operation_reusable": false,
       "observation": "NOT_STARTED",
       "phase9_uat_business_acceptance": "NOT_COMPLETED",
-      "current_authority": "READ_ONLY_RCA_AND_LOCAL_SOURCE_CANDIDATE_ONLY",
+      "current_authority": "READ_ONLY_CANDIDATE_REVIEW_RESEAL_PREPARATION_ONLY",
       "historical_execution_window_expired": true,
       "source_capture_candidate": {
         "path": "scripts/ops/agent_hub_phase9/remote_preflight_capture.py",
-        "status": "LOCAL_AND_INDEPENDENT_REMOTE_SENTINEL_TESTED",
+        "status": "REVIEW_HARDENED_LOCAL_AND_SCOPED_CI_PASS",
         "adopted_into_pilot_dispatcher": false,
-        "old_sealed_package_modified": false
+        "old_sealed_package_modified": false,
+        "success_verifier_required": true
       },
-      "fresh_gate_preparation": "HOLD_EVIDENCE_INSUFFICIENT",
+      "fresh_gate_preparation": "HOLD_NOT_PREPARED",
       "fresh_operation_created": false,
       "fresh_approval_created": false,
       "fresh_confirmation_token_created": false,
@@ -99,7 +102,14 @@
         "AH_T01B",
         "AH_R01",
         "AH_03"
-      ]
+      ],
+      "root_cause_disposition": "CONFIRMED_BOUNDED_HISTORICAL_GAP_OWNER_REVIEW_REQUIRED",
+      "fresh_passive_snapshot_id": "AH-P9-RCA-03-SNAPSHOT-247cd494-a466-426a-956a-983f01c009af",
+      "full_execution_snapshot_complete": false,
+      "fresh_execution_dependencies_resealed": false,
+      "review_package_seal_authorizes_execution": false,
+      "candidate_code_head": "4a3ab94ca72398afd11aa10e1509741f5866da91",
+      "fresh_pilot_dispatcher_created": false
     },
     "video_factory": {
       "state": "LEGACY_INTEGRATION_ONLY",
@@ -110,18 +120,47 @@
     }
   },
   "latest_milestone": {
-    "task": "AH-P9-RCA-02",
+    "task": "AH-P9-RCA-03",
     "verdict": "REVIEW_REQUIRED",
     "production_writes": 0,
     "real_provider_calls": 0,
     "actual_cost": 0,
     "scope_drift": "PASS",
-    "underlying_execution_blocker": "PROTECTED_SERVICE_DRIFT",
-    "visible_error_explanation": "e3b0c44298fc1c14 is the empty-stderr hash; the sealed launcher discards stdout/child rc/invocation UUID",
-    "tests": "capture 19/19 PASS; historical RCA 12/12 PASS; exact extracted sealed behavior 2/2 PASS; remote sentinel and wrapper PASS",
-    "ci": "source exact-main 7/7 PASS reverified; candidate NOT_RUN",
-    "fresh_gate": "HOLD_EVIDENCE_INSUFFICIENT",
-    "next_safe_action": "OWNER_REVIEW_RCA_AND_SOURCE_CAPTURE_CANDIDATE_THEN_SUBSEQUENT_SOURCE_ONLY_FRESH_DISPATCHER_RESEAL_AND_GATE_PREPARATION_IF_EVIDENCE_SUFFICIENT"
+    "root_cause_disposition": "PROTECTED_SERVICE_DRIFT_CONFIRMED_HISTORICAL_CAPTURE_GAP_OWNER_REVIEW_PENDING",
+    "diff_review": "ALL_SIX_INITIAL_DIFF_FILES_AND_REVIEW_HARDENING_REVIEWED",
+    "tests": {
+      "capture": 29,
+      "agent_hub": 299,
+      "business_evals": 20,
+      "historical_rca": 12,
+      "historical_gate_fixtures": 31,
+      "transport_fixtures": 24,
+      "exact_old_behavior": 2,
+      "all_pass": true
+    },
+    "ci": {
+      "scoped_code_head": "4a3ab94ca72398afd11aa10e1509741f5866da91",
+      "code_head_status": "PASS_3_OF_3",
+      "code_head_run_id": 34671833149,
+      "source_exact_main_status": "PASS_7_OF_7",
+      "receipt_head_evidence": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-03-20260912\\CI_EVIDENCE.json"
+    },
+    "snapshot": {
+      "id": "AH-P9-RCA-03-SNAPSHOT-247cd494-a466-426a-956a-983f01c009af",
+      "status": "PASS_PASSIVE_ONLY",
+      "protected_count": 18,
+      "full_execution_gate_evidence": false
+    },
+    "reseal": "REVIEW_PACKAGE_ONLY_EXECUTION_DEPENDENCIES_NOT_RESEALED",
+    "fresh_gate": "HOLD_NOT_PREPARED",
+    "blockers": [
+      "OWNER_RCA_CAPTURE_REVIEW_AND_HISTORICAL_GAP_DISPOSITION",
+      "PROTECTED_WORKSTREAM_COORDINATION_MISSING",
+      "FULL_FRESH_EXECUTION_SNAPSHOT_BACKUP_RESTORE_ROLE_COUNTER_BINDINGS_MISSING",
+      "FRESH_PILOT_DISPATCHER_AND_EXECUTION_DEPENDENCY_RESEAL_NOT_PREPARED",
+      "PHASE9_UAT_NOT_COMPLETED"
+    ],
+    "next_safe_action": "OWNER_REVIEW_DISPOSITION_AND_COORDINATION_THEN_ASSIGN_SOURCE_ONLY_FRESH_DISPATCHER_AND_COMPLETE_GATE_EVIDENCE_TASK"
   },
   "evidence_pointers": [
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-gate-20260910-d55d6333",
@@ -133,6 +172,8 @@
     "docs/NPD_UNIFIED_SALEHUB_AGENTHUB_FULL_HANDOFF.md",
     "docs/technical-handoff.md",
     "docs/AH_P9_REMOTE_PREFLIGHT_RCA_20260912.md",
-    "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an/outputs/ah-p9-rca-20260912/RCA_SUMMARY.md"
+    "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an/outputs/ah-p9-rca-20260912/RCA_SUMMARY.md",
+    "docs/AH_P9_CANDIDATE_REVIEW_RESEAL_20260912.md",
+    "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-03-20260912\\REVIEW_SUMMARY.md"
   ]
 }

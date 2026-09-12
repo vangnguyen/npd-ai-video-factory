@@ -109,6 +109,38 @@ NEXT_SAFE_ACTION:
 - Phase 9 UAT/business acceptance remains incomplete. Its completion precedes
   Sales SLA + Backup Copy 2, then AH-T01B, AH-R01 and AH-03. Phase 10 is `NO-GO`.
 
+### RCA-03 review and reseal preparation
+
+- Task: `AH-P9-RCA-03`; verdict `REVIEW_REQUIRED`.
+- Original candidate and canonical handoff bindings were verified clean.
+  The complete exact-main `43a1cca...` to `9eed9fb...` diff was reviewed.
+- Source hardening `4a3ab94ca72398afd11aa10e1509741f5866da91` requires a
+  successful full-binding verifier, explicit sanitization, integer child exit
+  and empty stderr for PASS. Capture remains library-only; no pilot adoption.
+- Tests: capture 29/29; Agent Hub 299/299; business eval 20/20; historical RCA
+  12/12; historical gate fixtures 31/31; transport fixtures 24/24; extracted
+  old launcher/verifier 2/2; fresh independent remote failure sentinel PASS.
+- Actual scoped candidate CI at the code head: 3/3 PASS on Linux/Windows;
+  source exact-main 7/7 PASS. Final receipt-head CI evidence is saved externally
+  in the assigned output bundle, without a self-referential handoff commit.
+- Accepted snapshot `AH-P9-RCA-03-SNAPSHOT-247cd494-a466-426a-956a-983f01c009af`
+  is passive-only: 18 protected services, target/config unchanged from RCA-02,
+  health/ready PASS, restart 0, no historical claim/attempt/state/stage paths.
+  Protected digest remains `6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e`.
+- Two rejected diagnostic attempts are retained as collector defects, not
+  runtime drift; only the corrected third snapshot is used for sealing.
+- A fresh review package binds source, tests, real CI and accepted snapshot
+  bytes, passive diagnostic payload/collector and local integrity verifier.
+  Its hashes grant no execution authority. Pilot OCI/runner/payload/verifier
+  dependencies remain `NOT_RESEALED`; fresh execution gate `HOLD_NOT_PREPARED`.
+- All 43 historical package/approval files were freshly rehashed unchanged.
+  No execution operation, window, approval, token, claim, staging or deployment
+  was created. Production writes/provider calls/actual provider cost: 0/0/0.
+- Blockers: Owner review and historical-gap disposition; protected-workstream
+  coordination; full fresh execution snapshot/backup/restore/role/counter
+  bindings; separate fresh dispatcher adoption; Phase 9 UAT remains incomplete.
+- Detailed review/runbook: `docs/AH_P9_CANDIDATE_REVIEW_RESEAL_20260912.md`.
+
 ### Video Factory
 
 - This repository retains legacy Video Factory integration and V1
@@ -148,20 +180,21 @@ NEXT_SAFE_ACTION:
 
 ## Latest milestone
 
-- Task: `AH-P9-RCA-02`, read-only RCA revalidation, independent local/remote
-  reproductions and minimal source-only capture candidate.
-- Result: `REVIEW_REQUIRED`. Protected-service drift is independently confirmed;
-  the exact extracted old launcher/verifier behavior reproduces the masked
-  error. The candidate is tested; the immutable historical capture gap remains.
-- Tests: new capture regressions 19/19 PASS; historical RCA tests 12/12 PASS;
-  exact extracted old behavior 2/2 PASS; independent remote sentinel and local
-  exit-code wrapper PASS; historical manifest 14/14 and sealed hashes 4/4 PASS.
-- CI: source exact-main 7/7 PASS reverified; candidate branch CI NOT_RUN.
-- Production writes: none.
-- Real provider calls: none.
-- Actual cost: zero.
-- Fresh gate: HOLD; no retry, replacement operation or executable gate prepared.
-- Next safe action: Owner reviews the RCA and source capture candidate. A
-  subsequent source-only task may adopt/reseal a fresh dispatcher and prepare a
-  new gate after protected-set snapshot/change coordination and fresh bindings
-  are sufficient. No pilot execution follows automatically.
+- Task: `AH-P9-RCA-03 — Candidate Review & Reseal Preparation`.
+- Result: `REVIEW_REQUIRED`; source/test/scoped CI/passive-snapshot review PASS,
+  with execution preparation still `HOLD_NOT_PREPARED`.
+- Root cause: protected-service drift plus old wrapper capture loss. Historical
+  primary child stdout/exit/UUID remain unavailable; Owner disposition pending.
+- Tests: capture 29, Agent Hub 299, business eval 20, historical RCA 12, historical
+  gate fixtures 31, transport fixtures 24, extracted old behavior 2; all PASS.
+- CI: real scoped candidate 3/3 PASS at hardening code head; exact-main 7/7 PASS.
+  Final receipt-head results are linked in the output `CI_EVIDENCE.json`.
+- Snapshot: accepted fresh passive snapshot and independent failure sentinel
+  PASS; full execution role/counter/backup/window bindings not collected.
+- Reseal: review package only; all pilot execution hashes explicitly unsealed.
+- Evidence: `C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-rca-03-20260912`.
+- Production writes: 0. Real provider calls: 0. Actual provider cost: 0.
+- NEXT_SAFE_ACTION: Owner reviews/disposes the bounded historical gap and
+  capture candidate, provides protected-workstream coordination, then assigns
+  a source-only fresh-dispatcher adoption and complete gate-evidence task.
+  Stop here; no execution follows automatically.
