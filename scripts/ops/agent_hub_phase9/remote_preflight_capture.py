@@ -113,12 +113,14 @@ def invoke_preflight(
     evidence_directory: Path,
     binding_id: str,
     invocation_id: str | None = None,
+    success_verifier: Callable[[dict], bool] | None = None,
 ) -> tuple[dict, Path]:
     """Persist streams/rc/UUID first; a nonzero rc always aborts.
 
     ``invoker`` has the existing invoke_argv(argv, input_bytes, timeout)
     contract. Neither argv nor stdin is written: they may carry authorization.
-    Success requires the actual preflight's explicit read-only safety flags.
+    Success requires explicit read-only flags and a caller's binding verifier.
+    The verifier must return exactly True; missing/failed verification aborts.
     """
     identifier = invocation_id or str(uuid4())
     try:
@@ -183,15 +185,26 @@ def invoke_preflight(
         raise CaptureStop("REMOTE_PREFLIGHT_TIMEOUT", capture_path)
     if launch_error:
         raise CaptureStop("REMOTE_PREFLIGHT_LAUNCH_ERROR", capture_path)
+    if type(returncode) is not int:
+        raise CaptureStop("REMOTE_PREFLIGHT_RETURNCODE_INVALID", capture_path)
     if returncode != 0:
         reason = failure["reason"] if failure else "UNCLASSIFIED"
         raise CaptureStop("REMOTE_PREFLIGHT_FAILED:" + reason, capture_path)
     value = _parse(stdout)
-    if (value is None or value.get("status") != "PASS"
+    if (stderr or value is None or value.get("status") != "PASS"
             or value.get("operation_id") != binding_id or value.get("mode") != "preflight"
             or value.get("claim_absent") is not True
             or value.get("candidate_staged") is not False
             or value.get("production_mutation") is not False
-            or value.get("business_system_write") is not False):
+            or value.get("business_system_write") is not False
+            or value.get("raw_secrets_accounts_keys_values_or_pii_emitted") is not False):
         raise CaptureStop("REMOTE_PREFLIGHT_OUTPUT_INVALID", capture_path)
+    if success_verifier is None:
+        raise CaptureStop("REMOTE_PREFLIGHT_VERIFIER_REQUIRED", capture_path)
+    try:
+        verified = success_verifier(value)
+    except Exception:
+        raise CaptureStop("REMOTE_PREFLIGHT_VERIFIER_FAILED", capture_path) from None
+    if verified is not True:
+        raise CaptureStop("REMOTE_PREFLIGHT_VERIFIER_FAILED", capture_path)
     return value, capture_path

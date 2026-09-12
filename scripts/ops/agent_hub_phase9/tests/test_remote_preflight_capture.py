@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from uuid import uuid4
+from unittest.mock import patch
 
 SOURCE = Path(__file__).resolve().parents[1] / "remote_preflight_capture.py"
 SPEC = importlib.util.spec_from_file_location("remote_preflight_capture", SOURCE)
@@ -28,7 +29,8 @@ def failure(**changes):
 def success(**changes):
     value = {"status": "PASS", "operation_id": BINDING, "mode": "preflight",
              "claim_absent": True, "candidate_staged": False,
-             "production_mutation": False, "business_system_write": False}
+             "production_mutation": False, "business_system_write": False,
+             "raw_secrets_accounts_keys_values_or_pii_emitted": False}
     value.update(changes)
     return json.dumps(value).encode()
 
@@ -40,6 +42,7 @@ class CaptureRegressionTests(unittest.TestCase):
         self.directory = Path(self.temporary.name)
 
     def invoke(self, stdout, rc=2, stderr=b"", **options):
+        options.setdefault("success_verifier", lambda value: True)
         def invoker(argv, *, input_bytes, timeout):
             return subprocess.CompletedProcess(argv, rc, stdout, stderr)
         return capture.invoke_preflight(invoker, ["validated-ssh"], input_bytes=b"fixture",
@@ -80,7 +83,8 @@ class CaptureRegressionTests(unittest.TestCase):
         self.assertEqual(json.loads(path.read_bytes())["child_returncode"], 0)
 
     def test_success_requires_all_readonly_flags(self):
-        for field in ("claim_absent", "candidate_staged", "production_mutation", "business_system_write"):
+        for field in ("claim_absent", "candidate_staged", "production_mutation", "business_system_write",
+                      "raw_secrets_accounts_keys_values_or_pii_emitted"):
             with self.subTest(field=field):
                 error, _ = self.stopped(success(**{field: None}), rc=0)
                 self.assertEqual(error.reason, "REMOTE_PREFLIGHT_OUTPUT_INVALID")
@@ -216,6 +220,94 @@ class CaptureRegressionTests(unittest.TestCase):
         self.assertEqual(caught.exception.reason, "REMOTE_PREFLIGHT_FAILED:PROTECTED_SERVICE_DRIFT")
         self.assertEqual(receipt["child_returncode"], 2)
         self.assertEqual(receipt["stderr"]["length_bytes"], 0)
+
+    def test_empty_output_at_zero_exit_still_aborts(self):
+        error, receipt = self.stopped(b"", rc=0)
+        self.assertEqual(error.reason, "REMOTE_PREFLIGHT_OUTPUT_INVALID")
+        self.assertEqual(receipt["stdout"]["content"], "EMPTY")
+
+    def test_zero_exit_with_stderr_never_returns_success(self):
+        error, _ = self.stopped(success(), rc=0, stderr=b"transport warning")
+        self.assertEqual(error.reason, "REMOTE_PREFLIGHT_OUTPUT_INVALID")
+
+    def test_missing_boolean_or_noninteger_exit_never_returns_success(self):
+        for code in (None, False, 0.0, "0"):
+            with self.subTest(code=code):
+                error, _ = self.stopped(success(), rc=code)
+                self.assertEqual(error.reason, "REMOTE_PREFLIGHT_RETURNCODE_INVALID")
+
+    def test_success_requires_explicit_verifier(self):
+        error, _ = self.stopped(success(), rc=0, success_verifier=None)
+        self.assertEqual(error.reason, "REMOTE_PREFLIGHT_VERIFIER_REQUIRED")
+
+    def test_verifier_rejection_exception_and_truthy_value_abort_after_capture(self):
+        def rejects(value):
+            raise ValueError("fixture-only-secret")
+        for verifier in (lambda value: False, lambda value: 1, rejects):
+            with self.subTest(verifier=verifier):
+                error, _ = self.stopped(success(), rc=0, success_verifier=verifier)
+                self.assertEqual(error.reason, "REMOTE_PREFLIGHT_VERIFIER_FAILED")
+                self.assertNotIn(b"fixture-only-secret", error.capture_path.read_bytes())
+
+    def test_verifier_runs_only_after_complete_receipt_and_never_on_failure(self):
+        def verifier(value):
+            receipts = list(self.directory.glob("capture-*.json"))
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(json.loads(receipts[0].read_bytes())["child_returncode"], 0)
+            return True
+        self.invoke(success(), rc=0, success_verifier=verifier)
+        def forbidden(value):
+            self.fail("verifier must not run on a failed child")
+        self.stopped(success(), rc=2, success_verifier=forbidden)
+
+    def test_fsync_or_atomic_publication_failure_never_returns_success(self):
+        for target in ("fsync", "link"):
+            with self.subTest(target=target):
+                with patch.object(capture.os, target, side_effect=OSError("fixture-only-secret")):
+                    with self.assertRaises(capture.CaptureStop) as caught:
+                        self.invoke(success(), rc=0)
+                self.assertEqual(caught.exception.reason, "CAPTURE_EVIDENCE_UNAVAILABLE")
+                self.assertFalse(list(self.directory.glob(".capture-*")))
+
+    def test_real_subprocess_path_quoting_metacharacters_and_binary_stdin_pipe(self):
+        folder = self.directory / "path with spaces and ' quote"
+        folder.mkdir()
+        program = folder / "pipe fixture.py"
+        program.write_text("import sys\nassert sys.stdin.buffer.read() == b'\\x00\\xfffixture\\r\\n'\n"
+            "assert sys.argv[1] == \"literal & | ; $(fixture) ' \\\"\"\n"
+            "sys.stdout.buffer.write(" + repr(failure()) + ")\nraise SystemExit(2)\n", encoding="utf-8")
+        argv = [sys.executable, "-B", str(program), "literal & | ; $(fixture) ' \""]
+        def invoker(arguments, *, input_bytes, timeout):
+            self.assertEqual(arguments, argv)
+            return subprocess.run(arguments, input=input_bytes, capture_output=True, timeout=timeout, shell=False)
+        with self.assertRaises(capture.CaptureStop) as caught:
+            capture.invoke_preflight(invoker, argv, input_bytes=b"\x00\xfffixture\r\n", timeout=5,
+                evidence_directory=self.directory, binding_id=BINDING)
+        receipt = json.loads(caught.exception.capture_path.read_bytes())
+        self.assertEqual(caught.exception.reason, "REMOTE_PREFLIGHT_FAILED:PROTECTED_SERVICE_DRIFT")
+        self.assertEqual(base64.b64decode(receipt["stdout"]["base64"]), failure())
+        self.assertEqual(receipt["child_returncode"], 2)
+        self.assertEqual(receipt["stderr"]["length_bytes"], 0)
+        self.assertNotIn(b"$(fixture)", caught.exception.capture_path.read_bytes())
+
+    def test_real_transport_exit_255_is_unclassified_and_stderr_redacted(self):
+        def invoker(argv, *, input_bytes, timeout):
+            return subprocess.run(argv, input=input_bytes, capture_output=True, timeout=timeout, shell=False)
+        with self.assertRaises(capture.CaptureStop) as caught:
+            capture.invoke_preflight(invoker, [sys.executable, "-B", "-c",
+                "import sys; sys.stderr.write('fixture-only-secret'); raise SystemExit(255)"],
+                input_bytes=b"", timeout=5, evidence_directory=self.directory, binding_id=BINDING)
+        receipt = json.loads(caught.exception.capture_path.read_bytes())
+        self.assertEqual(caught.exception.reason, "REMOTE_PREFLIGHT_FAILED:UNCLASSIFIED")
+        self.assertEqual(receipt["child_returncode"], 255)
+        self.assertNotIn(b"fixture-only-secret", caught.exception.capture_path.read_bytes())
+
+    def test_success_duplicate_keys_and_multiple_documents_never_reach_verifier(self):
+        duplicate = success().replace(b'"PASS"', b'"PASS", "status": "PASS"')
+        for raw in (duplicate, success() + b"{}", b"\xff", b"[]"):
+            with self.subTest(raw=raw):
+                error, _ = self.stopped(raw, rc=0, success_verifier=lambda value: self.fail("must not verify"))
+                self.assertEqual(error.reason, "REMOTE_PREFLIGHT_OUTPUT_INVALID")
 
 
 if __name__ == "__main__":

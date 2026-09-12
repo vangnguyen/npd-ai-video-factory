@@ -1,0 +1,45 @@
+name: Phase 9 Preflight Capture CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/agent-hub-p9-preflight-capture-20260912]
+  pull_request:
+    paths:
+      - scripts/ops/agent_hub_phase9/**
+      - .github/workflows/phase9-preflight-capture-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify capture, verifier, pipe and path regressions
+        run: python -B -m unittest discover -s scripts/ops/agent_hub_phase9/tests -v
+
+  agent-hub:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/agent_hub
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[dev]'
+      - run: pytest -q
+      - run: python -m npd_agent_hub.evals --minimum-pass-rate 1.0
