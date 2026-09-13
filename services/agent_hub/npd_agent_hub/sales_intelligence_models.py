@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .attribution_models import assert_no_raw_pii, assert_pseudonymous_reference
 from .campaign_models import CAMPAIGN_ID_PATTERN
 from .delivery_models import AttributionHeartbeatReceipt, AttributionProducerHeartbeat
+from .sales_sla_contract import SalesSLAStatus
 
 
 SALES_ACTIVITY_CONTRACT_VERSION = "phase-9b-sales-activity-v1"
@@ -20,15 +21,6 @@ class SalesActivityType(str, Enum):
     FIRST_RESPONSE = "first_response"
     APPOINTMENT_BOOKED = "appointment_booked"
     SITE_VISIT_COMPLETED = "site_visit_completed"
-
-
-class SalesSLAStatus(str, Enum):
-    MET = "met"
-    LATE = "late"
-    BREACHED = "breached"
-    PENDING = "pending"
-    OVERDUE_MISSING_EVIDENCE = "overdue_missing_evidence"
-    NOT_EVALUABLE = "not_evaluable"
 
 
 class SalesActivityObservation(BaseModel):

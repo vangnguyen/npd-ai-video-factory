@@ -17,6 +17,7 @@ from .models import (
 from .phase9_sales_shadow_evaluation_models import Phase9SalesShadowEvaluationRequest
 from .sales_intelligence import SalesIntelligenceService
 from .sales_intelligence_models import SalesSLAStatus
+from .sales_sla_contract import report_sla_fields
 from .sales_next_best_action import SalesAwareNextBestActionService
 from .store import HubStore
 
@@ -162,7 +163,7 @@ def analyze_marketing_review(
                     "recommendation_version": recommendation.recommendation_version,
                     "recommended_action_code": recommendation.recommended_action.value,
                     "confidence": recommendation.confidence,
-                    "first_response_sla": sales.first_response_sla.status.value,
+                    **report_sla_fields(sales),
                     "visit_booking_sla": sales.visit_booking_sla.status.value,
                     "completeness_proof_status": proof_status,
                     "completeness_verified": sales.completeness_verified,

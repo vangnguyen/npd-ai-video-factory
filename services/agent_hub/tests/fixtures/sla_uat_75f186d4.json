@@ -1,0 +1,49 @@
+{
+  "campaign_id": "CMP-VGP-VINHTIEN-202609-01",
+  "campaign_present": true,
+  "historical_acceptance_expected": "overdue_missing_evidence",
+  "input_case": {
+    "as_of": "2026-09-13T13:16:00Z",
+    "completeness_proof": null,
+    "observations": [],
+    "subject_ref": "opportunity:6a881aa4bb9606e32"
+  },
+  "provenance": {
+    "live_readonly_input_sha256": "3589a0f13dfe0b229b0797287c88d45ff94f68c576ba2424a150f5df17cba680",
+    "original_uat_sha256": "48076f501e93a095921432bfb2f118e8017b2165256a0838d02b76aad20f77cb",
+    "reconstruction": "Exact stored case and SLA-relevant touchpoint/policy fields. Campaign display/budget fields synthetic; unrelated touchpoint metadata omitted. Current read is not a new UAT.",
+    "report_get_sha256": "60ae69bff90461eb0a8e1ff474613bcd3e11d2ad87720826650ffd374a01d8b2",
+    "six_retained_dump_hashes": {
+      "report": "4a55ca45fa4420eae26749a28564a0f14fdfdd91086cc72bb51cf0d02b0bdb1c",
+      "review": "6dcf3495438647e70009ad6480a0d7d03725052d20dcd5a9a02caa7475e6e58c",
+      "review_global_index": "49f4606eccbff1a66ad24ceeb8a9d7072e4cd62678bbb80368df6e4881ea0c89",
+      "review_subject_index": "49f4606eccbff1a66ad24ceeb8a9d7072e4cd62678bbb80368df6e4881ea0c89",
+      "task": "3d97a9e915668ef657a9538d7304b7b8e175b96a01d836ee56904f1816847bf0",
+      "task_audit": "32013b3d6c8bf35cf24e0fe03a9ca409e042b5357c972df7bd5d728cd04c58d4"
+    },
+    "task_get_sha256": "c3b66e1cef7ef8068a2d8854af1357f37bfc4a8660597db28f695f5f8d915334"
+  },
+  "reported_first_response_sla": "not_evaluable",
+  "sales_handoff": {
+    "first_response_sla_minutes": 15,
+    "visit_booking_sla_hours": 24
+  },
+  "schema": "npd.agent-hub.phase9.sla-production-shaped-fixture.v1",
+  "source_head": "75cc44e45a41a09b0a82e383a5d6ae51e9186ce2",
+  "touchpoints": [
+    {
+      "campaign_id": "CMP-VGP-VINHTIEN-202609-01",
+      "channel": "crm",
+      "event_id": "tpt_a7dcf7ca2f52df45ee25bf2b6d77d2e1",
+      "event_type": "opportunity_stage_changed",
+      "lead_id": null,
+      "metadata": {
+        "stage": "Prospecting",
+        "status": "open"
+      },
+      "occurred_at": "2026-08-21T10:46:27Z",
+      "opportunity_id": "6a881aa4bb9606e32",
+      "source_system": "espocrm"
+    }
+  ]
+}
