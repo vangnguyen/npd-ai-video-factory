@@ -21,7 +21,7 @@ def write(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + '\n', encoding='utf-8')
 
-def fixture(root, *, family='RCA05', operation=None):
+def fixture(root, *, family='RCA05', operation=None, agent_counter_values=None):
     """Build evidence in a temporary directory using explicitly synthetic values."""
     evidence = root / 'evidence'
     signatures = {f'synthetic-service-{i}': f'signature-{i}' for i in range(18)}
@@ -56,6 +56,7 @@ def fixture(root, *, family='RCA05', operation=None):
     write(evidence / 'BACKUP_RESTORE.json', {'status': 'PASS', 'backup_manifest_sha256': gate.sha(evidence / 'BACKUP_MANIFEST.json'),
         'restore_sha256': gate.sha(evidence / 'RESTORE_VALIDATION.json')})
     safety = {name: 0 for name in gate.AGENT_COUNTERS}
+    safety.update(agent_counter_values or {})
     safety.update({'role_assignments': {r: {'matches_expected': True} for r in ('owner', 'operator', 'viewer')},
         'configuration_valid': True, 'external_executor_configured': False, 'namespace_key_count': 10692})
     write(evidence / 'ROLE_COUNTER_BINDINGS.json', {'candidate_head': HEAD, 'role_config_and_redis_safety': safety,

@@ -21,7 +21,7 @@ REQUIRED_PILOT_FILES = {'runner.py', 'dispatcher.py', 'verifier.py', 'remote_run
     'RUNTIME_PROFILE.json', 'OWNER_GATE.md', 'candidate.oci.tar', 'ROLLBACK_CUSTODY_MANIFEST.json',
     'gate_bindings.py', 'pilot_dispatcher.py', 'pilot_transport.py',
     'evidence/FULL_EXECUTION_SNAPSHOT.json', 'evidence/COUNTER_EVIDENCE.json', 'evidence/PROTECTED_BASELINE.json',
-    'EXECUTION_WINDOW.json', 'operation_identity.py'}
+    'EXECUTION_WINDOW.json', 'operation_identity.py', 'capture_hash_contract.py'}
 HASH = re.compile(r'[0-9a-f]{64}')
 HEAD = re.compile(r'[0-9a-f]{40}')
 

@@ -1,0 +1,5 @@
+# Preserve exact production/provenance bytes on Windows and Linux checkout.
+owned_preflight_1953.stdout.bin -text
+owned_preflight_1805.legacy.json -text
+owned_preflight_payload.json -text
+owned_preflight_fixture.json -text

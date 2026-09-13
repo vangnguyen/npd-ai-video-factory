@@ -13,6 +13,7 @@ from uuid import uuid4
 from unittest.mock import patch
 
 SOURCE = Path(__file__).resolve().parents[1] / "remote_preflight_capture.py"
+sys.path.insert(0, str(SOURCE.parent))
 SPEC = importlib.util.spec_from_file_location("remote_preflight_capture", SOURCE)
 capture = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(capture)

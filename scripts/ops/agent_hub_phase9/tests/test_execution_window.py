@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import gate_bindings as gate
 import pilot_dispatcher as dispatcher
 import pilot_runner as runner
+import capture_hash_contract as hashes
 from test_gate_bindings import HEAD, NOW, write
 import test_pilot_runner as runner_tests
 TEMPLATE = runner_tests.TEMPLATE
@@ -52,7 +53,7 @@ class WindowTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(gate.GateStop):
                 gate.verify_window(window, counter, self.verified['manifest']['operation_id'], HEAD)
 
-    def proof(self):
+    def proof(self, formatter=None, primary_updates=None):
         authority = self.root.parent / 'synthetic-authority'
         profile = gate.load(self.root / 'RUNTIME_PROFILE.json')
         profile.update({'_package': str(self.root), 'owner_exception_receipt_sha256': '0' * 64,
@@ -61,25 +62,41 @@ class WindowTests(unittest.TestCase):
         approval = self.approval(); approval['owner_authorization_receipt_sha256'] = '0' * 64
         envelope = runner.envelope_for(self.verified, profile, self.anchor, str(uuid4()), approval)
         primary = {'status': 'PASS', 'operation_id': profile['operation_id'], 'package_manifest_sha256': self.anchor,
+            'checked_at': (NOW + timedelta(seconds=30, microseconds=8167)).isoformat().replace('+00:00', 'Z'),
             'candidate_head': HEAD, 'snapshot_sha256': self.verified['manifest']['snapshot_sha256'],
             'protected_services_sha256': self.baseline, 'counter_evidence_sha256': profile['counter_evidence_sha256'],
             'safety_counters': self.verified['snapshot']['safety_counters']}
+        primary.update(primary_updates or {})
+        raw = (formatter(primary) if formatter else
+            json.dumps(primary, indent=2, sort_keys=True).encode() + b'\n')
+        primary = hashes.parse_payload(raw)
+        digest_bindings = {name: hashes.stdout_hashes(raw)[name]
+            for name in ('hash_contract', 'raw_stdout_sha256', 'canonical_payload_sha256')}
         write(authority / 'FINAL_READONLY_PREFLIGHT.json', primary)
         envelope.update({'final_readonly_preflight_status': 'PASS',
-            'final_readonly_preflight_sha256': gate.sha(authority / 'FINAL_READONLY_PREFLIGHT.json')})
+            'final_readonly_preflight_sha256': gate.sha(authority / 'FINAL_READONLY_PREFLIGHT.json'),
+            **digest_bindings})
         write(authority / 'DISPATCH_CLAIM.json', envelope)
         write(authority / 'REMOTE_CLAIM.json', {'status': 'CLAIMED', 'operation_id': profile['operation_id'],
             'claim_id': envelope['invocation_id'], 'claimed_at': (NOW + timedelta(seconds=50)).isoformat()})
-        raw = json.dumps(primary, sort_keys=True).encode() + b'\n'
-        capture = {'binding_id': profile['operation_id'], 'invocation_id': str(uuid4()),
-            'child_returncode': 0, 'timed_out': False, 'stderr': {'length_bytes': 0},
+        identifier = str(uuid4())
+        raw_name = 'capture-' + identifier + '.stdout.bin'
+        capture_name = 'capture-' + identifier + '.json'
+        (authority / 'captures').mkdir()
+        (authority / 'captures' / raw_name).write_bytes(raw)
+        capture = {'schema': hashes.CAPTURE_SCHEMA, 'raw_transport_bytes': True,
+            'raw_stdout_file': raw_name, **hashes.stdout_hashes(raw),
+            'binding_id': profile['operation_id'], 'invocation_id': identifier,
+            'child_returncode': 0, 'timed_out': False,
+            'stderr': {'length_bytes': 0, 'sha256': hashes.raw_digest(b'')},
+            'raw_stderr_sha256': hashes.raw_digest(b''),
             'stdout': {'length_bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()},
             'stdin': {'sha256': self.verified['bindings']['dependency_hashes']['remote_runtime.py']},
             'started_at_utc': (NOW + timedelta(seconds=10)).isoformat(),
             'completed_at_utc': (NOW + timedelta(seconds=40)).isoformat()}
-        write(authority / 'captures/capture-synthetic.json', capture)
-        write(authority / 'INITIAL_DISPATCH_CAPTURE.json', {'capture_name': 'capture-synthetic.json',
-            'sha256': gate.sha(authority / 'captures/capture-synthetic.json')})
+        write(authority / 'captures' / capture_name, capture)
+        write(authority / 'INITIAL_DISPATCH_CAPTURE.json', {'capture_name': capture_name,
+            'sha256': gate.sha(authority / 'captures' / capture_name), **digest_bindings})
         return authority
 
     def test_stale_receipt_never_starts_new_dispatch_but_owned_recovery_remains_verifiable(self):

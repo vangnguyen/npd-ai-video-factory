@@ -18,6 +18,9 @@ import tempfile
 from typing import Callable
 from uuid import UUID, uuid4
 
+from capture_hash_contract import (CAPTURE_SCHEMA, HASH_CONTRACT, CaptureHashError, parse_payload,
+    raw_digest, stdout_hashes)
+
 
 SAFE_FAILURE_REASONS = frozenset({
     "PROTECTED_SERVICE_DRIFT", "TARGET_BASELINE_DRIFT",
@@ -35,22 +38,10 @@ class CaptureStop(Exception):
         self.capture_path = capture_path
 
 
-def _unique_object(pairs: list[tuple[str, object]]) -> dict:
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError("duplicate JSON key")
-        result[key] = value
-    return result
-
-
 def _parse(raw: bytes) -> dict | None:
-    if len(raw) > 1024 * 1024:
-        return None
     try:
-        value = json.loads(raw, object_pairs_hook=_unique_object)
-        return value if isinstance(value, dict) else None
-    except (ValueError, UnicodeError, RecursionError):
+        return parse_payload(raw)
+    except CaptureHashError:
         return None
 
 
@@ -70,7 +61,7 @@ def _safe_failure(raw: bytes, binding_id: str) -> dict | None:
 def _bytes(value: bytes | str | None) -> bytes:
     if isinstance(value, str):
         return value.encode("utf-8")
-    return value or b""
+    return value if type(value) is bytes else b''
 
 
 def _stream(raw: bytes, *, retain_verbatim: bool = False) -> dict:
@@ -104,6 +95,22 @@ def _publish(directory: Path, invocation_id: str, value: dict) -> Path:
     return target
 
 
+def _publish_raw_stdout(directory: Path, invocation_id: str, raw: bytes) -> Path:
+    """Retain verified owned stdout bytes atomically, without text conversion."""
+    target = directory / ('capture-' + invocation_id + '.stdout.bin')
+    descriptor, temporary = tempfile.mkstemp(prefix='.capture-', dir=directory)
+    temporary_path = Path(temporary)
+    try:
+        with os.fdopen(descriptor, 'wb') as handle:
+            handle.write(raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temporary_path, target)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+    return target
+
+
 def invoke_preflight(
     invoker: Callable,
     argv: list[str],
@@ -114,6 +121,7 @@ def invoke_preflight(
     binding_id: str,
     invocation_id: str | None = None,
     success_verifier: Callable[[dict], bool] | None = None,
+    retain_raw_stdout: bool = False,
 ) -> tuple[dict, Path]:
     """Persist streams/rc/UUID first; a nonzero rc always aborts.
 
@@ -128,6 +136,8 @@ def invoke_preflight(
             raise ValueError("noncanonical UUID")
         if not isinstance(binding_id, str) or not 1 <= len(binding_id) <= 160:
             raise ValueError("invalid binding")
+        if type(retain_raw_stdout) is not bool:
+            raise ValueError('invalid custody flag')
         if not all(character.isascii() and (character.isalnum() or character in "-_.")
                    for character in binding_id):
             raise ValueError("invalid binding")
@@ -162,10 +172,14 @@ def invoke_preflight(
         else:
             stdout, stderr, returncode = b"", b"", None
             launch_error = type(underlying).__name__
+    raw_transport = (stdout is None or type(stdout) is bytes) and (stderr is None or type(stderr) is bytes)
     stdout, stderr = _bytes(stdout), _bytes(stderr)
-    failure = _safe_failure(stdout, binding_id)
+    failure = _safe_failure(stdout, binding_id) if raw_transport else None
+    hash_fields = stdout_hashes(stdout) if raw_transport else {
+        'hash_contract': HASH_CONTRACT, 'raw_stdout_sha256': None,
+        'raw_stdout_length_bytes': None, 'canonical_payload_sha256': None}
     receipt = {
-        "schema": "npd.agent-hub.phase9.remote-preflight-capture.v1",
+        "schema": CAPTURE_SCHEMA,
         "binding_id": binding_id, "invocation_id": identifier,
         "started_at_utc": started,
         "completed_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -175,6 +189,10 @@ def invoke_preflight(
         "stdout": _stream(stdout, retain_verbatim=failure is not None),
         "stderr": _stream(stderr), "validated_failure": failure,
         "argv_or_authorization_persisted": False,
+        "raw_transport_bytes": raw_transport,
+        "raw_stdout_file": ('capture-' + identifier + '.stdout.bin') if retain_raw_stdout else None,
+        "raw_stderr_sha256": raw_digest(stderr) if raw_transport else None,
+        **hash_fields,
     }
     try:
         capture_path = _publish(evidence_directory, identifier, receipt)
@@ -190,6 +208,8 @@ def invoke_preflight(
     if returncode != 0:
         reason = failure["reason"] if failure else "UNCLASSIFIED"
         raise CaptureStop("REMOTE_PREFLIGHT_FAILED:" + reason, capture_path)
+    if not raw_transport:
+        raise CaptureStop('REMOTE_PREFLIGHT_RAW_BYTES_REQUIRED', capture_path)
     value = _parse(stdout)
     if (stderr or value is None or value.get("status") != "PASS"
             or value.get("operation_id") != binding_id or value.get("mode") != "preflight"
@@ -207,4 +227,9 @@ def invoke_preflight(
         raise CaptureStop("REMOTE_PREFLIGHT_VERIFIER_FAILED", capture_path) from None
     if verified is not True:
         raise CaptureStop("REMOTE_PREFLIGHT_VERIFIER_FAILED", capture_path)
+    if retain_raw_stdout:
+        try:
+            _publish_raw_stdout(evidence_directory, identifier, stdout)
+        except OSError:
+            raise CaptureStop('CAPTURE_EVIDENCE_UNAVAILABLE', capture_path) from None
     return value, capture_path

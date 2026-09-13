@@ -1,0 +1,28 @@
+{
+  "canonical_payload_sha256": "7263d908ac179b35974063554983be9ba64bcfbf04d090132cad52a46c866269",
+  "execution_authority": "NONE",
+  "files": {
+    "owned_preflight_1805.legacy.json": {
+      "length_bytes": 1805,
+      "sha256": "bdb66e060d704d885f8277198a2a52e26879fc3ba8d90ac757eb854a50098fb2"
+    },
+    "owned_preflight_1953.stdout.bin": {
+      "length_bytes": 1953,
+      "sha256": "0140bfe2364271a69b96df1e225044e115b47ac795217a35c79daeb0bf60f000"
+    },
+    "owned_preflight_payload.json": {
+      "length_bytes": 1725,
+      "sha256": "b0617a1cb0206d4a27c867ec78a03bd4b3c914702f9648d23de489a872546e2c"
+    }
+  },
+  "fixture_only": true,
+  "hash_contract": "npd.agent-hub.phase9.raw-bytes-and-canonical-json.v1",
+  "historical_operation_retired": true,
+  "legacy_length_bytes": 1805,
+  "legacy_sha256": "bdb66e060d704d885f8277198a2a52e26879fc3ba8d90ac757eb854a50098fb2",
+  "original_receipt_sha256": "92d54e4927764d100ab80e8fc839589aa22f928dc655579f8feb77a537933df6",
+  "raw_length_bytes": 1953,
+  "raw_stdout_sha256": "0140bfe2364271a69b96df1e225044e115b47ac795217a35c79daeb0bf60f000",
+  "schema": "npd.phase9.rca10.production-fixture.v1",
+  "source_custody": "Original FINAL_READONLY_PREFLIGHT.json, exact bytes verified against immutable transport receipt digest/length"
+}

@@ -14,6 +14,8 @@ from gate_bindings import GateStop, HASH, fresh, load, require, sha, utc_time, v
 from operation_identity import DISPATCH_SCHEMA, CONFIRMATION_ENTROPY_PREFIX
 from pilot_dispatcher import dispatch_preflight, verify_execution_approval
 import remote_preflight_capture as capture
+from capture_hash_contract import (CAPTURE_SCHEMA, HASH_CONTRACT, CaptureHashError,
+    canonical_digest, parse_payload, raw_digest, verify_stdout)
 from pilot_transport import invoke, strict_argv, stage_argv
 
 def encode(value): return base64.urlsafe_b64encode(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).decode()
@@ -95,12 +97,35 @@ def verify_followup_package(package, anchor, head, baseline, authority, *, curre
         require(path.is_file() and not path.is_symlink(), 'OWNED_DISPATCH_PROOF_MISSING')
         return load(path)
     previous = owned('DISPATCH_CLAIM.json'); claimed = owned('REMOTE_CLAIM.json')
-    preflight = owned('FINAL_READONLY_PREFLIGHT.json')
+    preflight_path = authority / 'FINAL_READONLY_PREFLIGHT.json'
+    owned('FINAL_READONLY_PREFLIGHT.json')
+    try:
+        preflight = parse_payload(preflight_path.read_bytes())
+    except CaptureHashError:
+        raise GateStop('OWNED_PREFLIGHT_ENCODING_INVALID') from None
     proof = owned('INITIAL_DISPATCH_CAPTURE.json')
     capture_path = authority / 'captures' / proof.get('capture_name', '')
     require(capture_path.parent == authority / 'captures' and capture_path.is_file()
         and not capture_path.is_symlink() and sha(capture_path) == proof.get('sha256'), 'OWNED_CAPTURE_HASH_MISMATCH')
     receipt = load(capture_path)
+    require(receipt.get('schema') == CAPTURE_SCHEMA and receipt.get('hash_contract') == HASH_CONTRACT
+        and receipt.get('raw_transport_bytes') is True, 'OWNED_CAPTURE_HASH_CONTRACT_INVALID')
+    identifier = receipt.get('invocation_id')
+    try: require(str(__import__('uuid').UUID(identifier)) == identifier, 'OWNED_CAPTURE_UUID_INVALID')
+    except (ValueError, TypeError, AttributeError): raise GateStop('OWNED_CAPTURE_UUID_INVALID') from None
+    raw_name = 'capture-' + identifier + '.stdout.bin'
+    require(receipt.get('raw_stdout_file') == raw_name, 'OWNED_RAW_STDOUT_BINDING_INVALID')
+    raw_path = authority / 'captures' / raw_name
+    require(raw_path.is_file() and not raw_path.is_symlink(), 'OWNED_RAW_STDOUT_MISSING')
+    raw = raw_path.read_bytes()
+    try:
+        verify_stdout(raw, preflight, receipt)
+    except CaptureHashError:
+        raise GateStop('OWNED_CAPTURE_INVALID') from None
+    hashes = {'hash_contract': HASH_CONTRACT, 'raw_stdout_sha256': raw_digest(raw),
+        'canonical_payload_sha256': canonical_digest(preflight)}
+    require(all(proof.get(name) == wanted and previous.get(name) == wanted
+        for name, wanted in hashes.items()), 'OWNED_CAPTURE_DIGEST_BINDING_MISMATCH')
     claimed_at = utc_time(claimed.get('claimed_at'))
     verified = verify_package(package, anchor, head, baseline, current=claimed_at)
     operation = verified['manifest']['operation_id']
@@ -122,10 +147,11 @@ def verify_followup_package(package, anchor, head, baseline, authority, *, curre
         'snapshot_sha256': verified['manifest']['snapshot_sha256'], 'protected_services_sha256': baseline,
         'counter_evidence_sha256': verified['snapshot']['dependencies']['counter_receipt']['sha256'],
         'safety_counters': verified['snapshot']['safety_counters']}.items()), 'OWNED_FULL_PREFLIGHT_BINDING_MISMATCH')
-    raw = json.dumps(preflight, sort_keys=True).encode() + b'\n'
     require(receipt.get('binding_id') == operation and receipt.get('child_returncode') == 0
         and type(receipt.get('child_returncode')) is int and receipt.get('timed_out') is False
         and receipt.get('stderr', {}).get('length_bytes') == 0
+        and receipt.get('stderr', {}).get('sha256') == raw_digest(b'')
+        and receipt.get('raw_stderr_sha256') == raw_digest(b'')
         and receipt.get('stdout', {}).get('sha256') == hashlib.sha256(raw).hexdigest()
         and receipt.get('stdout', {}).get('length_bytes') == len(raw)
         and receipt.get('stdin', {}).get('sha256') == verified['bindings']['dependency_hashes']['remote_runtime.py'], 'OWNED_CAPTURE_INVALID')
@@ -142,13 +168,15 @@ def verify_followup_package(package, anchor, head, baseline, authority, *, curre
     require(utc_time(verified['window']['start_utc']) <= started < utc_time(verified['window']['latest_dispatcher_start_utc'])
         and started <= completed <= claimed_at < utc_time(verified['window']['initial_dispatch_deadline_utc']), 'OWNED_INITIAL_DISPATCH_OUTSIDE_WINDOW')
     fresh(verified['window']['counter_observed_at_utc'], started)
+    fresh(preflight.get('checked_at'), completed)
     return verified
 
 def observe(package, verified, profile, anchor, envelope, evidence, invoker=invoke):
     argv=strict_argv(profile,['python3','-B','-','preflight',encode(envelope)])
     return dispatch_preflight(invoker,argv,package=package,expected_manifest=anchor,
         expected_head=profile['candidate_head'],expected_baseline=profile['protected_services_sha256'],
-        input_bytes=(package/'remote_runtime.py').read_bytes(),evidence_directory=evidence,timeout=240)
+        input_bytes=(package/'remote_runtime.py').read_bytes(),evidence_directory=evidence,timeout=240,
+        retain_raw_stdout=True)
 
 def invoke_mode(package,profile,envelope,mode,evidence,invoker=invoke):
     argv=strict_argv(profile,['python3','-B','-',mode,encode(envelope)])
@@ -179,11 +207,23 @@ def execute(package,verified,profile,anchor,approval_path,confirmation_path,auth
         # Reject staging contract drift before preflight or remote claim.
         stage_argv(profile,package/'candidate.oci.tar',profile['operation_id'])
         preflight,path=observe(package,verified,profile,anchor,envelope,authority/'captures',invoker)
+        receipt = load(path)
+        require(receipt.get('schema') == CAPTURE_SCHEMA and receipt.get('hash_contract') == HASH_CONTRACT,
+            'OWNED_CAPTURE_HASH_CONTRACT_INVALID')
+        raw_path = authority / 'captures' / receipt.get('raw_stdout_file', '')
+        require(raw_path.parent == authority / 'captures' and raw_path.is_file()
+            and not raw_path.is_symlink(), 'OWNED_RAW_STDOUT_MISSING')
+        try:
+            verify_stdout(raw_path.read_bytes(), preflight, receipt)
+        except CaptureHashError:
+            raise GateStop('OWNED_CAPTURE_INVALID') from None
+        capture_hashes = {name: receipt[name] for name in ('hash_contract', 'raw_stdout_sha256', 'canonical_payload_sha256')}
+        envelope.update(capture_hashes)
         preflight_path=publish(authority,'FINAL_READONLY_PREFLIGHT.json',preflight)
         envelope['final_readonly_preflight_status']='PASS';envelope['final_readonly_preflight_sha256']=sha(preflight_path)
         # Revalidate the approval window and all files after the child and before claim.
         verify_execution_approval(approval,verify_package(package,anchor,profile['candidate_head'],profile['protected_services_sha256']),anchor)
-        publish(authority,'INITIAL_DISPATCH_CAPTURE.json',{'capture_name':path.name,'sha256':sha(path)})
+        publish(authority,'INITIAL_DISPATCH_CAPTURE.json',{'capture_name':path.name,'sha256':sha(path), **capture_hashes})
         publish(authority,'DISPATCH_CLAIM.json',envelope)
         claimed=invoke_mode(package,profile,envelope,'claim',authority/'captures',invoker)
         require(claimed.get('status')=='CLAIMED' and claimed.get('claim_id')==invocation,'REMOTE_CLAIM_NOT_ACCEPTED')
