@@ -7,7 +7,7 @@ import hmac
 import json
 import time
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import Enum, IntEnum
 from typing import Annotated, Callable
 from urllib.parse import urlparse
 
@@ -24,6 +24,22 @@ class Role(IntEnum):
     VIEWER = 10
     OPERATOR = 20
     OWNER = 30
+
+
+class Capability(str, Enum):
+    ANALYZE_AGENT_TASK = "agent_tasks.analyze"
+
+
+CAPABILITY_VERSION = 1
+CAPABILITY_TTL_SECONDS = 300
+CAPABILITY_MINIMUM_ROLE = {Capability.ANALYZE_AGENT_TASK: Role.OPERATOR}
+
+
+def principal_capabilities(principal: Principal) -> list[str]:
+    """Project authenticated RBAC; client capability fields never grant authority."""
+    if not isinstance(principal.role, Role):
+        raise HTTPException(status_code=403, detail="unknown role")
+    return sorted(c.value for c, minimum in CAPABILITY_MINIMUM_ROLE.items() if principal.role >= minimum)
 
 
 @dataclass(frozen=True)
@@ -137,7 +153,8 @@ class StaticTokenAuthorizer:
             if not hmac.compare_digest(_b64decode(supplied_signature), expected_signature):
                 raise ValueError("signature mismatch")
             payload = json.loads(_b64decode(body))
-            if not isinstance(payload, dict) or int(payload.get("exp", 0)) < int(time.time()):
+            if (not isinstance(payload, dict) or type(payload.get("exp")) is not int
+                    or payload["exp"] <= int(time.time())):
                 raise ValueError("expired payload")
             return payload
         except (
@@ -239,6 +256,18 @@ class StaticTokenAuthorizer:
             )
         return principal
 
+    def capability_payload(self, principal: Principal, session_cookie: str | None = None) -> dict[str, object]:
+        issued_at = int(time.time())
+        expires_at = issued_at + CAPABILITY_TTL_SECONDS
+        capabilities = principal_capabilities(principal)
+        if principal.auth_method == "session":
+            if not session_cookie or self.authenticate_session(session_cookie) != principal:
+                raise HTTPException(status_code=401, detail="invalid or expired session")
+            expires_at = min(expires_at, int(self.verify_payload(session_cookie)["exp"]))
+        return {"role": principal.role.name.lower(), "subject": principal.subject,
+                "auth_method": principal.auth_method, "capability_version": CAPABILITY_VERSION,
+                "capabilities": capabilities, "issued_at": issued_at, "expires_at": expires_at}
+
 
 def role_dependency(
     minimum_role: Role,
@@ -262,7 +291,13 @@ def role_dependency(
     return dependency
 
 
+def capability_dependency(capability: Capability, *, authorizer: StaticTokenAuthorizer | None = None) -> Callable[..., Principal]:
+    # Both create+initial analysis and reanalysis share the same authenticated RBAC contract.
+    return role_dependency(CAPABILITY_MINIMUM_ROLE[capability], authorizer=authorizer)
+
+
 authorizer = StaticTokenAuthorizer()
 require_viewer = role_dependency(Role.VIEWER, authorizer=authorizer)
 require_operator = role_dependency(Role.OPERATOR, authorizer=authorizer)
 require_owner = role_dependency(Role.OWNER, authorizer=authorizer)
+require_analyze = capability_dependency(Capability.ANALYZE_AGENT_TASK, authorizer=authorizer)

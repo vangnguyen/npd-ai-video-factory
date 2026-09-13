@@ -60,10 +60,13 @@ def test_google_login_creates_owner_session_and_command_center_access(monkeypatc
 
         whoami = client.get("/api/v1/whoami")
         assert whoami.status_code == 200
-        assert whoami.json() == {
+        assert {key:whoami.json()[key] for key in ("role","subject")} == {
             "role": "owner",
             "subject": "nguyenvanvangct@gmail.com",
         }
+        assert whoami.json()["auth_method"] == "session"
+        assert whoami.json()["capabilities"] == ["agent_tasks.analyze"]
+        assert whoami.headers["Cache-Control"] == "no-store"
         page = client.get("/command-center")
         assert page.status_code == 200
         assert "Đăng xuất" in page.text

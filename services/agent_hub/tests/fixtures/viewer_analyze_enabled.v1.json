@@ -1,0 +1,18 @@
+{
+  "actual_browser_evidence_sha256": "29d3331b024b0a585b393626d614b649dbaee288d5f9c060eee459ad79408da2",
+  "baseline_head": "e0ebc72f96b743dcff4ff2212818f7a702dbc060",
+  "bootstrap_payload": {
+    "role": "viewer",
+    "subject": "viewer"
+  },
+  "effective_role": "viewer",
+  "kind": "production-shaped immutable Viewer Analyze enabled reproduction",
+  "old_backend_and_create_handler": "Viewer denied; button enabled is UI capability gating defect",
+  "old_html_sha256": "2730a60844d833b53477985829a692beabbff8418bfd79c2b4c78f7d99d62e27",
+  "old_phase9_access_setter": "function setPhase9Access(role){currentRole=role||'';const allowed=phase9CanWrite();$('phase9Create').disabled=!allowed;$('phase9AccessNote').textContent=allowed?'Role '+currentRole+' có thể tạo task review nội bộ.':'Role '+(currentRole||'chưa xác định')+' chỉ được xem kết quả; không thể tạo task.';for(const button of document.querySelectorAll('[data-phase9-write]')){const key=button.dataset.phase9Key||'';button.disabled=!allowed||phase9FeedbackPending.has(key)||phase9FeedbackSubmitted.has(key)}}",
+  "old_phase9_can_write": "function phase9CanWrite(){return currentRole==='operator'||currentRole==='owner'}",
+  "old_render_result": "shared Analyze enabled; Phase9 Create disabled",
+  "raw_shared_button_html": "<button class=\"primary\" onclick=\"createTask()\">Phân tích bằng AI Agents</button>",
+  "read_only_production_evidence_sha256": "b6c5003b3296b8ec4ba6e12536dc991b28b05069d01f39df931ef1b396bd4c79",
+  "source_dashboard_sha256": "7d3a2afc9e0005bd1af07b4199777ed7b6bac8b18d677bd20ce40e6e742d0e44"
+}

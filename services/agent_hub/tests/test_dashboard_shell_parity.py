@@ -1,19 +1,19 @@
-import hashlib
-
-from npd_agent_hub.dashboard import command_center_html
+from npd_agent_hub.dashboard import DASHBOARD_HTML, command_center_html
 
 
-def test_static_token_dashboard_bytes_remain_unchanged():
+def test_static_token_shell_retains_actual_dashboard_and_capability_gate():
     response = command_center_html(browser_login_enabled=False)
-    assert len(response.body) == 95725
-    assert hashlib.sha256(response.body).hexdigest() == (
-        "2730a60844d833b53477985829a692beabbff8418bfd79c2b4c78f7d99d62e27"
-    )
+    assert response.body == DASHBOARD_HTML.encode("utf-8")
+    assert response.headers["Cache-Control"] == "no-store"
+    assert b'id="sharedAnalyze" class="primary" data-analyze disabled' in response.body
+    assert b"sessionStorage.getItem('npd_agent_token')" in response.body
 
 
-def test_google_login_dashboard_bytes_remain_unchanged():
+def test_google_shell_retains_capability_gate_and_authenticated_identity():
     response = command_center_html(browser_login_enabled=True)
-    assert len(response.body) == 95595
-    assert hashlib.sha256(response.body).hexdigest() == (
-        "d05ab01f525139d252a8fbffe7acda35462545522326b3bf6498f005a78e8ea9"
-    )
+    assert response.headers["Cache-Control"] == "no-store"
+    assert b'span id="identity"' in response.body and b'id="token"' not in response.body
+    assert b"sessionStorage.getItem('npd_agent_token')" not in response.body
+    assert b"$('identity').textContent=me.subject" in response.body
+    assert b"acceptCapabilityBootstrap(me,generation)" in response.body
+    assert b"if(r.status===401){location.href='/login'" in response.body

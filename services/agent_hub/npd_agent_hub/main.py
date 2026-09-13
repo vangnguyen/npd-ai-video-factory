@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 
 from .auth import (
@@ -11,6 +11,7 @@ from .auth import (
     Principal,
     Role,
     authorizer,
+    require_analyze,
     require_operator,
     require_owner,
     require_viewer,
@@ -219,8 +220,9 @@ def command_center_page(request: Request):
 
 
 @app.get("/api/v1/whoami")
-def whoami(principal: Principal = Depends(require_viewer)) -> dict[str, str]:
-    return {"role": principal.role.name.lower(), "subject": principal.subject}
+def whoami(request: Request, response: Response, principal: Principal = Depends(require_viewer)) -> dict[str, object]:
+    response.headers["Cache-Control"] = "no-store"
+    return authorizer.capability_payload(principal, request.cookies.get(SESSION_COOKIE))
 
 
 @app.get("/api/v1/agents", response_model=list[AgentDescriptor])
@@ -255,7 +257,7 @@ def tool_capabilities(
 @app.post("/api/v1/agent-tasks", response_model=CommandCenterReport)
 async def create_agent_task(
     task: AgentTask,
-    _principal: Principal = Depends(require_operator),
+    _principal: Principal = Depends(require_analyze),
 ) -> CommandCenterReport:
     report = hub.run(task)
     return await hub.analyze(report.task_id)
@@ -264,7 +266,7 @@ async def create_agent_task(
 @app.post("/api/v1/agent-tasks/{task_id}/analyze", response_model=CommandCenterReport)
 async def analyze_agent_task(
     task_id: str,
-    _principal: Principal = Depends(require_operator),
+    _principal: Principal = Depends(require_analyze),
 ) -> CommandCenterReport:
     try:
         return await hub.analyze(task_id)

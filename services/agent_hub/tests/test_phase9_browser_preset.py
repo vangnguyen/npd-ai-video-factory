@@ -149,7 +149,7 @@ def test_phase9_browser_output_is_escaped_and_viewer_controls_are_read_only():
         assert escaped_value in item_renderer
 
     assert "data-phase9-write" in DASHBOARD_HTML
-    assert "button.disabled=!allowed" in DASHBOARD_HTML
+    assert "button.disabled=!phase9CanWrite()" in DASHBOARD_HTML
     assert "Viewer chỉ được xem; feedback cần operator hoặc owner." in DASHBOARD_HTML
     assert (
         "Viewer chỉ được xem; phân tích lại cần operator hoặc owner."
