@@ -1,6 +1,7 @@
 """Render operation-specific constants without executing the audited template."""
 import ast
 from pathlib import Path
+from operation_identity import validate_fresh_operation_id
 
 BINDINGS = {'OPERATION': 'operation_id', 'TOKEN_SHA': 'confirmation_token_sha256',
     'FRESH_BACKUP_MANIFEST_SHA': 'fresh_backup_manifest_sha256', 'ROLLBACK_BUNDLE_MANIFEST_SHA': 'rollback_bundle_manifest_sha256',
@@ -13,7 +14,19 @@ BINDINGS = {'OPERATION': 'operation_id', 'TOKEN_SHA': 'confirmation_token_sha256
     'LATEST_DISPATCHER_START': 'latest_dispatcher_start_utc'}
 
 def render(template, profile):
+    validate_fresh_operation_id(profile.get('operation_id'))
     tree = ast.parse(Path(template).read_text(encoding='utf-8'))
+    # Inline the same canonical source for the standalone stdin remote runtime.
+    contract = ast.parse(Path(__file__).with_name('operation_identity.py').read_text(encoding='utf-8'))
+    contract_nodes = [node for node in contract.body if not (isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str))]
+    expanded = []; imports = 0
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module == 'operation_identity':
+            expanded.extend(contract_nodes); imports += 1
+        else: expanded.append(node)
+    if imports != 1: raise ValueError('CANONICAL_OPERATION_CONTRACT_IMPORT_INVALID')
+    tree.body = expanded
     found = set()
     for node in tree.body:
         if isinstance(node, ast.Assign):

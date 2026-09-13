@@ -10,7 +10,8 @@ import sys
 from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gate_bindings import GateStop, HASH, fresh, load, require, sha, utc_time, verify_package
+from gate_bindings import GateStop, HASH, fresh, load, require, sha, utc_time, verify_package, verify_operation_identity
+from operation_identity import DISPATCH_SCHEMA, CONFIRMATION_ENTROPY_PREFIX
 from pilot_dispatcher import dispatch_preflight, verify_execution_approval
 import remote_preflight_capture as capture
 from pilot_transport import invoke, strict_argv, stage_argv
@@ -25,7 +26,7 @@ def publish(directory, name, value):
     return path
 
 def confirmation_entropy(contract):
-    return ('npd.agent-hub.rca05.confirmation.v1|' + contract['operation_id'] + '|' + contract['candidate_head']
+    return (CONFIRMATION_ENTROPY_PREFIX + contract['operation_id'] + '|' + contract['candidate_head']
         + '|' + contract['snapshot_sha256'] + '|' + contract.get('execution_window_sha256', '')).encode()
 
 def dpapi(raw, entropy, *, decrypt):
@@ -61,7 +62,7 @@ def authorize(package, verified, anchor, approval_path, confirmation_path, *, cu
 
 def envelope_for(verified, profile, anchor, invocation, approval=None):
     deps=verified['bindings']['dependency_hashes']
-    envelope={'schema':'npd.phase9.limited-pilot-rca05.dispatch.v1', 'operation_id':profile['operation_id'],
+    envelope={'schema':DISPATCH_SCHEMA, 'operation_id':profile['operation_id'],
         'invocation_id':invocation, 'candidate_head':profile['candidate_head'], 'snapshot_sha256':profile['snapshot_sha256'],
         'counter_evidence_sha256':profile['counter_evidence_sha256'], 'protected_services_sha256':profile['protected_services_sha256'],
         'owner_exception_receipt_sha256':profile['owner_exception_receipt_sha256'],
@@ -165,6 +166,8 @@ def execute(package,verified,profile,anchor,approval_path,confirmation_path,auth
     # Approval and token checks occur before transport, any claim, or any file write.
     phase={'execute':'mutation','uat':'decision','rollback':'recovery'}[action]
     approval=authorize(package,verified,anchor,approval_path,confirmation_path,phase=phase)
+    verify_operation_identity(verified['bindings'].get('operation_id'))
+    require(profile.get('operation_id') == verified['bindings']['operation_id'], 'RUNTIME_OPERATION_BINDING_MISMATCH')
     require(isinstance(approval.get('owner_authorization_receipt_sha256'),str)
         and bool(HASH.fullmatch(approval['owner_authorization_receipt_sha256'])),'OWNER_AUTHORIZATION_RECEIPT_MISSING')
     profile['_approval_file_sha256']=sha(approval_path)
@@ -173,6 +176,8 @@ def execute(package,verified,profile,anchor,approval_path,confirmation_path,auth
     if action=='execute':
         require(not (authority/'DISPATCH_CLAIM.json').exists(),'LOCAL_OPERATION_ALREADY_DISPATCHED')
         verify_execution_approval(approval,verified,anchor,phase='dispatch')
+        # Reject staging contract drift before preflight or remote claim.
+        stage_argv(profile,package/'candidate.oci.tar',profile['operation_id'])
         preflight,path=observe(package,verified,profile,anchor,envelope,authority/'captures',invoker)
         preflight_path=publish(authority,'FINAL_READONLY_PREFLIGHT.json',preflight)
         envelope['final_readonly_preflight_status']='PASS';envelope['final_readonly_preflight_sha256']=sha(preflight_path)

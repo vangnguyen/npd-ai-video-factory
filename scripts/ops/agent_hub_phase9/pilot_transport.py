@@ -1,10 +1,9 @@
 """One pinned Windows OpenSSH path. No host-file staging or fallback exists."""
 from pathlib import Path
-import re
 import shlex
 import subprocess
 
-from gate_bindings import require, sha
+from gate_bindings import require, sha, verify_operation_identity
 
 def strict_argv(profile, remote):
     p = profile['transport']
@@ -25,9 +24,10 @@ def invoke(argv, *, input_bytes=None, timeout=90):
     return subprocess.run(argv, input=input_bytes, capture_output=True, shell=False, timeout=timeout)
 
 def stage_argv(profile, candidate, operation):
-    # This is only called after fresh approval, preflight and an owned remote claim.
+    # Check before claim; repeat pinned trust checks immediately before SCP.
+    verify_operation_identity(operation)
+    require(operation == profile.get('operation_id'), 'STAGE_OPERATION_BINDING_MISMATCH')
     strict_argv(profile, ['true']) # Reverify the same pinned trust, without dispatching.
-    require(re.fullmatch(r'PHASE9-LIMITED-PILOT-RCA05-[0-9a-f-]{36}', operation) is not None, 'STAGE_OPERATION_INVALID')
     p = profile['transport']
     destination = '/var/lib/npd-ai/agent-hub-deployments/phase9-limited-pilot/attempts/' + operation + '/candidate.oci.tar'
     return [p['scp_executable'], '-F', 'NUL', '-i', p['identity_file'], '-P', '22',

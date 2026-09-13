@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gate_bindings import GateStop, WINDOW_FIELDS, fresh, require, sha, utc_time, verify_package
+from gate_bindings import GateStop, WINDOW_FIELDS, fresh, require, sha, utc_time, verify_package, verify_operation_identity
 from remote_preflight_capture import invoke_preflight
 
 def dispatch_preflight(invoker, argv, *, package, expected_manifest, expected_head,
@@ -31,6 +31,7 @@ def verify_execution_approval(approval, verified, expected_manifest, *, current=
         and approval.get('decision') == 'APPROVED' and approval.get('fresh_explicit_owner_execution_approval') is True,
         'OWNER_EXECUTION_APPROVAL_NOT_GRANTED')
     bindings = verified['bindings']
+    verify_operation_identity(bindings.get('operation_id'))
     for name, value in {'operation_id': bindings['operation_id'], 'candidate_head': bindings['candidate_head'],
         'package_manifest_sha256': expected_manifest, 'snapshot_sha256': bindings['snapshot_sha256'],
         'counter_evidence_sha256': verified['snapshot']['dependencies']['counter_receipt']['sha256'],

@@ -21,7 +21,7 @@ def write(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + '\n', encoding='utf-8')
 
-def fixture(root):
+def fixture(root, *, family='RCA05', operation=None):
     """Build evidence in a temporary directory using explicitly synthetic values."""
     evidence = root / 'evidence'
     signatures = {f'synthetic-service-{i}': f'signature-{i}' for i in range(18)}
@@ -68,7 +68,7 @@ def fixture(root):
         'safety_counters': {**{name: safety[name] for name in gate.AGENT_COUNTERS}, **counter['counters']},
         'dependencies': {name: {'path': f, 'sha256': gate.sha(evidence / f)} for name, f in files.items()}}
     write(evidence / 'FULL_EXECUTION_SNAPSHOT.json', snapshot)
-    operation = 'PHASE9-LIMITED-PILOT-RCA05-' + str(uuid4())
+    operation = operation or 'PHASE9-LIMITED-PILOT-' + family + '-' + str(uuid4())
     window = {name: (NOW + timedelta(seconds=offset)).isoformat() for name, offset in
         zip(gate.WINDOW_FIELDS, (0, 1200, 4500, 7200))}
     window.update({'operation_id': operation, 'candidate_head': HEAD, 'counter_observed_at_utc': NOW.isoformat(),

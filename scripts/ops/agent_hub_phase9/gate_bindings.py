@@ -7,6 +7,7 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 from uuid import UUID
+from operation_identity import OperationIdentityError, validate_fresh_operation_id
 
 COUNTERS = ('video_factory_job_count', 'video_factory_queue_count',
             'video_factory_processing_count', 'video_factory_in_flight_count')
@@ -20,7 +21,7 @@ REQUIRED_PILOT_FILES = {'runner.py', 'dispatcher.py', 'verifier.py', 'remote_run
     'RUNTIME_PROFILE.json', 'OWNER_GATE.md', 'candidate.oci.tar', 'ROLLBACK_CUSTODY_MANIFEST.json',
     'gate_bindings.py', 'pilot_dispatcher.py', 'pilot_transport.py',
     'evidence/FULL_EXECUTION_SNAPSHOT.json', 'evidence/COUNTER_EVIDENCE.json', 'evidence/PROTECTED_BASELINE.json',
-    'EXECUTION_WINDOW.json'}
+    'EXECUTION_WINDOW.json', 'operation_identity.py'}
 HASH = re.compile(r'[0-9a-f]{64}')
 HEAD = re.compile(r'[0-9a-f]{40}')
 
@@ -29,6 +30,10 @@ class GateStop(ValueError):
 
 def require(condition, reason):
     if condition is not True: raise GateStop(reason)
+
+def verify_operation_identity(operation):
+    try: return validate_fresh_operation_id(operation)
+    except OperationIdentityError as error: raise GateStop(str(error)) from None
 
 def sha(path):
     digest = hashlib.sha256()
@@ -187,10 +192,7 @@ def verify_package(directory, expected_manifest, expected_head, expected_baselin
     require(manifest.get('status') == 'PREPARED_FOR_OWNER_REVIEW' and manifest.get('execution_approval') == 'NOT_GRANTED',
         'PREPARATION_AUTHORITY_INVALID')
     operation = manifest.get('operation_id', '')
-    prefix = next((p for p in ('PHASE9-LIMITED-PILOT-RCA05-', 'PHASE9-LIMITED-PILOT-RCA06-') if operation.startswith(p)), '')
-    require(bool(prefix), 'OPERATION_ID_INVALID')
-    try: require(str(UUID(operation[len(prefix):])) == operation[len(prefix):], 'OPERATION_ID_INVALID')
-    except (ValueError, TypeError, AttributeError): raise GateStop('OPERATION_ID_INVALID') from None
+    verify_operation_identity(operation)
     listed = set()
     for entry in manifest['artifacts']:
         name = entry['path']; require(name.casefold() not in {p.casefold() for p in listed}, 'DUPLICATE_ARTIFACT')
