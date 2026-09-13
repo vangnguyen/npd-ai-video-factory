@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 from typing import Callable
 from uuid import UUID, uuid4
@@ -26,14 +27,22 @@ SAFE_FAILURE_REASONS = frozenset({
     "PROTECTED_SERVICE_DRIFT", "TARGET_BASELINE_DRIFT",
     "TARGET_BASELINE_SIGNATURE_DRIFT", "PREFLIGHT_OUTSIDE_MUTATION_START_WINDOW",
     "OPERATION_ALREADY_CLAIMED_OR_ATTEMPTED", "OPERATION_RACED_DURING_PREFLIGHT",
+    "COMPOSE_FILE_LABEL_DRIFT", "COMPOSE_BASELINE_BINDING_INVALID", "COMPOSE_BASELINE_PATH_MISMATCH",
+    "COMPOSE_BASELINE_TARGET_MISMATCH", "COMPOSE_BASELINE_CUSTODY_HASH_MISMATCH",
+    "COMPOSE_BASELINE_CUSTODY_UNAVAILABLE", "COMPOSE_BASELINE_NOT_RECOVERED", "USAGE_INVALID",
 })
 
 
 class CaptureStop(Exception):
     """A bounded reason, with a pointer to evidence; never raw child output."""
 
-    def __init__(self, reason: str, capture_path: Path | None = None) -> None:
-        super().__init__(reason)
+    def __init__(self, reason: str, capture_path: Path | None = None, *, diagnostic: dict | None = None) -> None:
+        self.diagnostic = diagnostic
+        message = reason
+        if diagnostic:
+            message += (' [component=' + diagnostic['component'] + '; exit=' + str(diagnostic['exit_code'])
+                + '; classification=' + diagnostic['classification'] + '; stderr=' + diagnostic['sanitized_stderr'] + ']')
+        super().__init__(message)
         self.reason = reason
         self.capture_path = capture_path
 
@@ -96,7 +105,7 @@ def _publish(directory: Path, invocation_id: str, value: dict) -> Path:
 
 
 def _publish_raw_stdout(directory: Path, invocation_id: str, raw: bytes) -> Path:
-    """Retain verified owned stdout bytes atomically, without text conversion."""
+    """Retain verified success or validated safe failure bytes without conversion."""
     target = directory / ('capture-' + invocation_id + '.stdout.bin')
     descriptor, temporary = tempfile.mkstemp(prefix='.capture-', dir=directory)
     temporary_path = Path(temporary)
@@ -122,6 +131,7 @@ def invoke_preflight(
     invocation_id: str | None = None,
     success_verifier: Callable[[dict], bool] | None = None,
     retain_raw_stdout: bool = False,
+    invocation_context: dict | None = None,
 ) -> tuple[dict, Path]:
     """Persist streams/rc/UUID first; a nonzero rc always aborts.
 
@@ -138,6 +148,12 @@ def invoke_preflight(
             raise ValueError("invalid binding")
         if type(retain_raw_stdout) is not bool:
             raise ValueError('invalid custody flag')
+        if invocation_context is not None:
+            if (set(invocation_context) != {'component', 'remote_argv_shape', 'stdin_mode'}
+                    or invocation_context['component'] != 'agent_hub_phase9.remote_runtime.preflight'
+                    or invocation_context['remote_argv_shape'] != ['python3', '-B', '-', 'preflight', '<redacted binding envelope>']
+                    or invocation_context['stdin_mode'] != 'binary sealed runtime via stdin'):
+                raise ValueError('invalid safe context')
         if not all(character.isascii() and (character.isalnum() or character in "-_.")
                    for character in binding_id):
             raise ValueError("invalid binding")
@@ -178,6 +194,12 @@ def invoke_preflight(
     hash_fields = stdout_hashes(stdout) if raw_transport else {
         'hash_contract': HASH_CONTRACT, 'raw_stdout_sha256': None,
         'raw_stdout_length_bytes': None, 'canonical_payload_sha256': None}
+    diagnostic = {'component':(invocation_context or {}).get('component', 'read_only_preflight_child'),
+        'exit_code':returncode,
+        'classification':('TIMEOUT' if timed_out else 'LAUNCH_ERROR' if launch_error else
+            'REMOTE_RUNTIME_GUARD:' + failure['reason'] if failure else 'UNCLASSIFIED_CHILD_EXIT' if returncode != 0 else 'CHILD_EXIT_ZERO'),
+        'sanitized_stderr':'EMPTY' if not stderr else 'REDACTED_OPAQUE_STDERR',
+        'stderr_sha256':raw_digest(stderr), 'stderr_length_bytes':len(stderr)}
     receipt = {
         "schema": CAPTURE_SCHEMA,
         "binding_id": binding_id, "invocation_id": identifier,
@@ -189,8 +211,14 @@ def invoke_preflight(
         "stdout": _stream(stdout, retain_verbatim=failure is not None),
         "stderr": _stream(stderr), "validated_failure": failure,
         "argv_or_authorization_persisted": False,
+        'sanitized_invocation_context':invocation_context,
+        'argv_fingerprint_sha256':hashlib.sha256(json.dumps(argv, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest(),
+        'local_child_context':{'parent_executable':sys.executable, 'parent_pid':os.getpid(), 'cwd':os.getcwd(),
+            'relevant_env_keys_present':[key for key in ('PATH','HOME','USER','LOGNAME','LANG','LC_ALL','PYTHONIOENCODING','PYTHONPATH') if key in os.environ]},
+        'child_failure':diagnostic,
         "raw_transport_bytes": raw_transport,
-        "raw_stdout_file": ('capture-' + identifier + '.stdout.bin') if retain_raw_stdout else None,
+        "raw_stdout_file": ('capture-' + identifier + '.stdout.bin') if retain_raw_stdout and not timed_out
+            and not launch_error and (returncode == 0 or failure is not None) else None,
         "raw_stderr_sha256": raw_digest(stderr) if raw_transport else None,
         **hash_fields,
     }
@@ -206,8 +234,13 @@ def invoke_preflight(
     if type(returncode) is not int:
         raise CaptureStop("REMOTE_PREFLIGHT_RETURNCODE_INVALID", capture_path)
     if returncode != 0:
+        if retain_raw_stdout and failure is not None:
+            try:
+                _publish_raw_stdout(evidence_directory, identifier, stdout)
+            except OSError:
+                raise CaptureStop('CAPTURE_EVIDENCE_UNAVAILABLE', capture_path) from None
         reason = failure["reason"] if failure else "UNCLASSIFIED"
-        raise CaptureStop("REMOTE_PREFLIGHT_FAILED:" + reason, capture_path)
+        raise CaptureStop("REMOTE_PREFLIGHT_FAILED:" + reason, capture_path, diagnostic=diagnostic)
     if not raw_transport:
         raise CaptureStop('REMOTE_PREFLIGHT_RAW_BYTES_REQUIRED', capture_path)
     value = _parse(stdout)

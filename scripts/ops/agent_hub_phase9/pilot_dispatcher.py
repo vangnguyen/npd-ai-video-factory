@@ -11,7 +11,7 @@ from remote_preflight_capture import invoke_preflight
 
 def dispatch_preflight(invoker, argv, *, package, expected_manifest, expected_head,
         expected_baseline, input_bytes, evidence_directory, timeout=90, current=None,
-        retain_raw_stdout=False):
+        retain_raw_stdout=False, invocation_id=None, invocation_context=None):
     verified = verify_package(package, expected_manifest, expected_head, expected_baseline, current=current)
     operation = verified['manifest']['operation_id']
     expected = {'candidate_head': expected_head, 'snapshot_sha256': verified['manifest']['snapshot_sha256'],
@@ -26,7 +26,7 @@ def dispatch_preflight(invoker, argv, *, package, expected_manifest, expected_he
         return all(value.get(key) == wanted for key, wanted in expected.items())
     return invoke_preflight(invoker, argv, input_bytes=input_bytes, timeout=timeout,
         evidence_directory=Path(evidence_directory), binding_id=operation, success_verifier=verifier,
-        retain_raw_stdout=retain_raw_stdout)
+        retain_raw_stdout=retain_raw_stdout, invocation_id=invocation_id, invocation_context=invocation_context)
 
 def verify_execution_approval(approval, verified, expected_manifest, *, current=None, phase='mutation'):
     require(isinstance(approval, dict) and approval.get('kind') == 'OWNER_EXECUTION_APPROVAL'

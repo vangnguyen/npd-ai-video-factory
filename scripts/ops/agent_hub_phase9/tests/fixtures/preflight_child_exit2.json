@@ -1,0 +1,23 @@
+{
+  "actual_config_files": [
+    "/opt/npd-ai-video-factory-releases/400899ba82501beeea469f4a33dc169a9a09bb8e/deploy/phase5/docker-compose.agent-hub.prod.yml",
+    "/var/lib/npd-ai/agent-hub-deployments/phase9-limited-pilot/attempts/PHASE9-LIMITED-PILOT-RCA06-ae039afa-f715-47f7-8a91-8d536eefc91a/rollback-override.json"
+  ],
+  "new_behavior": "explicit exact terminal recovery custody binding; no reuse authority",
+  "old_allowed_paths": [
+    [
+      "/opt/npd-ai-video-factory-releases/400899ba82501beeea469f4a33dc169a9a09bb8e/deploy/phase5/docker-compose.agent-hub.prod.yml"
+    ],
+    [
+      "/opt/npd-ai-video-factory-releases/400899ba82501beeea469f4a33dc169a9a09bb8e/deploy/phase5/docker-compose.agent-hub.prod.yml",
+      "/var/lib/npd-ai/agent-hub-deployments/phase9-limited-pilot/attempts/PHASE9-LIMITED-PILOT-RCA06-0936a195-e70a-4189-9434-2a1def050d0a/rollback-override.json"
+    ]
+  ],
+  "old_behavior": "remote GateStop COMPOSE_FILE_LABEL_DRIFT -> exit 2; fixture reproduces stdout hash",
+  "operation_id": "PHASE9-LIMITED-PILOT-RCA06-0936a195-e70a-4189-9434-2a1def050d0a",
+  "original_primary_stdout_available": false,
+  "original_stderr_bytes": 0,
+  "original_stdout_bytes": 186,
+  "original_stdout_sha256": "19760b785add72c0922795952586dcb4198ccfabf7535362046a582f3b6b0ded",
+  "scope": "LOCAL_FIXTURE_ONLY_NOT_EXECUTION_AUTHORITY"
+}

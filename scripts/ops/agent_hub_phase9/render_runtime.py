@@ -1,7 +1,9 @@
 """Render operation-specific constants without executing the audited template."""
 import ast
+import json
 from pathlib import Path
 from operation_identity import validate_fresh_operation_id
+from baseline_compose_context import validate_compose_binding, COMPOSE_BASE_PATH, COMPOSE_CLAIM_ROOT, COMPOSE_ROLLBACK_CONFIG
 
 BINDINGS = {'OPERATION': 'operation_id', 'TOKEN_SHA': 'confirmation_token_sha256',
     'FRESH_BACKUP_MANIFEST_SHA': 'fresh_backup_manifest_sha256', 'ROLLBACK_BUNDLE_MANIFEST_SHA': 'rollback_bundle_manifest_sha256',
@@ -20,12 +22,18 @@ def render(template, profile):
     contract = ast.parse(Path(__file__).with_name('operation_identity.py').read_text(encoding='utf-8'))
     contract_nodes = [node for node in contract.body if not (isinstance(node, ast.Expr)
         and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str))]
-    expanded = []; imports = 0
+    compose = ast.parse(Path(__file__).with_name('baseline_compose_context.py').read_text(encoding='utf-8'))
+    compose_nodes = [n for n in compose.body if not (isinstance(n, ast.ImportFrom) and n.module == 'operation_identity')
+        and not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str))]
+    expanded = []; imports = 0; compose_imports = 0
     for node in tree.body:
         if isinstance(node, ast.ImportFrom) and node.module == 'operation_identity':
             expanded.extend(contract_nodes); imports += 1
+        elif isinstance(node, ast.ImportFrom) and node.module == 'baseline_compose_context':
+            expanded.extend(compose_nodes); compose_imports += 1
         else: expanded.append(node)
     if imports != 1: raise ValueError('CANONICAL_OPERATION_CONTRACT_IMPORT_INVALID')
+    if compose_imports != 1: raise ValueError('COMPOSE_BASELINE_CONTRACT_IMPORT_INVALID')
     tree.body = expanded
     found = set()
     for node in tree.body:
@@ -36,6 +44,15 @@ def render(template, profile):
                     if value is None: raise ValueError('RUNTIME_PROFILE_UNBOUND')
                     node.value = ast.Constant(value); found.add(target.id)
     if found != set(BINDINGS): raise ValueError('RUNTIME_TEMPLATE_BINDINGS_INCOMPLETE')
+    context = profile.get('baseline_compose_binding')
+    if context is not None:
+        validate_compose_binding(context, COMPOSE_BASE_PATH, COMPOSE_CLAIM_ROOT, COMPOSE_ROLLBACK_CONFIG)
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                name = node.targets[0].id
+                updates = {'BASELINE_COMPOSE_BINDING_JSON':json.dumps(context, sort_keys=True, separators=(',', ':')),
+                    'BASELINE_TARGET_ID':context['container_id'], 'BASELINE_TARGET_SIGNATURE_SHA':context['target_signature_sha256']}
+                if name in updates: node.value = ast.Constant(updates[name])
     ast.fix_missing_locations(tree)
     output = ast.unparse(tree) + '\n'
     compile(output, 'fresh_remote_runtime', 'exec')

@@ -176,7 +176,10 @@ def observe(package, verified, profile, anchor, envelope, evidence, invoker=invo
     return dispatch_preflight(invoker,argv,package=package,expected_manifest=anchor,
         expected_head=profile['candidate_head'],expected_baseline=profile['protected_services_sha256'],
         input_bytes=(package/'remote_runtime.py').read_bytes(),evidence_directory=evidence,timeout=240,
-        retain_raw_stdout=True)
+        retain_raw_stdout=True, invocation_id=envelope['invocation_id'],
+        invocation_context={'component':'agent_hub_phase9.remote_runtime.preflight',
+            'remote_argv_shape':['python3','-B','-','preflight','<redacted binding envelope>'],
+            'stdin_mode':'binary sealed runtime via stdin'})
 
 def invoke_mode(package,profile,envelope,mode,evidence,invoker=invoke):
     argv=strict_argv(profile,['python3','-B','-',mode,encode(envelope)])

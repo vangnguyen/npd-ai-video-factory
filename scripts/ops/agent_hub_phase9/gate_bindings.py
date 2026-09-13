@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import ast
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
 from uuid import UUID
 from operation_identity import OperationIdentityError, validate_fresh_operation_id
+from baseline_compose_context import (ComposeBindingError, validate_compose_binding,
+    COMPOSE_BASE_PATH, COMPOSE_CLAIM_ROOT, COMPOSE_ROLLBACK_CONFIG)
 
 COUNTERS = ('video_factory_job_count', 'video_factory_queue_count',
             'video_factory_processing_count', 'video_factory_in_flight_count')
@@ -21,7 +24,7 @@ REQUIRED_PILOT_FILES = {'runner.py', 'dispatcher.py', 'verifier.py', 'remote_run
     'RUNTIME_PROFILE.json', 'OWNER_GATE.md', 'candidate.oci.tar', 'ROLLBACK_CUSTODY_MANIFEST.json',
     'gate_bindings.py', 'pilot_dispatcher.py', 'pilot_transport.py',
     'evidence/FULL_EXECUTION_SNAPSHOT.json', 'evidence/COUNTER_EVIDENCE.json', 'evidence/PROTECTED_BASELINE.json',
-    'EXECUTION_WINDOW.json', 'operation_identity.py', 'capture_hash_contract.py'}
+    'EXECUTION_WINDOW.json', 'operation_identity.py', 'capture_hash_contract.py', 'baseline_compose_context.py'}
 HASH = re.compile(r'[0-9a-f]{64}')
 HEAD = re.compile(r'[0-9a-f]{40}')
 
@@ -220,6 +223,30 @@ def verify_package(directory, expected_manifest, expected_head, expected_baselin
         and payload.get('execution_scope_sha256') == bindings['dependency_hashes']['EXECUTION_SCOPE.json'], 'PAYLOAD_SCOPE_COUNTER_MISMATCH')
     contract = load(directory / 'CONFIRMATION_CONTRACT.json')
     profile = load(directory / 'RUNTIME_PROFILE.json')
+    context = profile.get('baseline_compose_binding')
+    if context is not None:
+        try:
+            validate_compose_binding(context, COMPOSE_BASE_PATH, COMPOSE_CLAIM_ROOT, COMPOSE_ROLLBACK_CONFIG)
+        except (ComposeBindingError, ValueError):
+            raise GateStop('COMPOSE_BASELINE_BINDING_INVALID') from None
+        context_name = 'evidence/BASELINE_COMPOSE_BINDING.json'
+        require(context_name in bindings['dependency_hashes'] and load(directory / context_name) == context,
+            'COMPOSE_BASELINE_PACKAGE_BINDING_MISMATCH')
+        require(bindings['dependency_hashes'].get('evidence/COMPLETED_RECOVERY_RECEIPT.json') == context['recovery_receipt_sha256']
+            and bindings['dependency_hashes'].get('evidence/RECOVERED_COMPOSE_READONLY.json') == context['source_observation_sha256'],
+            'COMPOSE_BASELINE_PROVENANCE_BINDING_MISMATCH')
+        baseline_target = load(directory / 'evidence/PROTECTED_BASELINE.json').get('target', {})
+        require(baseline_target.get('id') == context['container_id'], 'COMPOSE_BASELINE_CONTAINER_BINDING_MISMATCH')
+        try:
+            tree = ast.parse((directory / 'remote_runtime.py').read_bytes())
+            constants = {target.id:node.value.value for node in tree.body if isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Constant) for target in node.targets if isinstance(target, ast.Name)}
+            matches = json.loads(constants.get('BASELINE_COMPOSE_BINDING_JSON', 'null')) == context
+        except (SyntaxError, ValueError, TypeError):
+            matches = False
+        require(matches and constants.get('BASELINE_TARGET_ID') == context['container_id']
+            and constants.get('BASELINE_TARGET_SIGNATURE_SHA') == context['target_signature_sha256'],
+            'COMPOSE_BASELINE_RUNTIME_BINDING_MISMATCH')
     for value, reason in ((contract, 'CONFIRMATION_BINDING_MISMATCH'), (profile, 'RUNTIME_PROFILE_BINDING_MISMATCH')):
         require(value.get('operation_id') == operation and value.get('candidate_head') == expected_head
             and value.get('snapshot_sha256') == manifest['snapshot_sha256']

@@ -20,11 +20,14 @@ import time
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 from operation_identity import OperationIdentityError, validate_fresh_operation_id, DISPATCH_SCHEMA, CLAIM_SCHEMA
+from baseline_compose_context import (ComposeBindingError, verify_recovered_compose,
+    COMPOSE_BASE_PATH, COMPOSE_CLAIM_ROOT, COMPOSE_ROLLBACK_CONFIG)
+BASELINE_COMPOSE_BINDING_JSON = None
 OPERATION = 'UNBOUND'
 PROJECT = 'npd-agent-hub-prod'
 SERVICE = 'agent-hub'
 SUBJECT = 'opportunity:6a881aa4bb9606e32'
-BASE_COMPOSE = Path('/opt/npd-ai-video-factory-releases/400899ba82501beeea469f4a33dc169a9a09bb8e/deploy/phase5/docker-compose.agent-hub.prod.yml')
+BASE_COMPOSE = Path(COMPOSE_BASE_PATH)
 BASE_COMPOSE_SHA = '789b126b2f02d23c978ca82f0944739eff93d82e23ef82a2b9c1ab5d5189cab8'
 ENV_FILE = Path('/etc/npd-ai/agent-hub.env')
 ENV_SHA = '86a95f5c613fbacf851d5a7a56a28225fb9a5b7c33945cd8919ecec230997d18'
@@ -39,7 +42,7 @@ CANDIDATE_OCI_INDEX = 'sha256:59019b49de03d16b7ab6d7aaf11ab2d9d28cd8d9b2900e64cb
 CANDIDATE_MANIFEST = 'sha256:9bc567c0f0b381f6cdc12bf7d4b73c6110d41d4fa5f354addda1a9818e61700b'
 CANDIDATE_CONFIG = 'sha256:5f114c43c1ed18d71de18ed35956a8f56cf15c23f3c821d0514f94aa0e78c60e'
 CANDIDATE_RUNTIME_IDS = {CANDIDATE_CONFIG, CANDIDATE_OCI_INDEX}
-ROLLBACK_CONFIG = 'sha256:470810b2dbb2c525df971129b6bcf8cf31f4f2b7a4167721989a9bec01537041'
+ROLLBACK_CONFIG = COMPOSE_ROLLBACK_CONFIG
 ROLLBACK_TAG = 'npd-agent-hub:phase5'
 TOKEN_SHA = None
 FRESH_BACKUP_MANIFEST_SHA = None
@@ -54,7 +57,7 @@ NOT_BEFORE = None
 LATEST_MUTATION = None
 DECISION_DEADLINE = None
 RECOVERY_DEADLINE = None
-CLAIM_ROOT = Path('/var/lib/npd-ai/agent-hub-deployments/phase9-limited-pilot')
+CLAIM_ROOT = Path(COMPOSE_CLAIM_ROOT)
 RECEIPT_ROOT = Path('/var/lib/npd-ai/agent-hub-deployments')
 CLAIM_PATH = CLAIM_ROOT / 'operations' / (OPERATION + '.json')
 ATTEMPT_DIR = CLAIM_ROOT / 'attempts' / OPERATION
@@ -287,7 +290,15 @@ def compose_context(item: dict[str, object], image_reference: str) -> tuple[list
         allowed_paths = ([str(BASE_COMPOSE), str(OVERRIDE_PATH)],)
     else:
         allowed_paths = ()
-    require(config_paths in allowed_paths, 'COMPOSE_FILE_LABEL_DRIFT')
+    if config_paths not in allowed_paths:
+        require(item.get('Image') == ROLLBACK_CONFIG and BASELINE_COMPOSE_BINDING_JSON is not None,
+            'COMPOSE_FILE_LABEL_DRIFT')
+        try:
+            verify_recovered_compose(json.loads(BASELINE_COMPOSE_BINDING_JSON), item, config_paths,
+                BASE_COMPOSE, CLAIM_ROOT, ROLLBACK_CONFIG, ROLLBACK_TAG, digest(container_signature(item)))
+        except (ComposeBindingError, ValueError, OSError) as error:
+            reason = str(error) if isinstance(error, ComposeBindingError) else 'COMPOSE_BASELINE_CUSTODY_UNAVAILABLE'
+            raise GateStop(reason) from None
     require(Path(str(labels.get('com.docker.compose.project.working_dir', ''))).is_absolute(), 'COMPOSE_WORKDIR_INVALID')
     protected_file(BASE_COMPOSE, BASE_COMPOSE_SHA)
     env = env_map(item.get('Config', {}).get('Env') or [])
