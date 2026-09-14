@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from local_custody_fixture import fixture_retention
+
 import asyncio
 import json
 from datetime import UTC, date, datetime, timedelta
@@ -263,7 +265,7 @@ def test_plan_preview_approval_and_no_external_side_effects():
 
 def test_redis_recovery_uses_experiment_subnamespace():
     client = fakeredis.FakeRedis(decode_responses=True)
-    first_store = RedisHubStore(client=client, namespace="test:agent-hub")
+    first_store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     campaign, reconciliation = accepted_fixture(first_store)
     first = ExperimentService(first_store)
     experiment = first.create(
@@ -273,7 +275,7 @@ def test_redis_recovery_uses_experiment_subnamespace():
     first.preview(experiment.experiment_id, actor="operator")
 
     restarted = ExperimentService(
-        RedisHubStore(client=client, namespace="test:agent-hub")
+        RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     )
     restored = restarted.get(experiment.experiment_id)
     assert restored.last_preview is not None
@@ -586,7 +588,7 @@ def test_meta_mapping_requires_exact_variants_and_is_immutable_after_observation
 
 def test_meta_tracking_mapping_recovers_from_redis_subnamespace():
     client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=client, namespace="test:agent-hub")
+    store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     campaign, reconciliation = accepted_fixture(store)
     service = ExperimentService(store)
     experiment = service.create(
@@ -602,7 +604,7 @@ def test_meta_tracking_mapping_recovers_from_redis_subnamespace():
         ),
         actor="owner",
     )
-    restarted_store = RedisHubStore(client=client, namespace="test:agent-hub")
+    restarted_store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     restored = ExperimentService(restarted_store).get(experiment.experiment_id)
     restored_campaign = restarted_store.get_campaign(campaign.campaign_id)
     assert restored_campaign is not None
@@ -635,7 +637,7 @@ def test_guardrail_breach_stops_for_manual_review_without_execution():
 
 def test_observation_and_evaluation_recover_from_redis():
     client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=client, namespace="test:agent-hub")
+    store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     campaign, reconciliation = accepted_fixture(store)
     service = ExperimentService(store)
     experiment = service.create(
@@ -651,7 +653,7 @@ def test_observation_and_evaluation_recover_from_redis():
     )
 
     restored = ExperimentService(
-        RedisHubStore(client=client, namespace="test:agent-hub")
+        RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     ).get(experiment.experiment_id)
     assert len(restored.observations) == 1
     assert restored.last_evaluation is not None

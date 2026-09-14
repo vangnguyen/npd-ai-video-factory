@@ -5,6 +5,8 @@ No remote invocation is made here. Production use needs separately issued
 Owner authority, an exact tool digest and live read-only verification.
 Original claim/state bytes are retained; a partial close fails execution shut.
 """
+
+from custody_file_contract import custody_file_writer
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -164,11 +166,13 @@ def verify_live(plan, value):
     require(value.get('cohort_review_count') == 0 and value.get('writes') == 0, 'LIVE_READONLY_SCOPE_INVALID')
     return value
 
+@custody_file_writer
 def create_private(path, raw):
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0)
     fd = os.open(path, flags, 0o600)
     with os.fdopen(fd, 'wb') as stream:stream.write(raw);stream.flush();os.fsync(stream.fileno())
 
+@custody_file_writer
 def replace_owned(path, raw, expected_sha):
     require(sha(path.read_bytes()) == expected_sha and not path.is_symlink(), 'COMPARE_AND_SWAP_MISMATCH')
     temporary = path.parent / ('.terminalizing-' + str(uuid4()))

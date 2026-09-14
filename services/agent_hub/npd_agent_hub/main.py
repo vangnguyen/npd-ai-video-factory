@@ -3,7 +3,8 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
+from .retention_custody import CustodyBlocked
 
 from .auth import (
     OAUTH_STATE_COOKIE,
@@ -108,11 +109,18 @@ from .video_factory.router import (
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    await hub.provider_health_scheduler.start()
+    started=False
+    try:
+        await hub.provider_health_scheduler.start()
+        started=True
+    except CustodyBlocked:
+        # Retention HOLD keeps the read-only application surface available.
+        # No scheduler or writer is started by an inactive coordinator.
+        _app.state.retention_custody='HOLD_NOT_ACTIVATED'
     try:
         yield
     finally:
-        await hub.provider_health_scheduler.stop()
+        if started:await hub.provider_health_scheduler.stop()
 
 
 app = FastAPI(
@@ -126,6 +134,12 @@ app.include_router(delivery_router)
 app.include_router(journeys_router)
 app.include_router(video_factory_router)
 app.state.video_factory_boundary = disabled_video_factory_boundary
+
+@app.exception_handler(CustodyBlocked)
+async def custody_hold_response(_request: Request, _error: CustodyBlocked):
+    # No raw exception, source key, payload, credential or archive body emitted.
+    return JSONResponse(status_code=503, content={"detail": "RETENTION_CUSTODY_HOLD"})
+
 schema_reader = EspoSchemaReader()
 mapping_reader = EspoMappingReader(schema_reader)
 

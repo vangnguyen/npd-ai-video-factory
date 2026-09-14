@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 import claim_only_terminalization as terminal
 import claim_terminalization_entry as entry
 from test_claim_only_terminalization import NOW, fixture
+from custody_file_contract import custody_file_scope, LocalFileCustodyFixture
 
 class FrozenDatetime(datetime):
     @classmethod
@@ -23,6 +24,8 @@ class EntryTests(unittest.TestCase):
         self.plan['terminalization_tool_sha256']=terminal.sha(b'synthetic')
         self.authority=self.root/'authority';self.owner=terminal.approval_text(self.plan).encode()
         self.freeze=patch.object(terminal,'datetime',FrozenDatetime);self.freeze.start();self.addCleanup(self.freeze.stop)
+        self.file_scope=custody_file_scope(LocalFileCustodyFixture(Path(self.temp.name)))
+        self.file_scope.__enter__();self.addCleanup(self.file_scope.__exit__,None,None,None)
     def test_verify_prepared_does_not_load_approval_or_call_transport(self):
         argv=['entry','--verify-prepared','--plan','synthetic','--tool','synthetic','--profile','synthetic']
         stream=io.StringIO()

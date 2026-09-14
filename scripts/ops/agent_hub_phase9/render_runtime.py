@@ -25,15 +25,21 @@ def render(template, profile):
     compose = ast.parse(Path(__file__).with_name('baseline_compose_context.py').read_text(encoding='utf-8'))
     compose_nodes = [n for n in compose.body if not (isinstance(n, ast.ImportFrom) and n.module == 'operation_identity')
         and not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str))]
-    expanded = []; imports = 0; compose_imports = 0
+    custody = ast.parse(Path(__file__).with_name('custody_file_contract.py').read_text(encoding='utf-8'))
+    custody_nodes = [n for n in custody.body if not (isinstance(n, ast.Expr)
+        and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str))]
+    expanded = []; imports = 0; compose_imports = 0; custody_imports = 0
     for node in tree.body:
         if isinstance(node, ast.ImportFrom) and node.module == 'operation_identity':
             expanded.extend(contract_nodes); imports += 1
         elif isinstance(node, ast.ImportFrom) and node.module == 'baseline_compose_context':
             expanded.extend(compose_nodes); compose_imports += 1
+        elif isinstance(node, ast.ImportFrom) and node.module == 'custody_file_contract':
+            expanded.extend(custody_nodes); custody_imports += 1
         else: expanded.append(node)
     if imports != 1: raise ValueError('CANONICAL_OPERATION_CONTRACT_IMPORT_INVALID')
     if compose_imports != 1: raise ValueError('COMPOSE_BASELINE_CONTRACT_IMPORT_INVALID')
+    if custody_imports != 1: raise ValueError('FILE_CUSTODY_CONTRACT_IMPORT_INVALID')
     tree.body = expanded
     found = set()
     for node in tree.body:

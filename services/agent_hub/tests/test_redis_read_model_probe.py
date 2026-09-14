@@ -1,3 +1,5 @@
+
+from local_custody_fixture import fixture_retention
 import fakeredis
 import pytest
 
@@ -9,7 +11,7 @@ from npd_agent_hub.store import MemoryHubStore, RedisHubStore
 
 def test_probe_exercises_redis_read_models_without_returning_values_or_ids():
     client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=client, namespace="test:agent-hub")
+    store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     AgentHub(store=store).run(AgentTask(objective="Synthetic readiness probe"))
 
     report = run_probe(store)

@@ -19,6 +19,7 @@ import remote_preflight_capture as capture
 from test_gate_bindings import HEAD, NOW, fixture, write
 import test_execution_window as window_tests
 import test_pilot_runner as runner_tests
+from custody_file_contract import custody_file_scope, LocalFileCustodyFixture
 
 class OwnedFollowupTests(unittest.TestCase):
     proof = window_tests.WindowTests.proof
@@ -30,6 +31,8 @@ class OwnedFollowupTests(unittest.TestCase):
         self.baseline, self.anchor = fixture(self.root, family='RCA06',
             agent_counter_values={'tool_execution_total': 181, 'execution_audit_count': 362})
         self.verified = gate.verify_package(self.root, self.anchor, HEAD, self.baseline, current=NOW)
+        self.file_scope=custody_file_scope(LocalFileCustodyFixture(Path(self.temp.name)))
+        self.file_scope.__enter__();self.addCleanup(self.file_scope.__exit__,None,None,None)
 
     def verify(self, authority):
         return runner.verify_followup_package(self.root, self.anchor, HEAD, self.baseline,

@@ -4,6 +4,8 @@ The file is transported in memory over strict-host-key SSH. It never prints
 environment values, tokens, customer payloads, Redis keys, or raw HTTP bodies.
 """
 from __future__ import annotations
+
+from custody_file_contract import custody_file_writer
 import base64
 import copy
 from datetime import datetime, timezone
@@ -139,6 +141,7 @@ def protected_file(path: Path, expected_sha: str, exact_mode: int | None=None) -
     require(sha_bytes(raw) == expected_sha, 'PROTECTED_FILE_SHA_DRIFT')
     return raw
 
+@custody_file_writer
 def create_exclusive(path: Path, raw: bytes, mode: int=384) -> None:
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0), mode)
     with os.fdopen(descriptor, 'wb') as stream:
@@ -146,6 +149,7 @@ def create_exclusive(path: Path, raw: bytes, mode: int=384) -> None:
         stream.flush()
         os.fsync(stream.fileno())
 
+@custody_file_writer
 def replace_private(path: Path, value: object) -> None:
     pending = path.with_name(path.name + '.pending')
     require(not pending.exists(), 'STATE_PENDING_CONFLICT')
@@ -408,6 +412,7 @@ def read_state(invocation_id: str) -> dict[str, object]:
     require(state.get('operation_id') == OPERATION and state.get('invocation_id') == invocation_id, 'OPERATION_STATE_OWNERSHIP_MISMATCH')
     return state
 
+@custody_file_writer
 def prepare_claim_parents() -> None:
     require(RECEIPT_ROOT.is_dir() and (not RECEIPT_ROOT.is_symlink()), 'RECEIPT_ROOT_MISSING_OR_UNSAFE')
     metadata = RECEIPT_ROOT.lstat()
@@ -515,6 +520,7 @@ def preflight(envelope: dict[str, object]) -> dict[str, object]:
     require(not CLAIM_PATH.exists() and (not ATTEMPT_DIR.exists()), 'OPERATION_RACED_DURING_PREFLIGHT')
     return {'status': 'PASS', 'checked_at': iso(), 'target': public_identity(baseline['target']), 'protected_services_sha256': BASELINE_PROTECTED_SHA, 'routes': baseline['routes'], 'safety_counters': {name: baseline['safety'].get(name) for name in SAFETY_COUNTERS}, 'claim_absent': True, 'candidate_staged': False, 'production_mutation': False, 'business_system_write': False, 'candidate_head': CANDIDATE_HEAD, 'snapshot_sha256': SNAPSHOT_SHA, 'counter_evidence_sha256': COUNTER_EVIDENCE_SHA, 'package_manifest_sha256': envelope['package_manifest_sha256']}
 
+@custody_file_writer
 def claim(envelope: dict[str, object]) -> dict[str, object]:
     now = utc_now()
     require(mutation_start_allowed(now), 'CLAIM_OUTSIDE_MUTATION_START_WINDOW')

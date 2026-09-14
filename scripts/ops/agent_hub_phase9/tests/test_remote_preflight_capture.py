@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from uuid import uuid4
 from unittest.mock import patch
+from custody_file_contract import custody_file_scope, LocalFileCustodyFixture
 
 SOURCE = Path(__file__).resolve().parents[1] / "remote_preflight_capture.py"
 sys.path.insert(0, str(SOURCE.parent))
@@ -41,6 +42,8 @@ class CaptureRegressionTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.directory = Path(self.temporary.name)
+        self.file_scope=custody_file_scope(LocalFileCustodyFixture(Path(self.temporary.name)))
+        self.file_scope.__enter__();self.addCleanup(self.file_scope.__exit__,None,None,None)
 
     def invoke(self, stdout, rc=2, stderr=b"", **options):
         options.setdefault("success_verifier", lambda value: True)

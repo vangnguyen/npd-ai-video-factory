@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from local_custody_fixture import fixture_retention
+
 import asyncio
 from datetime import datetime, timedelta, timezone
 
@@ -251,13 +253,13 @@ def test_alert_contract_rejects_external_routing_or_notifications():
 def test_fakeredis_recovers_snapshots_alerts_and_namespace():
     now = datetime(2026, 8, 22, 12, 0, tzinfo=UTC)
     client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=client, namespace="test:agent-hub")
+    store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     _, _, provider_health = services(store, clock=lambda: now)
     created = provider_health.refresh(
         configuration=CONFIGURED, probes=AVAILABLE, actor="operator@example.com"
     )
 
-    restarted_store = RedisHubStore(client=client, namespace="test:agent-hub")
+    restarted_store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     _, _, restarted = services(restarted_store, clock=lambda: now)
     assert restarted.status().latest_snapshot == created.latest_snapshot
     assert restarted.status().alerts[0].alert_id == created.alerts[0].alert_id
@@ -274,9 +276,9 @@ def test_provider_health_snapshot_retention_removes_old_payload_and_index(
     monkeypatch.setattr(store_module, "PROVIDER_HEALTH_SNAPSHOT_RETENTION", 3)
     client = fakeredis.FakeRedis(decode_responses=True)
     store = (
-        RedisHubStore(client=client, namespace="test:agent-hub")
+        RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
         if backend == "redis"
-        else MemoryHubStore()
+        else MemoryHubStore(retention=fixture_retention())
     )
     now = [datetime(2026, 8, 22, 12, 0, tzinfo=UTC)]
     _, _, provider_health = services(store, clock=lambda: now[0])
@@ -292,7 +294,7 @@ def test_provider_health_snapshot_retention_removes_old_payload_and_index(
         now[0] += timedelta(minutes=5)
 
     restarted = (
-        RedisHubStore(client=client, namespace="test:agent-hub")
+        RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
         if backend == "redis"
         else store
     )

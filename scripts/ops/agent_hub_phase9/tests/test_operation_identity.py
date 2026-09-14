@@ -18,6 +18,7 @@ import pilot_transport as transport
 import render_runtime
 import operation_identity as identity
 from test_gate_bindings import HEAD, NOW, fixture, write, reseal_outer
+from custody_file_contract import custody_file_scope, LocalFileCustodyFixture
 
 def approval(verified, anchor):
     return {'kind':'OWNER_EXECUTION_APPROVAL','decision':'APPROVED','fresh_explicit_owner_execution_approval':True,
@@ -35,6 +36,8 @@ class IdentityAndStageTests(unittest.TestCase):
         self.verified=gate.verify_package(self.root,self.anchor,HEAD,self.baseline,current=NOW)
         self.operation=self.verified['bindings']['operation_id'];self.profile=gate.load(self.root/'RUNTIME_PROFILE.json')
         self.profile['transport']={'scp_executable':'synthetic-scp','identity_file':'synthetic-identity','known_hosts_client_path':'synthetic-pinned-file'}
+        self.file_scope=custody_file_scope(LocalFileCustodyFixture(Path(self.temp.name)))
+        self.file_scope.__enter__();self.addCleanup(self.file_scope.__exit__,None,None,None)
     def test_current_family_gate_dispatcher_and_stage_binding_passes(self):
         expected={'status':'PASS','mode':'preflight','operation_id':self.operation,'candidate_head':HEAD,
             'snapshot_sha256':self.verified['manifest']['snapshot_sha256'],'counter_evidence_sha256':self.verified['snapshot']['dependencies']['counter_receipt']['sha256'],

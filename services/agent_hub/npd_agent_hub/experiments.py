@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .retention_custody import custody_operation
+
 from collections.abc import Callable
 from datetime import datetime, time, timezone
 from math import erfc, sqrt
@@ -49,6 +51,7 @@ class ExperimentService:
         self.source_status_provider = source_status_provider
         self.source_reader = source_reader
 
+    @custody_operation("self.store")
     def _audit(
         self,
         experiment: Experiment,
@@ -98,6 +101,7 @@ class ExperimentService:
                 return candidate
         raise ValueError("experiment sequence is exhausted for this project/month")
 
+    @custody_operation("self.store")
     def create(self, request: ExperimentCreate, *, actor: str) -> Experiment:
         self._accepted_source(request)
         experiment = Experiment(
@@ -145,6 +149,7 @@ class ExperimentService:
             limit=limit, campaign_id=campaign_id, status=status
         )
 
+    @custody_operation("self.store")
     def update_draft(
         self, experiment_id: str, update: ExperimentDraftUpdate, *, actor: str
     ) -> Experiment:
@@ -172,6 +177,7 @@ class ExperimentService:
         )
         return updated
 
+    @custody_operation("self.store")
     def preview(self, experiment_id: str, *, actor: str) -> ExperimentPreview:
         experiment = self.get(experiment_id)
         if experiment.status in {
@@ -214,6 +220,7 @@ class ExperimentService:
         )
         return preview
 
+    @custody_operation("self.store")
     def request_approval(
         self, experiment_id: str, *, actor: str, note: str | None = None
     ) -> Experiment:
@@ -239,6 +246,7 @@ class ExperimentService:
         )
         return updated
 
+    @custody_operation("self.store")
     def decide_approval(
         self,
         experiment_id: str,
@@ -287,6 +295,7 @@ class ExperimentService:
             "verified_import": "read_only",
         }
 
+    @custody_operation("self.store")
     def add_observation(
         self,
         experiment_id: str,
@@ -339,6 +348,7 @@ class ExperimentService:
         limit = max(1, min(limit, 100))
         return [item.model_copy(deep=True) for item in experiment.observations[-limit:]][::-1]
 
+    @custody_operation("self.store")
     def decide_observation_quality(
         self,
         experiment_id: str,
@@ -471,6 +481,7 @@ class ExperimentService:
             tracked_urls=tracked_urls,
         )
 
+    @custody_operation("self.store")
     def apply_meta_tracking_mapping(
         self,
         experiment_id: str,
@@ -700,6 +711,7 @@ class ExperimentService:
                     )
         return breaches
 
+    @custody_operation("self.store")
     def evaluate(
         self,
         experiment_id: str,

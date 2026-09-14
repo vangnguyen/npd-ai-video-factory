@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .retention_custody import custody_operation
+
 from dataclasses import dataclass, field
 
 from .agents import SPECIALIST_AGENTS, select_agents
@@ -99,6 +101,7 @@ class AgentHub:
         )
         return [commander, *[agent.descriptor for agent in SPECIALIST_AGENTS.values()]]
 
+    @custody_operation("self.store")
     def run(self, task: AgentTask) -> CommandCenterReport:
         if PHASE9_REVIEW_CONTEXT_KEY in task.context:
             reports = plan_marketing_review(task)
@@ -175,6 +178,7 @@ class AgentHub:
                     return planned_action
         raise LookupError(action_id)
 
+    @custody_operation("self.store")
     def decide(
         self,
         task_id: str,
@@ -217,6 +221,7 @@ class AgentHub:
         )
         return target
 
+    @custody_operation("self.store")
     async def execute(self, task_id: str, action_id: str) -> ToolExecutionResult:
         task = self._get_task(task_id)
         if task is None:
@@ -281,6 +286,7 @@ class AgentHub:
         )
         return result
 
+    @custody_operation("self.store")
     async def analyze(self, task_id: str) -> CommandCenterReport:
         """Run only allowlisted reads, then turn evidence into a business answer."""
         task = self._get_task(task_id)

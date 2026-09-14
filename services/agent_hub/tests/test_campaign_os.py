@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from local_custody_fixture import fixture_retention
+
 from datetime import date
 
 import fakeredis
@@ -220,7 +222,7 @@ def test_specific_channel_plan_approval_returns_to_planned_for_next_scope():
 def test_redis_persistence_recovery_and_campaign_subnamespace():
     redis_client = fakeredis.FakeRedis(decode_responses=True)
     first = CampaignService(
-        RedisHubStore(client=redis_client, namespace="test:agent-hub")
+        RedisHubStore(client=redis_client, namespace="test:agent-hub", retention=fixture_retention())
     )
     campaign = first.create_from_brief(
         CampaignBriefRequest(
@@ -229,7 +231,7 @@ def test_redis_persistence_recovery_and_campaign_subnamespace():
         actor="operator",
     )
     restarted = CampaignService(
-        RedisHubStore(client=redis_client, namespace="test:agent-hub")
+        RedisHubStore(client=redis_client, namespace="test:agent-hub", retention=fixture_retention())
     )
     restored = restarted.get(campaign.campaign_id)
 

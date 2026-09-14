@@ -17,6 +17,7 @@ import pilot_runner as runner
 import capture_hash_contract as hashes
 from test_gate_bindings import HEAD, NOW, write
 import test_pilot_runner as runner_tests
+from custody_file_contract import custody_file_scope, LocalFileCustodyFixture
 TEMPLATE = runner_tests.TEMPLATE
 
 class WindowTests(unittest.TestCase):
@@ -135,7 +136,9 @@ class WindowTests(unittest.TestCase):
             INITIAL_DISPATCH_DEADLINE=(NOW+timedelta(seconds=600)).isoformat()), \
             patch.object(module,'utc_now',return_value=NOW+timedelta(seconds=601)), \
             patch.object(module,'verify_baseline',side_effect=AssertionError('observation reached')):
-            with self.assertRaisesRegex(module.GateStop,'EXPIRED'): module.claim({})
+            paths={n:Path(self.temp.name)/'runtime'/n for n in module.claim.__wrapped__.__code__.co_names if isinstance(getattr(module,n,None),Path)}
+            with patch.multiple(module,**paths):
+                with self.assertRaisesRegex(module.GateStop,'EXPIRED'): module.claim({})
 
     def test_remote_approval_window_must_equal_rendered_package_window(self):
         authority=self.proof();envelope=gate.load(authority/'DISPATCH_CLAIM.json')

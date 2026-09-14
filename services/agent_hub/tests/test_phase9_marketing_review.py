@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from local_custody_fixture import fixture_retention
+
 import asyncio
 import importlib
 from datetime import timedelta
@@ -225,7 +227,7 @@ def test_repeat_analyze_recomputes_without_creating_review_votes():
 def test_redis_task_and_report_recover_without_changing_evidence_contract():
     source_store, _journeys, _delivery, signed_case = signed_sales_fixture()
     client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=client, namespace="phase9-marketing-pilot-test")
+    store = RedisHubStore(client=client, namespace="phase9-marketing-pilot-test", retention=fixture_retention())
     for row in source_store.list_touchpoints(limit=100):
         store.append_touchpoint(row)
     unsigned = SalesIntelligencePreviewRequest(subject_ref=signed_case.subject_ref, observations=[], as_of=signed_case.as_of)

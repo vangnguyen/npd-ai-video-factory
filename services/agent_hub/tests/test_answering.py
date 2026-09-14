@@ -1,3 +1,5 @@
+
+from npd_agent_hub.store import MemoryHubStore
 from datetime import datetime, timezone
 
 from npd_agent_hub.answering import synthesize_business_answer
@@ -11,7 +13,7 @@ from npd_agent_hub.orchestrator import AgentHub
 
 
 def _crm_report(task: AgentTask) -> CommandCenterReport:
-    return AgentHub().run(task)
+    return AgentHub(store=MemoryHubStore()).run(task)
 
 
 def test_crm_answer_identifies_and_prioritizes_stale_leads_without_pii():

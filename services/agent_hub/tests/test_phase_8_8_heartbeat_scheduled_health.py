@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from local_custody_fixture import fixture_retention
+
 import asyncio
 import json
 import uuid
@@ -208,7 +210,7 @@ def test_freshness_prefers_heartbeat_and_keeps_lead_activity_separate():
 def test_scheduler_uses_cached_state_lease_and_persists_in_redis():
     now = [datetime(2026, 8, 22, 14, 0, tzinfo=UTC)]
     client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=client, namespace="test:agent-hub")
+    store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     delivery, provider_health, scheduler = services(
         store, now=lambda: now[0], scheduler_enabled=True
     )
@@ -224,7 +226,7 @@ def test_scheduler_uses_cached_state_lease_and_persists_in_redis():
     assert completed.external_notifications_enabled is False
     assert completed.production_write_enabled is False
 
-    restarted_store = RedisHubStore(client=client, namespace="test:agent-hub")
+    restarted_store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     _, restarted_health, restarted = services(
         restarted_store, now=lambda: now[0], scheduler_enabled=True
     )

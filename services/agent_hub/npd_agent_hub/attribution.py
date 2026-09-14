@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .retention_custody import custody_operation
+
 import hashlib
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -95,6 +97,7 @@ class AttributionService:
             for field in fields
         )
 
+    @custody_operation("self.store")
     def register_identity_mapping(
         self, request: CampaignIdentityMappingCreate, *, actor: str
     ) -> CampaignIdentityMapping:
@@ -232,6 +235,7 @@ class AttributionService:
             },
         )
 
+    @custody_operation("self.store")
     def _record_intake_issue(
         self,
         source_event: SourceTouchpointEvent,
@@ -271,6 +275,7 @@ class AttributionService:
         )
         return issue
 
+    @custody_operation("self.store")
     def _resolve_intake_issue(
         self,
         source_event: SourceTouchpointEvent,
@@ -315,6 +320,7 @@ class AttributionService:
                 },
             )
 
+    @custody_operation("self.store")
     def ingest_source_touchpoints(
         self, request: SourceTouchpointIngestRequest, *, actor: str
     ) -> AttributionDataQualitySnapshot:
@@ -576,6 +582,7 @@ class AttributionService:
     ) -> list[AttributionDataQualitySnapshot]:
         return self.store.list_attribution_quality_snapshots(limit=limit)
 
+    @custody_operation("self.store")
     def _audit(
         self,
         *,
@@ -595,6 +602,7 @@ class AttributionService:
             )
         )
 
+    @custody_operation("self.store")
     def backfill(
         self, request: TouchpointBackfillRequest, *, actor: str
     ) -> dict[str, int | bool]:
@@ -663,6 +671,7 @@ class AttributionService:
         ).encode("utf-8")
         return hashlib.sha256(payload).hexdigest()
 
+    @custody_operation("self.store")
     def reconcile(
         self, request: ReconciliationRequest, *, actor: str
     ) -> AttributionReconciliation:
@@ -782,6 +791,7 @@ class AttributionService:
             raise KeyError(reconciliation_id)
         return reconciliation
 
+    @custody_operation("self.store")
     def accept_quality(
         self,
         reconciliation_id: str,

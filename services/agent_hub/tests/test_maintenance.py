@@ -2,6 +2,7 @@ from copy import deepcopy
 
 import fakeredis
 import pytest
+from local_custody_fixture import fixture_retention
 
 from npd_agent_hub.maintenance import (
     MaintenanceError,
@@ -35,7 +36,7 @@ def test_export_and_restore_only_agent_namespace():
         target,
         payload,
         namespace="npd:agent-hub:v1",
-    )
+    retention=fixture_retention())
 
     assert restored == 3
     assert target.get("npd:agent-hub:v1:task:agt_1") == '{"task_id":"agt_1"}'
@@ -55,7 +56,7 @@ def test_v2_export_restore_preserves_absolute_ttl_semantics():
     assert exported["expires_at_epoch_ms"] > payload["created_at_epoch_ms"]
 
     target = fakeredis.FakeRedis(decode_responses=True)
-    assert restore_namespace(target, payload, namespace="npd:agent-hub:v1") == 1
+    assert restore_namespace(target, payload, namespace="npd:agent-hub:v1", retention=fixture_retention()) == 1
     restored_ttl = target.pttl("npd:agent-hub:v1:provider-health:scheduler:lease")
     assert 0 < restored_ttl <= exported["pttl_ms"]
     report = verify_namespace(target, payload, namespace="npd:agent-hub:v1")
@@ -72,7 +73,7 @@ def test_v2_restore_fails_closed_on_checksum_corruption_before_writing():
 
     target = fakeredis.FakeRedis(decode_responses=True)
     with pytest.raises(MaintenanceError, match="checksum mismatch"):
-        restore_namespace(target, corrupted, namespace="npd:agent-hub:v1")
+        restore_namespace(target, corrupted, namespace="npd:agent-hub:v1", retention=fixture_retention())
     assert list(target.scan_iter("*")) == []
 
 
@@ -96,7 +97,7 @@ def test_restore_refuses_namespace_mismatch_and_implicit_replace():
     }
 
     try:
-        restore_namespace(redis_client, payload, namespace="npd:agent-hub:v1")
+        restore_namespace(redis_client, payload, namespace="npd:agent-hub:v1", retention=fixture_retention())
         assert False, "restore must require explicit replace when namespace is not empty"
     except MaintenanceError as exc:
         assert "--replace" in str(exc)
@@ -106,7 +107,7 @@ def test_restore_refuses_namespace_mismatch_and_implicit_replace():
             fakeredis.FakeRedis(decode_responses=True),
             payload,
             namespace="different:namespace",
-        )
+        retention=fixture_retention())
         assert False, "namespace mismatch must fail"
     except MaintenanceError as exc:
         assert "does not match" in str(exc)
@@ -129,7 +130,7 @@ def test_replace_restore_removes_stale_agent_keys_but_not_other_namespaces():
         payload,
         namespace="npd:agent-hub:v1",
         replace=True,
-    )
+    retention=fixture_retention())
 
     assert redis_client.get("npd:agent-hub:v1:stale") is None
     assert redis_client.get("npd:agent-hub:v1:current") == "new"
@@ -147,7 +148,7 @@ def test_legacy_v1_restore_remains_supported_without_adding_ttls():
     }
     target = fakeredis.FakeRedis(decode_responses=True)
 
-    assert restore_namespace(target, payload, namespace="npd:agent-hub:v1") == 1
+    assert restore_namespace(target, payload, namespace="npd:agent-hub:v1", retention=fixture_retention()) == 1
     assert target.get("npd:agent-hub:v1:legacy") == "kept"
     assert target.pttl("npd:agent-hub:v1:legacy") == -1
 
@@ -164,5 +165,5 @@ def test_legacy_v1_restore_accepts_unsorted_items_and_verifies_canonical_key_ord
     }
     target = fakeredis.FakeRedis(decode_responses=True)
 
-    assert restore_namespace(target, payload, namespace="npd:agent-hub:v1") == 2
+    assert restore_namespace(target, payload, namespace="npd:agent-hub:v1", retention=fixture_retention()) == 2
     assert verify_namespace(target, payload, namespace="npd:agent-hub:v1")["status"] == "PASS"

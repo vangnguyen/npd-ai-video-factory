@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .retention_custody import custody_operation
+
 from .delivery_observability import AttributionDeliveryService
 from .journeys import JourneyService
 from .lead_scoring import LeadScoringService
@@ -30,6 +32,7 @@ class SalesNBAReviewService:
         self.scoring = LeadScoringService(journeys)
         self.nba = SalesAwareNextBestActionService(journeys)
 
+    @custody_operation("self.store")
     def record(
         self,
         request: SalesNBAReviewCreate,

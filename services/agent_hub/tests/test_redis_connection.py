@@ -72,6 +72,7 @@ def test_build_store_forwards_password_file(monkeypatch, tmp_path: Path):
     store = build_store(settings)
 
     assert isinstance(store, RedisHubStore)
-    assert store.redis is sentinel
+    assert store.redis._client is sentinel
+    assert store.retention.inactive is True
     assert seen["password_file"] == str(password_file)
     assert PASSWORD not in repr(settings)

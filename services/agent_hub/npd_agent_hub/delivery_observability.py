@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .retention_custody import custody_operation, CustodyRejectionWithEvidence
+
 import hashlib
 import hmac
 import json
@@ -48,7 +50,7 @@ class DeliveryNotConfigured(RuntimeError):
     pass
 
 
-class DeliveryIntegrityConflict(RuntimeError):
+class DeliveryIntegrityConflict(CustodyRejectionWithEvidence):
     pass
 
 
@@ -209,6 +211,7 @@ class AttributionDeliveryService:
             signature=self._signature(unsigned),
         )
 
+    @custody_operation("self.store")
     def _audit(
         self,
         *,
@@ -226,6 +229,7 @@ class AttributionDeliveryService:
             )
         )
 
+    @custody_operation("self.store")
     def _save_dead_letter(
         self,
         *,
@@ -313,6 +317,7 @@ class AttributionDeliveryService:
                 f"delivery retry budget exceeds configured maximum {configured_max}"
             )
 
+    @custody_operation("self.store")
     def ingest(
         self, envelope: AttributionDeliveryEnvelope, *, actor: str
     ) -> AttributionDeliveryReceipt:
@@ -374,6 +379,7 @@ class AttributionDeliveryService:
         )
         return receipt
 
+    @custody_operation("self.store")
     def record_failure(
         self, failure: AttributionDeliveryFailure, *, actor: str
     ) -> AttributionDeliveryReceipt:
@@ -464,6 +470,7 @@ class AttributionDeliveryService:
             rows = [item for item in rows if item.outcome == outcome]
         return rows[:limit]
 
+    @custody_operation("self.store")
     def ingest_heartbeat(
         self, heartbeat: AttributionProducerHeartbeat, *, actor: str
     ) -> AttributionHeartbeatReceipt:

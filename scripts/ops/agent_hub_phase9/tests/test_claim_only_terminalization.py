@@ -14,6 +14,7 @@ import claim_only_terminalization as terminal
 import operation_identity as identity
 import pilot_dispatcher as dispatcher
 import runtime_template as runtime
+from custody_file_contract import custody_file_scope, LocalFileCustodyFixture
 
 NOW=datetime(2026,9,13,7,10,tzinfo=timezone.utc)
 ATTEMPT='542945ca-a1fb-49af-a340-4acd5485ee8f'
@@ -55,6 +56,8 @@ class ClaimOnlyTerminalizationTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name)/'local-fixture'
         self.plan,self.live=fixture(self.root);self.attempt=self.root/'attempts'/self.plan['operation_id']
         self.claim=self.root/'operations'/(self.plan['operation_id']+'.json');self.state=self.attempt/'state.json'
+        self.file_scope=custody_file_scope(LocalFileCustodyFixture(Path(self.temp.name)))
+        self.file_scope.__enter__();self.addCleanup(self.file_scope.__exit__,None,None,None)
     def execute(self,**options):
         plan=options.pop('plan',self.plan)
         return terminal.terminalize(self.root,plan,options.pop('approval',approval(plan)),tool_sha256=options.pop('tool_sha256',plan['terminalization_tool_sha256']),

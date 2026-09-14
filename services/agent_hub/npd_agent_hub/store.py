@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .retention_custody import CustodyCoordinator, GuardedRedis, inactive_coordinator, custody_writer, custody_reader
+
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
@@ -38,6 +40,7 @@ PROVIDER_HEALTH_SNAPSHOT_RETENTION = 5000
 
 @dataclass
 class MemoryHubStore:
+    retention: CustodyCoordinator = field(default_factory=CustodyCoordinator, repr=False, compare=False)
     backend_name: str = "memory"
     tasks: dict[str, AgentTask] = field(default_factory=dict)
     reports: dict[str, CommandCenterReport] = field(default_factory=dict)
@@ -79,38 +82,47 @@ class MemoryHubStore:
     experiment_updated_at: dict[str, datetime] = field(default_factory=dict)
     experiment_audit: dict[str, list[ExperimentAuditEvent]] = field(default_factory=dict)
 
+    @custody_writer
     def _touch(self, task_id: str) -> None:
         self.updated_at[task_id] = datetime.now(timezone.utc)
 
+    @custody_reader
     def health(self) -> bool:
         return True
 
+    @custody_writer
     def save_task(self, task: AgentTask) -> None:
         self.tasks[task.task_id] = task.model_copy(deep=True)
         self._touch(task.task_id)
 
+    @custody_reader
     def get_task(self, task_id: str) -> AgentTask | None:
         task = self.tasks.get(task_id)
         return task.model_copy(deep=True) if task is not None else None
 
+    @custody_writer
     def save_report(self, report: CommandCenterReport) -> None:
         self.reports[report.task_id] = report.model_copy(deep=True)
         self._touch(report.task_id)
 
+    @custody_reader
     def get_report(self, task_id: str) -> CommandCenterReport | None:
         report = self.reports.get(task_id)
         return report.model_copy(deep=True) if report is not None else None
 
+    @custody_writer
     def append_execution(self, result: ToolExecutionResult) -> None:
         bucket = self.executions.setdefault(result.task_id, [])
         bucket.append(result.model_copy(deep=True))
         del bucket[:-1000]
         self._touch(result.task_id)
 
+    @custody_reader
     def list_executions(self, task_id: str, limit: int = 100) -> list[ToolExecutionResult]:
         limit = max(1, min(limit, 1000))
         return [item.model_copy(deep=True) for item in self.executions.get(task_id, [])[-limit:]][::-1]
 
+    @custody_writer
     def append_audit(self, event: AuditEvent) -> None:
         task_bucket = self.audit.setdefault(event.task_id, [])
         task_bucket.append(event.model_copy(deep=True))
@@ -119,27 +131,33 @@ class MemoryHubStore:
         del self.global_audit[:-5000]
         self._touch(event.task_id)
 
+    @custody_reader
     def list_audit(self, task_id: str, limit: int = 100) -> list[AuditEvent]:
         limit = max(1, min(limit, 1000))
         return [item.model_copy(deep=True) for item in self.audit.get(task_id, [])[-limit:]][::-1]
 
+    @custody_reader
     def list_recent_audit(self, limit: int = 100) -> list[AuditEvent]:
         limit = max(1, min(limit, 1000))
         return [item.model_copy(deep=True) for item in self.global_audit[-limit:]][::-1]
 
+    @custody_reader
     def list_recent_tasks(self, limit: int = 50) -> list[tuple[str, datetime]]:
         limit = max(1, min(limit, 200))
         items = sorted(self.updated_at.items(), key=lambda item: item[1], reverse=True)
         return items[:limit]
 
+    @custody_writer
     def save_campaign(self, campaign: Campaign) -> None:
         self.campaigns[campaign.campaign_id] = campaign.model_copy(deep=True)
         self.campaign_updated_at[campaign.campaign_id] = campaign.updated_at
 
+    @custody_reader
     def get_campaign(self, campaign_id: str) -> Campaign | None:
         campaign = self.campaigns.get(campaign_id)
         return campaign.model_copy(deep=True) if campaign is not None else None
 
+    @custody_reader
     def list_campaigns(
         self, limit: int = 50, status: CampaignStatus | None = None
     ) -> list[Campaign]:
@@ -154,11 +172,13 @@ class MemoryHubStore:
             rows = [campaign for campaign in rows if campaign.status == status]
         return [campaign.model_copy(deep=True) for campaign in rows[:limit]]
 
+    @custody_writer
     def append_campaign_audit(self, event: CampaignAuditEvent) -> None:
         bucket = self.campaign_audit.setdefault(event.campaign_id, [])
         bucket.append(event.model_copy(deep=True))
         del bucket[:-2000]
 
+    @custody_reader
     def list_campaign_audit(
         self, campaign_id: str, limit: int = 100
     ) -> list[CampaignAuditEvent]:
@@ -168,22 +188,26 @@ class MemoryHubStore:
             for event in self.campaign_audit.get(campaign_id, [])[-limit:]
         ][::-1]
 
+    @custody_writer
     def append_touchpoint(self, event: TouchpointEvent) -> None:
         if event.event_id in self.touchpoints:
             raise ValueError("touchpoint event_id already exists")
         self.touchpoints[event.event_id] = event.model_copy(deep=True)
 
+    @custody_writer
     def save_identity_mapping(self, mapping: CampaignIdentityMapping) -> None:
         if mapping.mapping_id in self.identity_mappings:
             raise ValueError("identity mapping_id already exists")
         self.identity_mappings[mapping.mapping_id] = mapping.model_copy(deep=True)
 
+    @custody_reader
     def get_identity_mapping(
         self, mapping_id: str
     ) -> CampaignIdentityMapping | None:
         row = self.identity_mappings.get(mapping_id)
         return row.model_copy(deep=True) if row is not None else None
 
+    @custody_reader
     def list_identity_mappings(
         self,
         *,
@@ -201,6 +225,7 @@ class MemoryHubStore:
             rows = [item for item in rows if item.campaign_id == campaign_id]
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    @custody_writer
     def save_attribution_quality_snapshot(
         self, snapshot: AttributionDataQualitySnapshot
     ) -> None:
@@ -208,6 +233,7 @@ class MemoryHubStore:
             deep=True
         )
 
+    @custody_reader
     def list_attribution_quality_snapshots(
         self, limit: int = 50
     ) -> list[AttributionDataQualitySnapshot]:
@@ -219,15 +245,18 @@ class MemoryHubStore:
         )
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    @custody_writer
     def save_attribution_intake_issue(self, issue: AttributionIntakeIssue) -> None:
         self.attribution_intake_issues[issue.issue_id] = issue.model_copy(deep=True)
 
+    @custody_reader
     def get_attribution_intake_issue(
         self, issue_id: str
     ) -> AttributionIntakeIssue | None:
         issue = self.attribution_intake_issues.get(issue_id)
         return issue.model_copy(deep=True) if issue is not None else None
 
+    @custody_reader
     def list_attribution_intake_issues(
         self, *, status: str | None = None, limit: int = 100
     ) -> list[AttributionIntakeIssue]:
@@ -241,6 +270,7 @@ class MemoryHubStore:
             rows = [item for item in rows if item.status.value == status]
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    @custody_writer
     def save_attribution_delivery_receipt(
         self, receipt: AttributionDeliveryReceipt
     ) -> None:
@@ -251,12 +281,14 @@ class MemoryHubStore:
             deep=True
         )
 
+    @custody_reader
     def get_attribution_delivery_receipt(
         self, receipt_id: str
     ) -> AttributionDeliveryReceipt | None:
         receipt = self.attribution_delivery_receipts.get(receipt_id)
         return receipt.model_copy(deep=True) if receipt is not None else None
 
+    @custody_reader
     def list_attribution_delivery_receipts(
         self, *, producer: str | None = None, limit: int = 1000
     ) -> list[AttributionDeliveryReceipt]:
@@ -270,6 +302,7 @@ class MemoryHubStore:
             rows = [item for item in rows if item.producer == producer]
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    @custody_writer
     def save_attribution_heartbeat_receipt(
         self, receipt: AttributionHeartbeatReceipt
     ) -> None:
@@ -286,12 +319,14 @@ class MemoryHubStore:
             )
             self.attribution_heartbeat_receipts.pop(oldest.receipt_id, None)
 
+    @custody_reader
     def get_attribution_heartbeat_receipt(
         self, receipt_id: str
     ) -> AttributionHeartbeatReceipt | None:
         receipt = self.attribution_heartbeat_receipts.get(receipt_id)
         return receipt.model_copy(deep=True) if receipt is not None else None
 
+    @custody_reader
     def list_attribution_heartbeat_receipts(
         self, *, producer: str | None = None, limit: int = 1000
     ) -> list[AttributionHeartbeatReceipt]:
@@ -305,12 +340,14 @@ class MemoryHubStore:
             rows = [item for item in rows if item.producer == producer]
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    @custody_writer
     def save_attribution_dead_letter(self, item: AttributionDeadLetter) -> None:
         existing = self.attribution_dead_letters.get(item.dead_letter_id)
         if existing is not None and existing != item:
             raise ValueError("dead letter is immutable")
         self.attribution_dead_letters[item.dead_letter_id] = item.model_copy(deep=True)
 
+    @custody_reader
     def list_attribution_dead_letters(
         self, *, producer: str | None = None, limit: int = 1000
     ) -> list[AttributionDeadLetter]:
@@ -324,6 +361,7 @@ class MemoryHubStore:
             rows = [item for item in rows if item.producer == producer]
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    @custody_writer
     def save_provider_health_snapshot(self, snapshot: ProviderHealthSnapshot) -> None:
         self.provider_health_snapshots[snapshot.snapshot_id] = snapshot.model_copy(
             deep=True
@@ -340,6 +378,7 @@ class MemoryHubStore:
             for item in expired:
                 self.provider_health_snapshots.pop(item.snapshot_id, None)
 
+    @custody_reader
     def list_provider_health_snapshots(
         self, limit: int = 50
     ) -> list[ProviderHealthSnapshot]:
@@ -351,13 +390,16 @@ class MemoryHubStore:
         )
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    @custody_writer
     def save_provider_alert(self, alert: ProviderHealthAlert) -> None:
         self.provider_alerts[alert.alert_id] = alert.model_copy(deep=True)
 
+    @custody_reader
     def get_provider_alert(self, alert_id: str) -> ProviderHealthAlert | None:
         alert = self.provider_alerts.get(alert_id)
         return alert.model_copy(deep=True) if alert is not None else None
 
+    @custody_reader
     def list_provider_alerts(self, limit: int = 100) -> list[ProviderHealthAlert]:
         limit = max(1, min(limit, 5000))
         rows = sorted(
@@ -367,17 +409,20 @@ class MemoryHubStore:
         )
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    @custody_writer
     def save_provider_health_scheduler_status(
         self, status: ProviderHealthSchedulerStatus
     ) -> None:
         self.provider_health_scheduler_status = status.model_copy(deep=True)
 
+    @custody_reader
     def get_provider_health_scheduler_status(
         self,
     ) -> ProviderHealthSchedulerStatus | None:
         status = self.provider_health_scheduler_status
         return status.model_copy(deep=True) if status is not None else None
 
+    @custody_writer
     def acquire_provider_health_scheduler_lease(
         self, owner: str, ttl_seconds: int
     ) -> bool:
@@ -393,6 +438,7 @@ class MemoryHubStore:
         )
         return True
 
+    @custody_writer
     def release_provider_health_scheduler_lease(self, owner: str) -> None:
         if (
             self.provider_health_scheduler_lease is not None
@@ -400,10 +446,12 @@ class MemoryHubStore:
         ):
             self.provider_health_scheduler_lease = None
 
+    @custody_reader
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
         event = self.touchpoints.get(event_id)
         return event.model_copy(deep=True) if event is not None else None
 
+    @custody_reader
     def list_touchpoints(
         self,
         *,
@@ -423,6 +471,7 @@ class MemoryHubStore:
         rows.sort(key=lambda item: (item.occurred_at, item.event_id), reverse=True)
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    @custody_writer
     def save_attribution_reconciliation(
         self, reconciliation: AttributionReconciliation
     ) -> None:
@@ -430,12 +479,14 @@ class MemoryHubStore:
             reconciliation.model_copy(deep=True)
         )
 
+    @custody_reader
     def get_attribution_reconciliation(
         self, reconciliation_id: str
     ) -> AttributionReconciliation | None:
         row = self.attribution_reconciliations.get(reconciliation_id)
         return row.model_copy(deep=True) if row is not None else None
 
+    @custody_reader
     def list_attribution_reconciliations(
         self, limit: int = 50
     ) -> list[AttributionReconciliation]:
@@ -447,25 +498,31 @@ class MemoryHubStore:
         )
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    @custody_reader
     def count_attribution_reconciliations(self) -> int:
         return len(self.attribution_reconciliations)
 
+    @custody_writer
     def append_attribution_audit(self, event: AttributionAuditEvent) -> None:
         self.attribution_audit.append(event.model_copy(deep=True))
         del self.attribution_audit[:-5000]
 
+    @custody_reader
     def list_attribution_audit(self, limit: int = 100) -> list[AttributionAuditEvent]:
         limit = max(1, min(limit, 1000))
         return [item.model_copy(deep=True) for item in self.attribution_audit[-limit:]][::-1]
 
+    @custody_writer
     def save_experiment(self, experiment: Experiment) -> None:
         self.experiments[experiment.experiment_id] = experiment.model_copy(deep=True)
         self.experiment_updated_at[experiment.experiment_id] = experiment.updated_at
 
+    @custody_reader
     def get_experiment(self, experiment_id: str) -> Experiment | None:
         experiment = self.experiments.get(experiment_id)
         return experiment.model_copy(deep=True) if experiment is not None else None
 
+    @custody_reader
     def list_experiments(
         self,
         limit: int = 50,
@@ -485,11 +542,13 @@ class MemoryHubStore:
             rows = [item for item in rows if item.status == status]
         return [item.model_copy(deep=True) for item in rows[:limit]]
 
+    @custody_writer
     def append_experiment_audit(self, event: ExperimentAuditEvent) -> None:
         bucket = self.experiment_audit.setdefault(event.experiment_id, [])
         bucket.append(event.model_copy(deep=True))
         del bucket[:-2000]
 
+    @custody_reader
     def list_experiment_audit(
         self, experiment_id: str, limit: int = 100
     ) -> list[ExperimentAuditEvent]:
@@ -510,6 +569,7 @@ class RedisHubStore:
         password_file: str | None = None,
         namespace: str | None = None,
         client: Redis | None = None,
+        retention: CustodyCoordinator | None = None,
     ) -> None:
         self.namespace = (namespace or default_settings.store_namespace).strip(":")
         self.redis = client or create_redis_client(
@@ -521,38 +581,48 @@ class RedisHubStore:
             ),
         )
 
+        self.retention = retention or inactive_coordinator()
+        self.redis = GuardedRedis(self.redis, self)
+
     def _key(self, *parts: str) -> str:
         return ":".join((self.namespace, *parts))
 
+    @custody_writer
     def _touch(self, task_id: str) -> None:
         self.redis.zadd(
             self._key("tasks"),
             {task_id: datetime.now(timezone.utc).timestamp()},
         )
 
+    @custody_reader
     def health(self) -> bool:
         return bool(self.redis.ping())
 
+    @custody_writer
     def save_task(self, task: AgentTask) -> None:
         pipe = self.redis.pipeline()
         pipe.set(self._key("task", task.task_id), task.model_dump_json())
         pipe.zadd(self._key("tasks"), {task.task_id: datetime.now(timezone.utc).timestamp()})
         pipe.execute()
 
+    @custody_reader
     def get_task(self, task_id: str) -> AgentTask | None:
         raw = self.redis.get(self._key("task", task_id))
         return AgentTask.model_validate_json(raw) if raw else None
 
+    @custody_writer
     def save_report(self, report: CommandCenterReport) -> None:
         pipe = self.redis.pipeline()
         pipe.set(self._key("report", report.task_id), report.model_dump_json())
         pipe.zadd(self._key("tasks"), {report.task_id: datetime.now(timezone.utc).timestamp()})
         pipe.execute()
 
+    @custody_reader
     def get_report(self, task_id: str) -> CommandCenterReport | None:
         raw = self.redis.get(self._key("report", task_id))
         return CommandCenterReport.model_validate_json(raw) if raw else None
 
+    @custody_writer
     def append_execution(self, result: ToolExecutionResult) -> None:
         key = self._key("executions", result.task_id)
         pipe = self.redis.pipeline()
@@ -561,11 +631,13 @@ class RedisHubStore:
         pipe.zadd(self._key("tasks"), {result.task_id: datetime.now(timezone.utc).timestamp()})
         pipe.execute()
 
+    @custody_reader
     def list_executions(self, task_id: str, limit: int = 100) -> list[ToolExecutionResult]:
         limit = max(1, min(limit, 1000))
         rows = self.redis.lrange(self._key("executions", task_id), -limit, -1)
         return [ToolExecutionResult.model_validate_json(raw) for raw in reversed(rows)]
 
+    @custody_writer
     def append_audit(self, event: AuditEvent) -> None:
         raw = event.model_dump_json()
         task_key = self._key("audit", event.task_id)
@@ -578,16 +650,19 @@ class RedisHubStore:
         pipe.zadd(self._key("tasks"), {event.task_id: event.created_at.timestamp()})
         pipe.execute()
 
+    @custody_reader
     def list_audit(self, task_id: str, limit: int = 100) -> list[AuditEvent]:
         limit = max(1, min(limit, 1000))
         rows = self.redis.lrange(self._key("audit", task_id), -limit, -1)
         return [AuditEvent.model_validate_json(raw) for raw in reversed(rows)]
 
+    @custody_reader
     def list_recent_audit(self, limit: int = 100) -> list[AuditEvent]:
         limit = max(1, min(limit, 1000))
         rows = self.redis.lrange(self._key("audit", "global"), -limit, -1)
         return [AuditEvent.model_validate_json(raw) for raw in reversed(rows)]
 
+    @custody_reader
     def list_recent_tasks(self, limit: int = 50) -> list[tuple[str, datetime]]:
         limit = max(1, min(limit, 200))
         rows = self.redis.zrevrange(self._key("tasks"), 0, limit - 1, withscores=True)
@@ -596,6 +671,7 @@ class RedisHubStore:
             for task_id, score in rows
         ]
 
+    @custody_writer
     def save_campaign(self, campaign: Campaign) -> None:
         pipe = self.redis.pipeline()
         pipe.set(
@@ -608,10 +684,12 @@ class RedisHubStore:
         )
         pipe.execute()
 
+    @custody_reader
     def get_campaign(self, campaign_id: str) -> Campaign | None:
         raw = self.redis.get(self._key("campaign-os", "campaign", campaign_id))
         return Campaign.model_validate_json(raw) if raw else None
 
+    @custody_reader
     def list_campaigns(
         self, limit: int = 50, status: CampaignStatus | None = None
     ) -> list[Campaign]:
@@ -627,6 +705,7 @@ class RedisHubStore:
             filtered = [campaign for campaign in filtered if campaign.status == status]
         return filtered[:limit]
 
+    @custody_writer
     def append_campaign_audit(self, event: CampaignAuditEvent) -> None:
         key = self._key("campaign-os", "audit", event.campaign_id)
         pipe = self.redis.pipeline()
@@ -634,6 +713,7 @@ class RedisHubStore:
         pipe.ltrim(key, -2000, -1)
         pipe.execute()
 
+    @custody_reader
     def list_campaign_audit(
         self, campaign_id: str, limit: int = 100
     ) -> list[CampaignAuditEvent]:
@@ -643,6 +723,7 @@ class RedisHubStore:
         )
         return [CampaignAuditEvent.model_validate_json(raw) for raw in reversed(rows)]
 
+    @custody_writer
     def append_touchpoint(self, event: TouchpointEvent) -> None:
         event_key = self._key("attribution-os", "touchpoint", event.event_id)
         if not self.redis.set(event_key, event.model_dump_json(), nx=True):
@@ -668,6 +749,7 @@ class RedisHubStore:
             )
         pipe.execute()
 
+    @custody_writer
     def save_identity_mapping(self, mapping: CampaignIdentityMapping) -> None:
         mapping_key = self._key(
             "attribution-os", "identity-mapping", mapping.mapping_id
@@ -679,6 +761,7 @@ class RedisHubStore:
             {mapping.mapping_id: mapping.created_at.timestamp()},
         )
 
+    @custody_reader
     def get_identity_mapping(
         self, mapping_id: str
     ) -> CampaignIdentityMapping | None:
@@ -687,6 +770,7 @@ class RedisHubStore:
         )
         return CampaignIdentityMapping.model_validate_json(raw) if raw else None
 
+    @custody_reader
     def list_identity_mappings(
         self,
         *,
@@ -706,6 +790,7 @@ class RedisHubStore:
             filtered = [item for item in filtered if item.campaign_id == campaign_id]
         return filtered[:limit]
 
+    @custody_writer
     def save_attribution_quality_snapshot(
         self, snapshot: AttributionDataQualitySnapshot
     ) -> None:
@@ -720,6 +805,7 @@ class RedisHubStore:
         )
         pipe.execute()
 
+    @custody_reader
     def list_attribution_quality_snapshots(
         self, limit: int = 50
     ) -> list[AttributionDataQualitySnapshot]:
@@ -736,6 +822,7 @@ class RedisHubStore:
                 rows.append(AttributionDataQualitySnapshot.model_validate_json(raw))
         return rows
 
+    @custody_writer
     def save_attribution_intake_issue(self, issue: AttributionIntakeIssue) -> None:
         pipe = self.redis.pipeline()
         pipe.set(
@@ -748,6 +835,7 @@ class RedisHubStore:
         )
         pipe.execute()
 
+    @custody_reader
     def get_attribution_intake_issue(
         self, issue_id: str
     ) -> AttributionIntakeIssue | None:
@@ -756,6 +844,7 @@ class RedisHubStore:
         )
         return AttributionIntakeIssue.model_validate_json(raw) if raw else None
 
+    @custody_reader
     def list_attribution_intake_issues(
         self, *, status: str | None = None, limit: int = 100
     ) -> list[AttributionIntakeIssue]:
@@ -769,6 +858,7 @@ class RedisHubStore:
             filtered = [item for item in filtered if item.status.value == status]
         return filtered[:limit]
 
+    @custody_writer
     def save_attribution_delivery_receipt(
         self, receipt: AttributionDeliveryReceipt
     ) -> None:
@@ -785,6 +875,7 @@ class RedisHubStore:
         )
         pipe.execute()
 
+    @custody_reader
     def get_attribution_delivery_receipt(
         self, receipt_id: str
     ) -> AttributionDeliveryReceipt | None:
@@ -793,6 +884,7 @@ class RedisHubStore:
         )
         return AttributionDeliveryReceipt.model_validate_json(raw) if raw else None
 
+    @custody_reader
     def list_attribution_delivery_receipts(
         self, *, producer: str | None = None, limit: int = 1000
     ) -> list[AttributionDeliveryReceipt]:
@@ -806,6 +898,7 @@ class RedisHubStore:
             filtered = [item for item in filtered if item.producer == producer]
         return filtered[:limit]
 
+    @custody_writer
     def save_attribution_heartbeat_receipt(
         self, receipt: AttributionHeartbeatReceipt
     ) -> None:
@@ -838,6 +931,7 @@ class RedisHubStore:
                 cleanup.zrem(index_key, *expired_ids)
             cleanup.execute()
 
+    @custody_reader
     def get_attribution_heartbeat_receipt(
         self, receipt_id: str
     ) -> AttributionHeartbeatReceipt | None:
@@ -846,6 +940,7 @@ class RedisHubStore:
         )
         return AttributionHeartbeatReceipt.model_validate_json(raw) if raw else None
 
+    @custody_reader
     def list_attribution_heartbeat_receipts(
         self, *, producer: str | None = None, limit: int = 1000
     ) -> list[AttributionHeartbeatReceipt]:
@@ -859,6 +954,7 @@ class RedisHubStore:
             filtered = [item for item in filtered if item.producer == producer]
         return filtered[:limit]
 
+    @custody_writer
     def save_attribution_dead_letter(self, item: AttributionDeadLetter) -> None:
         key = self._key("attribution-os", "dead-letter", item.dead_letter_id)
         raw = item.model_dump_json()
@@ -873,6 +969,7 @@ class RedisHubStore:
         )
         pipe.execute()
 
+    @custody_reader
     def list_attribution_dead_letters(
         self, *, producer: str | None = None, limit: int = 1000
     ) -> list[AttributionDeadLetter]:
@@ -891,6 +988,7 @@ class RedisHubStore:
             rows = [item for item in rows if item.producer == producer]
         return rows[:limit]
 
+    @custody_writer
     def save_provider_health_snapshot(self, snapshot: ProviderHealthSnapshot) -> None:
         index_key = self._key("provider-health", "snapshots")
         snapshot_key = self._key(
@@ -929,6 +1027,7 @@ class RedisHubStore:
 
         self.redis.transaction(save_capped, index_key)
 
+    @custody_reader
     def list_provider_health_snapshots(
         self, limit: int = 50
     ) -> list[ProviderHealthSnapshot]:
@@ -945,6 +1044,7 @@ class RedisHubStore:
                 rows.append(ProviderHealthSnapshot.model_validate_json(raw))
         return rows
 
+    @custody_writer
     def save_provider_alert(self, alert: ProviderHealthAlert) -> None:
         pipe = self.redis.pipeline()
         pipe.set(
@@ -957,10 +1057,12 @@ class RedisHubStore:
         )
         pipe.execute()
 
+    @custody_reader
     def get_provider_alert(self, alert_id: str) -> ProviderHealthAlert | None:
         raw = self.redis.get(self._key("provider-health", "alert", alert_id))
         return ProviderHealthAlert.model_validate_json(raw) if raw else None
 
+    @custody_reader
     def list_provider_alerts(self, limit: int = 100) -> list[ProviderHealthAlert]:
         limit = max(1, min(limit, 5000))
         ids = self.redis.zrevrange(
@@ -969,6 +1071,7 @@ class RedisHubStore:
         rows = [self.get_provider_alert(str(alert_id)) for alert_id in ids]
         return [item for item in rows if item is not None]
 
+    @custody_writer
     def save_provider_health_scheduler_status(
         self, status: ProviderHealthSchedulerStatus
     ) -> None:
@@ -977,12 +1080,14 @@ class RedisHubStore:
             status.model_dump_json(),
         )
 
+    @custody_reader
     def get_provider_health_scheduler_status(
         self,
     ) -> ProviderHealthSchedulerStatus | None:
         raw = self.redis.get(self._key("provider-health", "scheduler", "status"))
         return ProviderHealthSchedulerStatus.model_validate_json(raw) if raw else None
 
+    @custody_writer
     def acquire_provider_health_scheduler_lease(
         self, owner: str, ttl_seconds: int
     ) -> bool:
@@ -993,15 +1098,18 @@ class RedisHubStore:
             return True
         return bool(self.redis.set(key, owner, nx=True, ex=ttl_seconds))
 
+    @custody_writer
     def release_provider_health_scheduler_lease(self, owner: str) -> None:
         key = self._key("provider-health", "scheduler", "lease")
         if self.redis.get(key) == owner:
             self.redis.delete(key)
 
+    @custody_reader
     def get_touchpoint(self, event_id: str) -> TouchpointEvent | None:
         raw = self.redis.get(self._key("attribution-os", "touchpoint", event_id))
         return TouchpointEvent.model_validate_json(raw) if raw else None
 
+    @custody_reader
     def list_touchpoints(
         self,
         *,
@@ -1034,6 +1142,7 @@ class RedisHubStore:
             filtered = [item for item in filtered if item.lead_id == lead_id]
         return filtered[:limit]
 
+    @custody_writer
     def save_attribution_reconciliation(
         self, reconciliation: AttributionReconciliation
     ) -> None:
@@ -1050,6 +1159,7 @@ class RedisHubStore:
         )
         pipe.execute()
 
+    @custody_reader
     def get_attribution_reconciliation(
         self, reconciliation_id: str
     ) -> AttributionReconciliation | None:
@@ -1058,6 +1168,7 @@ class RedisHubStore:
         )
         return AttributionReconciliation.model_validate_json(raw) if raw else None
 
+    @custody_reader
     def list_attribution_reconciliations(
         self, limit: int = 50
     ) -> list[AttributionReconciliation]:
@@ -1068,9 +1179,11 @@ class RedisHubStore:
         rows = [self.get_attribution_reconciliation(str(item)) for item in ids]
         return [item for item in rows if item is not None]
 
+    @custody_reader
     def count_attribution_reconciliations(self) -> int:
         return int(self.redis.zcard(self._key("attribution-os", "reconciliations")))
 
+    @custody_writer
     def append_attribution_audit(self, event: AttributionAuditEvent) -> None:
         key = self._key("attribution-os", "audit")
         pipe = self.redis.pipeline()
@@ -1078,6 +1191,7 @@ class RedisHubStore:
         pipe.ltrim(key, -5000, -1)
         pipe.execute()
 
+    @custody_reader
     def list_attribution_audit(self, limit: int = 100) -> list[AttributionAuditEvent]:
         limit = max(1, min(limit, 1000))
         rows = self.redis.lrange(
@@ -1085,6 +1199,7 @@ class RedisHubStore:
         )
         return [AttributionAuditEvent.model_validate_json(raw) for raw in reversed(rows)]
 
+    @custody_writer
     def save_experiment(self, experiment: Experiment) -> None:
         pipe = self.redis.pipeline()
         pipe.set(
@@ -1101,12 +1216,14 @@ class RedisHubStore:
         )
         pipe.execute()
 
+    @custody_reader
     def get_experiment(self, experiment_id: str) -> Experiment | None:
         raw = self.redis.get(
             self._key("experiment-os", "experiment", experiment_id)
         )
         return Experiment.model_validate_json(raw) if raw else None
 
+    @custody_reader
     def list_experiments(
         self,
         limit: int = 50,
@@ -1126,6 +1243,7 @@ class RedisHubStore:
             filtered = [item for item in filtered if item.status == status]
         return filtered[:limit]
 
+    @custody_writer
     def append_experiment_audit(self, event: ExperimentAuditEvent) -> None:
         key = self._key("experiment-os", "audit", event.experiment_id)
         pipe = self.redis.pipeline()
@@ -1133,6 +1251,7 @@ class RedisHubStore:
         pipe.ltrim(key, -2000, -1)
         pipe.execute()
 
+    @custody_reader
     def list_experiment_audit(
         self, experiment_id: str, limit: int = 100
     ) -> list[ExperimentAuditEvent]:
@@ -1147,7 +1266,7 @@ def build_store(settings: HubSettings | None = None) -> HubStore:
     cfg = settings or default_settings
     backend = cfg.store_backend.casefold()
     if backend == "memory":
-        return MemoryHubStore()
+        return MemoryHubStore(retention=inactive_coordinator())
     if backend == "redis":
         return RedisHubStore(
             redis_url=cfg.agent_redis_url,

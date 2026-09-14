@@ -23,6 +23,7 @@ import pilot_runner as runner
 import pilot_dispatcher as dispatcher
 from test_gate_bindings import fixture as package_fixture, HEAD, NOW, write, reseal_outer
 import gate_bindings as gate
+from custody_file_contract import custody_file_scope, LocalFileCustodyFixture
 
 FRESH = 'PHASE9-LIMITED-PILOT-RCA06-00000000-0000-4000-8000-000000000011'  # Synthetic only.
 ATTEMPT = '313c7a37-63cd-4575-8205-e8fe90e3a156'
@@ -121,7 +122,7 @@ raise SystemExit('old guard unexpectedly passed')
     def test_real_local_read_rejects_nonroot_or_nonprivate_custody(self):
         # A local temporary tree only; no production path is read.
         value,raw,item=recovered_fixture()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, custody_file_scope(LocalFileCustodyFixture(Path(directory))):
             root=Path(directory);root.chmod(0o700);mapped={}
             for i,content in enumerate(raw.values()):
                 path=root/str(i);path.write_bytes(content);path.chmod(0o600);mapped[str(path)]=hashlib.sha256(content).hexdigest()
@@ -141,12 +142,12 @@ raise SystemExit('old guard unexpectedly passed')
         for operation in identity.RETIRED_EXECUTION_OPERATIONS:
             with self.assertRaises(identity.OperationIdentityError):render_runtime.render(OPS/'runtime_template.py',{**profile,'operation_id':operation})
     def test_gate_requires_package_bound_context_and_provenance(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with tempfile.TemporaryDirectory() as temp, custody_file_scope(LocalFileCustodyFixture(Path(temp))):
             root=Path(temp);baseline,anchor=package_fixture(root);profile=json.loads((root/'RUNTIME_PROFILE.json').read_bytes())
             profile['baseline_compose_binding']=recovered_fixture()[0];(root/'RUNTIME_PROFILE.json').write_text(json.dumps(profile))
             with self.assertRaises(gate.GateStop):gate.verify_package(root,anchor,HEAD,baseline,current=NOW)
     def test_fully_resealed_synthetic_context_binds_gate_to_runtime(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with tempfile.TemporaryDirectory() as temp, custody_file_scope(LocalFileCustodyFixture(Path(temp))):
             root=Path(temp);baseline,anchor=package_fixture(root);context,raw,item=recovered_fixture()
             for name in ['PROTECTED_BASELINE.json','COUNTER_EVIDENCE.json']:
                 obj=gate.load(root/'evidence'/name)
@@ -187,7 +188,7 @@ class PreflightChildDiagnosticsTests(unittest.TestCase):
     def test_known_guard_retains_raw_before_precise_abort_never_success(self):
         op=FRESH;raw=(json.dumps({'status':'ABORTED_FAIL_CLOSED','reason':'COMPOSE_FILE_LABEL_DRIFT','operation_id':op,
             'raw_sensitive_output':False},sort_keys=True)+'\n').encode()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, custody_file_scope(LocalFileCustodyFixture(Path(directory))):
             with self.assertRaises(capture.CaptureStop) as caught:
                 capture.invoke_preflight(lambda *a,**k:subprocess.CompletedProcess([],2,raw,b''),['ssh'],input_bytes=b'fixture',timeout=1,
                     evidence_directory=Path(directory),binding_id=op,retain_raw_stdout=True,
@@ -197,7 +198,7 @@ class PreflightChildDiagnosticsTests(unittest.TestCase):
             self.assertEqual(error.diagnostic['classification'],'REMOTE_RUNTIME_GUARD:COMPOSE_FILE_LABEL_DRIFT')
             self.assertIn('exit=2',str(error));self.assertIn('stderr=EMPTY',str(error))
     def test_unknown_output_and_secret_stderr_remain_opaque(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, custody_file_scope(LocalFileCustodyFixture(Path(directory))):
             with self.assertRaises(capture.CaptureStop) as caught:
                 capture.invoke_preflight(lambda *a,**k:subprocess.CompletedProcess([],2,b'fixture-only-private',b'fixture-only-private'),
                     ['ssh'],input_bytes=b'fixture',timeout=1,evidence_directory=Path(directory),binding_id=FRESH,retain_raw_stdout=True)
@@ -205,11 +206,11 @@ class PreflightChildDiagnosticsTests(unittest.TestCase):
             self.assertFalse(list(Path(directory).glob('*.stdout.bin')))
             self.assertIsNone(json.loads(caught.exception.capture_path.read_bytes())['raw_stdout_file'])
     def test_invalid_safe_context_rejects_before_child(self):
-        with tempfile.TemporaryDirectory() as directory,self.assertRaises(capture.CaptureStop):
+        with tempfile.TemporaryDirectory() as directory, custody_file_scope(LocalFileCustodyFixture(Path(directory))),self.assertRaises(capture.CaptureStop):
             capture.invoke_preflight(lambda *a,**k:self.fail('child reached'),[],input_bytes=b'',timeout=1,evidence_directory=Path(directory),
                 binding_id=FRESH,invocation_context={'secret':'fixture'})
     def test_runner_dispatcher_share_child_correlation_and_safe_context(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, custody_file_scope(LocalFileCustodyFixture(Path(directory))):
             package=Path(directory);(package/'remote_runtime.py').write_bytes(b'fixture')
             with patch.object(runner,'strict_argv',return_value=['pinned-ssh']),patch.object(runner,'dispatch_preflight') as dispatch:
                 runner.observe(package,{}, {'candidate_head':'a'*40,'protected_services_sha256':'b'*64},'c'*64,

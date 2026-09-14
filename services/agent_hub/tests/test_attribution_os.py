@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from local_custody_fixture import fixture_retention
+
 from datetime import date, datetime, timezone
 import asyncio
 import json
@@ -271,13 +273,13 @@ def test_closed_won_missing_revenue_date_is_reported_as_quality_issue():
 
 def test_redis_recovery_uses_attribution_subnamespace():
     redis_client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=redis_client, namespace="test:agent-hub")
+    store = RedisHubStore(client=redis_client, namespace="test:agent-hub", retention=fixture_retention())
     _, attribution, _, _, _, observations = build_fixture(store)
     reconciliation = attribution.reconcile(
         ReconciliationRequest(observations=observations), actor="operator"
     )
     restarted = AttributionService(
-        RedisHubStore(client=redis_client, namespace="test:agent-hub")
+        RedisHubStore(client=redis_client, namespace="test:agent-hub", retention=fixture_retention())
     )
     assert restarted.status().touchpoint_count == 3
     assert restarted.get_reconciliation(reconciliation.reconciliation_id).quality.match_rate == 1

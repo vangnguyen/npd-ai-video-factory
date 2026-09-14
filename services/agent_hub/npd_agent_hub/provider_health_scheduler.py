@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .retention_custody import custody_operation, custody_detached_context
+
 import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -72,6 +74,7 @@ class ProviderHealthScheduler:
             )
         return stored
 
+    @custody_operation("self.store")
     async def run_once(self, *, force: bool = False) -> ProviderHealthSchedulerStatus:
         current = self.status()
         if not self.enabled and not force:
@@ -151,6 +154,7 @@ class ProviderHealthScheduler:
             except TimeoutError:
                 continue
 
+    @custody_operation("self.store")
     async def start(self) -> None:
         if self.store.get_provider_health_scheduler_status() is None:
             self.store.save_provider_health_scheduler_status(self._initial_status())
@@ -158,7 +162,7 @@ class ProviderHealthScheduler:
             return
         self._stop.clear()
         self._task = asyncio.create_task(
-            self._run_forever(), name="provider-health-scheduler"
+            self._run_forever(), name="provider-health-scheduler", context=custody_detached_context()
         )
 
     async def stop(self) -> None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .retention_custody import CustodyCoordinator, GuardedRedis, inactive_coordinator, custody_writer, custody_reader
+
 from dataclasses import dataclass, field
 from hashlib import sha256
 from typing import Protocol
@@ -24,8 +26,10 @@ class NBAReviewRepository(Protocol):
 
 @dataclass
 class MemoryNBAReviewRepository:
+    retention: CustodyCoordinator = field(default_factory=CustodyCoordinator, repr=False, compare=False)
     reviews: dict[str, NBAReviewRecord] = field(default_factory=dict)
 
+    @custody_writer
     def save(self, review: NBAReviewRecord) -> None:
         existing = self.reviews.get(review.review_id)
         if existing is not None and existing != review:
@@ -40,6 +44,7 @@ class MemoryNBAReviewRepository:
             for item in expired:
                 self.reviews.pop(item.review_id, None)
 
+    @custody_reader
     def list(
         self,
         *,
@@ -78,6 +83,7 @@ class RedisNBAReviewRepository:
     def _subject_index(self, subject_ref: str) -> str:
         return self._key("subject", self._subject_hash(subject_ref), "reviews")
 
+    @custody_writer
     def save(self, review: NBAReviewRecord) -> None:
         key = self._review_key(review.review_id)
         if not self.redis.set(key, review.model_dump_json(), nx=True):
@@ -93,10 +99,12 @@ class RedisNBAReviewRepository:
         pipe.execute()
         self._prune()
 
+    @custody_reader
     def _load(self, review_id: str) -> NBAReviewRecord | None:
         raw = self.redis.get(self._review_key(review_id))
         return NBAReviewRecord.model_validate_json(raw) if raw else None
 
+    @custody_writer
     def _prune(self) -> None:
         overflow = int(self.redis.zcard(self._global_index())) - NBA_REVIEW_RETENTION
         if overflow <= 0:
@@ -112,6 +120,7 @@ class RedisNBAReviewRepository:
             pipe.delete(self._review_key(review_id))
             pipe.execute()
 
+    @custody_reader
     def list(
         self,
         *,
@@ -135,7 +144,7 @@ def repository_for_store(store: HubStore) -> NBAReviewRepository:
     if isinstance(store, MemoryHubStore):
         existing = getattr(store, "_phase9_nba_review_repository", None)
         if existing is None:
-            existing = MemoryNBAReviewRepository()
+            existing = MemoryNBAReviewRepository(retention=store.retention)
             setattr(store, "_phase9_nba_review_repository", existing)
         return existing
     raise TypeError(f"unsupported Agent Hub store backend for NBA reviews: {store.backend_name}")

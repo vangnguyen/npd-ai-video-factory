@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .retention_custody import custody_operation
+
 import hashlib
 from datetime import datetime, timezone
 from typing import Callable
@@ -74,6 +76,7 @@ class ProviderHealthService:
     def _digest(prefix: str, value: str) -> str:
         return f"{prefix}_{hashlib.sha256(value.encode('utf-8')).hexdigest()[:24]}"
 
+    @custody_operation("self.store")
     def _audit(
         self,
         *,
@@ -181,6 +184,7 @@ class ProviderHealthService:
             )
         return observations
 
+    @custody_operation("self.store")
     def _commit_snapshot(
         self,
         *,
@@ -293,6 +297,7 @@ class ProviderHealthService:
             )
         return conditions
 
+    @custody_operation("self.store")
     def _sync_alerts(
         self,
         conditions: dict[str, tuple[str, str, ProviderAlertSeverity, str]],
@@ -421,6 +426,7 @@ class ProviderHealthService:
             detail="Cached provider state and producer heartbeat freshness were evaluated internally.",
         )
 
+    @custody_operation("self.store")
     def acknowledge(self, alert_id: str, *, actor: str) -> ProviderHealthAlert:
         alert = self.store.get_provider_alert(alert_id)
         if alert is None:

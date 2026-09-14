@@ -1,0 +1,539 @@
+{
+  "actual_backend_acceptance": "NOT_RUN",
+  "additional_file_boundary": {
+    "disposition": "stdout READ_ONLY; file output HOLD before IO",
+    "function": "_write_payload",
+    "path": "services/agent_hub/npd_agent_hub/maintenance.py"
+  },
+  "callsite_counts": [
+    {
+      "callee": "append_attribution_audit",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/attribution.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "append_touchpoint",
+      "count": 2,
+      "path": "services/agent_hub/npd_agent_hub/attribution.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_attribution_intake_issue",
+      "count": 3,
+      "path": "services/agent_hub/npd_agent_hub/attribution.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_attribution_quality_snapshot",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/attribution.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_attribution_reconciliation",
+      "count": 2,
+      "path": "services/agent_hub/npd_agent_hub/attribution.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_identity_mapping",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/attribution.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "append_campaign_audit",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/campaigns.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_campaign",
+      "count": 7,
+      "path": "services/agent_hub/npd_agent_hub/campaigns.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "append_attribution_audit",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/delivery_observability.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_attribution_dead_letter",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/delivery_observability.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_attribution_delivery_receipt",
+      "count": 2,
+      "path": "services/agent_hub/npd_agent_hub/delivery_observability.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_attribution_heartbeat_receipt",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/delivery_observability.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "append_campaign_audit",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/experiments.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "append_experiment_audit",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/experiments.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_campaign",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/experiments.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_experiment",
+      "count": 9,
+      "path": "services/agent_hub/npd_agent_hub/experiments.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/nba_review.py",
+      "receiver": "self.repository"
+    },
+    {
+      "callee": "_prune",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/nba_review_repository.py",
+      "receiver": "self"
+    },
+    {
+      "callee": "append_audit",
+      "count": 6,
+      "path": "services/agent_hub/npd_agent_hub/orchestrator.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "append_execution",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/orchestrator.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_report",
+      "count": 5,
+      "path": "services/agent_hub/npd_agent_hub/orchestrator.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_task",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/orchestrator.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "append_attribution_audit",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/provider_health.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_provider_alert",
+      "count": 3,
+      "path": "services/agent_hub/npd_agent_hub/provider_health.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_provider_health_snapshot",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/provider_health.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "acquire_provider_health_scheduler_lease",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/provider_health_scheduler.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "release_provider_health_scheduler_lease",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/provider_health_scheduler.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save_provider_health_scheduler_status",
+      "count": 5,
+      "path": "services/agent_hub/npd_agent_hub/provider_health_scheduler.py",
+      "receiver": "self.store"
+    },
+    {
+      "callee": "save",
+      "count": 1,
+      "path": "services/agent_hub/npd_agent_hub/sales_nba_review.py",
+      "receiver": "self.repository"
+    },
+    {
+      "callee": "_touch",
+      "count": 4,
+      "path": "services/agent_hub/npd_agent_hub/store.py",
+      "receiver": "self"
+    }
+  ],
+  "category_mapping": "PROPOSED_OWNER_REVIEW_REQUIRED",
+  "exact_db1_memory_functions": 50,
+  "expected_writers": [
+    {
+      "component": "MemoryHubStore._touch",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_task",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_report",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.append_execution",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.append_audit",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_campaign",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.append_campaign_audit",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.append_touchpoint",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_identity_mapping",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_attribution_quality_snapshot",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_attribution_intake_issue",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_attribution_delivery_receipt",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_attribution_heartbeat_receipt",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_attribution_dead_letter",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_provider_health_snapshot",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_provider_alert",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_attribution_reconciliation",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.append_attribution_audit",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.save_experiment",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.append_experiment_audit",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore._touch",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_task",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_report",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.append_execution",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.append_audit",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_campaign",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.append_campaign_audit",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.append_touchpoint",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_identity_mapping",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_attribution_quality_snapshot",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_attribution_intake_issue",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_attribution_delivery_receipt",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_attribution_heartbeat_receipt",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_attribution_dead_letter",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_provider_health_snapshot",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_provider_alert",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_provider_health_scheduler_status",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.acquire_provider_health_scheduler_lease",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.release_provider_health_scheduler_lease",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_attribution_reconciliation",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.append_attribution_audit",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.save_experiment",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "RedisHubStore.append_experiment_audit",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryNBAReviewRepository.save",
+      "path": "services/agent_hub/npd_agent_hub/nba_review_repository.py"
+    },
+    {
+      "component": "RedisNBAReviewRepository.save",
+      "path": "services/agent_hub/npd_agent_hub/nba_review_repository.py"
+    },
+    {
+      "component": "RedisNBAReviewRepository._prune",
+      "path": "services/agent_hub/npd_agent_hub/nba_review_repository.py"
+    },
+    {
+      "component": "restore_namespace",
+      "path": "services/agent_hub/npd_agent_hub/maintenance.py"
+    },
+    {
+      "component": "MemoryHubStore.save_provider_health_scheduler_status",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.acquire_provider_health_scheduler_lease",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    },
+    {
+      "component": "MemoryHubStore.release_provider_health_scheduler_lease",
+      "path": "services/agent_hub/npd_agent_hub/store.py"
+    }
+  ],
+  "file_dispositions": [
+    {
+      "disposition": "READ_ONLY_STRING_TIMESTAMP_REPLACE_FALSE_POSITIVE_NO_FILE_MUTATION",
+      "function": "utc",
+      "path": "scripts/ops/agent_hub_phase9/claim_only_terminalization.py",
+      "previous_line": 47
+    },
+    {
+      "disposition": "INTEGRATED_REGISTRY_FIRST_FILE_WRITER",
+      "function": "create_private",
+      "path": "scripts/ops/agent_hub_phase9/claim_only_terminalization.py",
+      "previous_line": 167
+    },
+    {
+      "disposition": "INTEGRATED_REGISTRY_FIRST_FILE_WRITER",
+      "function": "replace_owned",
+      "path": "scripts/ops/agent_hub_phase9/claim_only_terminalization.py",
+      "previous_line": 172
+    },
+    {
+      "disposition": "INTEGRATED_REGISTRY_FIRST_FILE_WRITER",
+      "function": "execute",
+      "path": "scripts/ops/agent_hub_phase9/claim_terminalization_entry.py",
+      "previous_line": 41
+    },
+    {
+      "disposition": "INTEGRATED_REGISTRY_FIRST_FILE_WRITER",
+      "function": "save",
+      "path": "scripts/ops/agent_hub_phase9/claim_terminalization_entry.py",
+      "previous_line": 50
+    },
+    {
+      "disposition": "READ_ONLY_STRING_TIMESTAMP_REPLACE_FALSE_POSITIVE_NO_FILE_MUTATION",
+      "function": "fresh",
+      "path": "scripts/ops/agent_hub_phase9/gate_bindings.py",
+      "previous_line": 61
+    },
+    {
+      "disposition": "READ_ONLY_STRING_TIMESTAMP_REPLACE_FALSE_POSITIVE_NO_FILE_MUTATION",
+      "function": "utc_time",
+      "path": "scripts/ops/agent_hub_phase9/gate_bindings.py",
+      "previous_line": 69
+    },
+    {
+      "disposition": "READ_ONLY_STRING_TIMESTAMP_REPLACE_FALSE_POSITIVE_NO_FILE_MUTATION",
+      "function": "verify_execution_approval",
+      "path": "scripts/ops/agent_hub_phase9/pilot_dispatcher.py",
+      "previous_line": 31
+    },
+    {
+      "disposition": "INTEGRATED_REGISTRY_FIRST_FILE_WRITER",
+      "function": "publish",
+      "path": "scripts/ops/agent_hub_phase9/pilot_runner.py",
+      "previous_line": 23
+    },
+    {
+      "disposition": "READ_ONLY_STRING_TIMESTAMP_REPLACE_FALSE_POSITIVE_NO_FILE_MUTATION",
+      "function": "configure",
+      "path": "scripts/ops/agent_hub_phase9/pilot_uat.py",
+      "previous_line": 12
+    },
+    {
+      "disposition": "READ_ONLY_STRING_TIMESTAMP_REPLACE_FALSE_POSITIVE_NO_FILE_MUTATION",
+      "function": "parse_time",
+      "path": "scripts/ops/agent_hub_phase9/pilot_uat.py",
+      "previous_line": 18
+    },
+    {
+      "disposition": "READ_ONLY_STRING_TIMESTAMP_REPLACE_FALSE_POSITIVE_NO_FILE_MUTATION",
+      "function": "evaluate",
+      "path": "scripts/ops/agent_hub_phase9/pilot_uat.py",
+      "previous_line": 38
+    },
+    {
+      "disposition": "INTEGRATED_REGISTRY_FIRST_FILE_WRITER",
+      "function": "_publish",
+      "path": "scripts/ops/agent_hub_phase9/remote_preflight_capture.py",
+      "previous_line": 88
+    },
+    {
+      "disposition": "INTEGRATED_REGISTRY_FIRST_FILE_WRITER",
+      "function": "_publish_raw_stdout",
+      "path": "scripts/ops/agent_hub_phase9/remote_preflight_capture.py",
+      "previous_line": 107
+    },
+    {
+      "disposition": "READ_ONLY_STRING_TIMESTAMP_REPLACE_FALSE_POSITIVE_NO_FILE_MUTATION",
+      "function": "aware",
+      "path": "scripts/ops/agent_hub_phase9/retention_design.py",
+      "previous_line": 38
+    },
+    {
+      "disposition": "ISOLATED_LOCAL_REFERENCE_HELPER_EXISTING_O_EXCL_FSYNC_POLICY_GUARD_NOT_PRODUCTION_WRITER",
+      "function": "_write",
+      "path": "scripts/ops/agent_hub_phase9/retention_design.py",
+      "previous_line": 166
+    },
+    {
+      "disposition": "READ_ONLY_STRING_TIMESTAMP_REPLACE_FALSE_POSITIVE_NO_FILE_MUTATION",
+      "function": "iso",
+      "path": "scripts/ops/agent_hub_phase9/runtime_template.py",
+      "previous_line": 97
+    },
+    {
+      "disposition": "INTEGRATED_REGISTRY_FIRST_FILE_WRITER",
+      "function": "create_exclusive",
+      "path": "scripts/ops/agent_hub_phase9/runtime_template.py",
+      "previous_line": 142
+    },
+    {
+      "disposition": "INTEGRATED_REGISTRY_FIRST_FILE_WRITER",
+      "function": "replace_private",
+      "path": "scripts/ops/agent_hub_phase9/runtime_template.py",
+      "previous_line": 149
+    },
+    {
+      "disposition": "READ_ONLY_STRING_TIMESTAMP_REPLACE_FALSE_POSITIVE_NO_FILE_MUTATION",
+      "function": "parse_envelope",
+      "path": "scripts/ops/agent_hub_phase9/runtime_template.py",
+      "previous_line": 363
+    },
+    {
+      "disposition": "INTEGRATED_REGISTRY_FIRST_FILE_WRITER",
+      "function": "prepare_claim_parents",
+      "path": "scripts/ops/agent_hub_phase9/runtime_template.py",
+      "previous_line": 411
+    },
+    {
+      "disposition": "INTEGRATED_REGISTRY_FIRST_FILE_WRITER",
+      "function": "claim",
+      "path": "scripts/ops/agent_hub_phase9/runtime_template.py",
+      "previous_line": 518
+    }
+  ],
+  "fixture_transport": "fakeredis/Memory/selected TemporaryDirectory only",
+  "named_authorities": "UNBOUND",
+  "prior_callsites": 67,
+  "prior_db1_memory_functions": 47,
+  "production_coverage": "NOT_PROVEN_ACTIVATION_HOLD",
+  "source_corrections": [
+    "three previously missed Memory scheduler writers",
+    "10/22 file candidates are string/timestamp replace false positives"
+  ],
+  "source_integration_only": true,
+  "workstream": "Agent Hub ONLY"
+}

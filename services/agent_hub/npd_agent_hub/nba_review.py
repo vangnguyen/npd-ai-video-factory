@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .retention_custody import custody_operation
+
 from .journeys import JourneyService
 from .nba_review_models import (
     NBAReviewCreate,
@@ -26,6 +28,7 @@ class NBAReviewService:
         self.repository = repository or repository_for_store(store)
         self.nba = NextBestActionService(journeys)
 
+    @custody_operation("self.store")
     def record(
         self,
         request: NBAReviewCreate,

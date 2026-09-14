@@ -1,3 +1,5 @@
+
+from local_custody_fixture import fixture_retention
 import asyncio
 
 import fakeredis
@@ -45,12 +47,12 @@ def test_memory_store_restores_task_after_hub_recreation():
 
 def test_redis_store_round_trip_and_recent_task_index():
     redis_client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=redis_client, namespace="test:agent-hub")
+    store = RedisHubStore(client=redis_client, namespace="test:agent-hub", retention=fixture_retention())
     first_hub = AgentHub(store=store)
     report = first_hub.run(AgentTask(objective="Theo dõi lead CRM"))
 
     restarted_hub = AgentHub(
-        store=RedisHubStore(client=redis_client, namespace="test:agent-hub")
+        store=RedisHubStore(client=redis_client, namespace="test:agent-hub", retention=fixture_retention())
     )
     restored = restarted_hub.get(report.task_id)
     snapshot = restarted_hub.command_center()

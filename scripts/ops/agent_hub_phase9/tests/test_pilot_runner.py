@@ -18,6 +18,7 @@ import pilot_runner as runner
 import render_runtime
 import pilot_uat
 from test_gate_bindings import HEAD, NOW, fixture
+from custody_file_contract import custody_file_scope, LocalFileCustodyFixture
 
 TEMPLATE=Path(__file__).resolve().parents[1]/'runtime_template.py'
 
@@ -27,6 +28,8 @@ class RunnerTests(unittest.TestCase):
         self.root=Path(self.temp.name)/'package';self.root.mkdir()
         self.baseline,self.anchor=fixture(self.root)
         self.verified=gate.verify_package(self.root,self.anchor,HEAD,self.baseline,current=NOW)
+        self.file_scope=custody_file_scope(LocalFileCustodyFixture(Path(self.temp.name)))
+        self.file_scope.__enter__();self.addCleanup(self.file_scope.__exit__,None,None,None)
     def test_missing_approval_never_calls_transport_or_creates_claim(self):
         authority=Path(self.temp.name)/'authority'
         with patch.object(runner,'strict_argv',side_effect=AssertionError('transport reached')):
@@ -71,7 +74,9 @@ class RunnerTests(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('synthetic_unbound_runtime',TEMPLATE);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         with patch.object(module,'run',side_effect=AssertionError('remote command reached')):
             with self.assertRaises(module.GateStop):module.parse_envelope(base64.urlsafe_b64encode(b'{}').decode())
-            with self.assertRaises(module.GateStop):module.claim({'invocation_id':'synthetic'})
+            paths={n:Path(self.temp.name)/'runtime'/n for n in module.claim.__wrapped__.__code__.co_names if isinstance(getattr(module,n,None),Path)}
+            with patch.multiple(module,**paths):
+                with self.assertRaises(module.GateStop):module.claim({'invocation_id':'synthetic'})
     def test_confirmation_entropy_binds_operation_head_snapshot(self):
         a={'operation_id':'synthetic-A','candidate_head':HEAD,'snapshot_sha256':'a'*64}
         for field in a:

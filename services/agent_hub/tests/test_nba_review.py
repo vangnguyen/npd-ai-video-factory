@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from local_custody_fixture import fixture_retention
+
 from datetime import datetime, timezone
 
 import fakeredis
@@ -80,7 +82,7 @@ def test_memory_shadow_reviews_persist_across_service_instances_and_summarize_fa
 
 def test_redis_repository_recovers_reviews_without_raw_subject_in_index_key():
     client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=client, namespace="phase9-test")
+    store = RedisHubStore(client=client, namespace="phase9-test", retention=fixture_retention())
     record = NBAReviewRecord(
         subject_ref="lead:lead-001",
         recommendation_version="phase-9a-nba-v1",

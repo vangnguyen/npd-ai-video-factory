@@ -12,6 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import capture_hash_contract as contract
 import remote_preflight_capture as capture
+from custody_file_contract import custody_file_scope, LocalFileCustodyFixture
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures'
 OPERATION = 'SYNTHETIC-CAPTURE-HASH-ONLY'
@@ -99,6 +100,8 @@ class RawCustodyProducerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        self.file_scope=custody_file_scope(LocalFileCustodyFixture(Path(self.temp.name)))
+        self.file_scope.__enter__();self.addCleanup(self.file_scope.__exit__,None,None,None)
 
     def invoke(self, raw, *, stderr=b'', code=0, verifier=lambda value: True):
         return capture.invoke_preflight(lambda argv, **kw: subprocess.CompletedProcess(argv, code, raw, stderr),

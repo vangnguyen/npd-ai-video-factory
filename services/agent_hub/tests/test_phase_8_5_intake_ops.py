@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from local_custody_fixture import fixture_retention
+
 from datetime import date, datetime, timezone
 
 import fakeredis
@@ -137,7 +139,7 @@ def test_conflicting_verified_evidence_stays_blocked():
 
 def test_redis_recovers_pending_intake_queue_without_video_namespace():
     client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=client, namespace="test:agent-hub")
+    store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     CampaignService(store)
     service = AttributionService(store)
     service.ingest_source_touchpoints(
@@ -146,7 +148,7 @@ def test_redis_recovers_pending_intake_queue_without_video_namespace():
     )
 
     restarted = AttributionService(
-        RedisHubStore(client=client, namespace="test:agent-hub")
+        RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     )
     assert restarted.list_intake_issues()[0].source_event.source_event_id == "redis-lead-001"
     keys = {str(key) for key in client.scan_iter("*")}

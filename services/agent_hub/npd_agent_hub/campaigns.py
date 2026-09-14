@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .retention_custody import custody_operation
+
 import calendar
 import re
 from datetime import date, datetime, timezone
@@ -82,6 +84,7 @@ class CampaignService:
         self.store = store
         self.execution_enabled = execution_enabled
 
+    @custody_operation("self.store")
     def _audit(
         self,
         campaign: Campaign,
@@ -146,6 +149,7 @@ class CampaignService:
             ApprovalRequirement(scope="customer_contact", action="customer contact", target_system="Sales/customer channels", reason="Customer contact must be owner-approved and attributable."),
         ]
 
+    @custody_operation("self.store")
     def create(self, request: CampaignCreate, *, actor: str) -> Campaign:
         campaign_id = self._next_id(request)
         campaign = Campaign(
@@ -188,6 +192,7 @@ class CampaignService:
         )
         return campaign
 
+    @custody_operation("self.store")
     def create_from_brief(self, brief: CampaignBriefRequest, *, actor: str) -> Campaign:
         text = brief.request.strip()
         normalized = text.casefold()
@@ -249,6 +254,7 @@ class CampaignService:
     def list(self, *, limit: int = 50, status: CampaignStatus | None = None) -> list[Campaign]:
         return self.store.list_campaigns(limit=limit, status=status)
 
+    @custody_operation("self.store")
     def update_draft(self, campaign_id: str, update: CampaignDraftUpdate, *, actor: str) -> Campaign:
         campaign = self.get(campaign_id)
         if campaign.status not in {CampaignStatus.DRAFT, CampaignStatus.PLANNED}:
@@ -274,6 +280,7 @@ class CampaignService:
         )
         return campaign
 
+    @custody_operation("self.store")
     def refresh_plans(self, campaign_id: str, *, actor: str) -> Campaign:
         campaign = self.get(campaign_id)
         if campaign.status not in {CampaignStatus.DRAFT, CampaignStatus.PLANNED}:
@@ -406,6 +413,7 @@ class CampaignService:
         )
         return campaign
 
+    @custody_operation("self.store")
     def request_approval(self, campaign_id: str, *, scope: str, actor: str, note: str | None = None) -> Campaign:
         campaign = self.get(campaign_id)
         if campaign.status != CampaignStatus.PLANNED:
@@ -425,6 +433,7 @@ class CampaignService:
         self._audit(campaign, event_type="approval_requested", actor=actor, from_status=previous, scope=scope, detail=note)
         return campaign
 
+    @custody_operation("self.store")
     def decide_approval(
         self,
         campaign_id: str,
@@ -470,6 +479,7 @@ class CampaignService:
         )
         return campaign
 
+    @custody_operation("self.store")
     def transition(self, campaign_id: str, *, target: CampaignStatus, actor: str, owner_authorized: bool, note: str | None = None) -> Campaign:
         campaign = self.get(campaign_id)
         if target not in ALLOWED_TRANSITIONS[campaign.status]:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from local_custody_fixture import fixture_retention
+
 from datetime import date, datetime, timedelta, timezone
 
 import fakeredis
@@ -277,7 +279,7 @@ def test_delivery_contract_rejects_pii_write_flags_and_unbounded_retry():
 
 def test_redis_recovers_signed_receipts_dead_letters_and_namespace():
     client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=client, namespace="test:agent-hub")
+    store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     _, _, _, delivery = services(store)
     receipt = delivery.ingest(envelope(), actor="n8n-lead-intake")
     delivery.record_failure(
@@ -293,7 +295,7 @@ def test_redis_recovers_signed_receipts_dead_letters_and_namespace():
         actor="n8n-lead-intake",
     )
 
-    restarted_store = RedisHubStore(client=client, namespace="test:agent-hub")
+    restarted_store = RedisHubStore(client=client, namespace="test:agent-hub", retention=fixture_retention())
     restarted = AttributionDeliveryService(
         restarted_store, AttributionService(restarted_store), settings()
     )

@@ -1,4 +1,6 @@
 """Fresh Phase 9 runner. Preparation authority never permits execution."""
+
+from custody_file_contract import custody_file_writer
 from datetime import datetime, timezone
 import argparse
 import base64
@@ -20,6 +22,7 @@ from pilot_transport import invoke, strict_argv, stage_argv
 
 def encode(value): return base64.urlsafe_b64encode(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).decode()
 
+@custody_file_writer
 def publish(directory, name, value):
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / name

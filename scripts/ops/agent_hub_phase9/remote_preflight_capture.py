@@ -7,6 +7,8 @@ Only a narrowly validated, non-sensitive failure document is retained verbatim.
 """
 from __future__ import annotations
 
+from custody_file_contract import custody_file_writer
+
 import base64
 from datetime import datetime, timezone
 import hashlib
@@ -85,6 +87,7 @@ def _stream(raw: bytes, *, retain_verbatim: bool = False) -> dict:
     return result
 
 
+@custody_file_writer
 def _publish(directory: Path, invocation_id: str, value: dict) -> Path:
     """Publish one complete, fsynced receipt atomically, without overwriting."""
     directory.mkdir(parents=True, exist_ok=True)
@@ -104,6 +107,7 @@ def _publish(directory: Path, invocation_id: str, value: dict) -> Path:
     return target
 
 
+@custody_file_writer
 def _publish_raw_stdout(directory: Path, invocation_id: str, raw: bytes) -> Path:
     """Retain verified success or validated safe failure bytes without conversion."""
     target = directory / ('capture-' + invocation_id + '.stdout.bin')

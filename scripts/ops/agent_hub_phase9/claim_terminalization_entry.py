@@ -1,4 +1,6 @@
 """Local exact-approval entry; verify-prepared never grants authority or calls SSH."""
+
+from custody_file_contract import custody_file_writer
 import argparse
 import base64
 from datetime import datetime, timezone
@@ -38,6 +40,7 @@ def exact_owner_approval(plan, raw):
     contract.verify_approval(plan,approval)
     return approval
 
+@custody_file_writer
 def execute(plan,tool_raw,profile,owner_raw,authority,*,invoker=subprocess.run):
     # Only a subsequent actual Owner message may be supplied to this execution path.
     approval=exact_owner_approval(plan,owner_raw)
@@ -47,6 +50,7 @@ def execute(plan,tool_raw,profile,owner_raw,authority,*,invoker=subprocess.run):
     # Verify the exact transported code bytes before loading them server-side.
     payload=("import base64,hashlib,json\nraw=base64.b64decode("+repr(base64.b64encode(tool_raw).decode())+")\nassert hashlib.sha256(raw).hexdigest()=="+repr(plan['terminalization_tool_sha256'])+"\nscope={'__name__':'exact_owner_terminalization_tool'}\nexec(compile(raw,'bound_terminalization_tool','exec'),scope)\nplan=json.loads("+repr(json.dumps(plan,sort_keys=True))+ ")\napproval=json.loads("+repr(json.dumps(approval,sort_keys=True))+")\ntry:\n result=scope['run_bound_terminalization'](plan,approval,hashlib.sha256(raw).hexdigest())\n print(json.dumps(result,sort_keys=True))\nexcept Exception as error:\n safe=isinstance(error,(scope['TerminalizationStop'],scope['OperationIdentityError']))\n print(json.dumps({'status':'FAIL_CLOSED','reason':str(error) if safe else 'REDACTED_'+type(error).__name__,'operation_id':plan['operation_id'],'retry_allowed':False},sort_keys=True))\n raise SystemExit(2)\n").encode()
     Path(authority).mkdir(exist_ok=False)
+    @custody_file_writer
     def save(name,raw):
         with (Path(authority)/name).open('xb') as stream:stream.write(raw);stream.flush();__import__('os').fsync(stream.fileno())
     save('OWNER_RECEIVED_TERMINALIZATION_APPROVAL.txt',owner_raw)

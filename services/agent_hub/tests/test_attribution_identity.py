@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from local_custody_fixture import fixture_retention
+
 from datetime import date, datetime, timezone
 
 import fakeredis
@@ -338,7 +340,7 @@ def test_source_ingest_rejects_pii_and_changed_immutable_payload():
 
 def test_redis_recovers_identity_registry_quality_and_touchpoints():
     redis_client = fakeredis.FakeRedis(decode_responses=True)
-    store = RedisHubStore(client=redis_client, namespace="test:agent-hub")
+    store = RedisHubStore(client=redis_client, namespace="test:agent-hub", retention=fixture_retention())
     campaigns = CampaignService(store)
     campaign = create_campaign(
         campaigns, project="Vịnh Tiên", project_code="VGP", name="Vịnh Tiên"
@@ -364,7 +366,7 @@ def test_redis_recovers_identity_registry_quality_and_touchpoints():
         actor="operator",
     )
     restarted = AttributionService(
-        RedisHubStore(client=redis_client, namespace="test:agent-hub")
+        RedisHubStore(client=redis_client, namespace="test:agent-hub", retention=fixture_retention())
     )
     assert restarted.list_identity_mappings()[0].mapping_id == mapping.mapping_id
     assert restarted.list_data_quality_snapshots()[0].snapshot_id == snapshot.snapshot_id

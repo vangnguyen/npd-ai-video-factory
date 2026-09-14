@@ -16,6 +16,8 @@ from redis import Redis
 
 from .config import settings
 from .redis_connection import create_redis_client
+from .retention_custody import CustodyBlocked, GuardedRedis, inactive_coordinator
+from types import SimpleNamespace
 
 
 BACKUP_VERSION = 2
@@ -377,7 +379,7 @@ def verify_namespace(
     }
 
 
-def restore_namespace(
+def _restore_namespace_staged(
     client: Redis,
     payload: dict[str, Any],
     *,
@@ -424,6 +426,24 @@ def restore_namespace(
     return len(active)
 
 
+def restore_namespace(client, payload, *, namespace, replace=False, now_epoch_ms=None, retention=None):
+    """Guard maintenance before deletion. Legacy CLI confirmation cannot activate.
+
+    Local migration simulations use an explicit synthetic coordinator; source
+    integration does not authorize any production restore or mutation.
+    """
+    namespace=_namespace(namespace)
+    _normalized_items(payload,namespace=namespace)
+    coordinator=retention or inactive_coordinator()
+    owner=SimpleNamespace(retention=coordinator,_key=lambda *parts: ':'.join((namespace,*parts)))
+    owner.redis=GuardedRedis(client,owner)
+    with coordinator.batch(owner):
+        count=_restore_namespace_staged(owner.redis,payload,namespace=namespace,
+            replace=replace,now_epoch_ms=now_epoch_ms)
+    verify_namespace(client,payload,namespace=namespace)
+    return count
+
+
 def _client() -> Redis:
     return create_redis_client(
         settings.agent_redis_url,
@@ -436,10 +456,9 @@ def _write_payload(payload: dict[str, Any], output: str) -> None:
     if output == "-":
         sys.stdout.write(raw + "\n")
         return
-    path = Path(output)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(raw + "\n", encoding="utf-8")
-    os.chmod(path, 0o600)
+    # File backup publication requires its own durable file-custody binder.
+    # Stdout export remains read-only; no production file writer is activated.
+    raise CustodyBlocked("MAINTENANCE_FILE_CUSTODY_NOT_ACTIVATED")
 
 
 def _read_payload(source: str) -> dict[str, Any]:

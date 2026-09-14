@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import gate_bindings as gate
 import pilot_dispatcher as dispatcher
 from remote_preflight_capture import CaptureStop
+from custody_file_contract import custody_file_scope, LocalFileCustodyFixture
 
 HEAD = '1' * 40
 NOW = datetime(2026, 9, 12, 12, tzinfo=timezone.utc)
@@ -116,6 +117,8 @@ class BindingTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / 'package'; self.root.mkdir()
         self.baseline, self.anchor = fixture(self.root)
+        self.file_scope=custody_file_scope(LocalFileCustodyFixture(Path(self.temp.name)))
+        self.file_scope.__enter__();self.addCleanup(self.file_scope.__exit__,None,None,None)
 
     def verify(self, **options):
         return gate.verify_package(self.root, options.pop('manifest', self.anchor), options.pop('head', HEAD),

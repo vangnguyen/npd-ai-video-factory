@@ -1,3 +1,5 @@
+
+from npd_agent_hub.store import MemoryHubStore
 import asyncio
 
 from fastapi.testclient import TestClient
@@ -113,7 +115,7 @@ def test_marketing_source_status_exposes_configuration_only():
 
 
 def test_broad_objective_routes_to_all_specialists():
-    hub = AgentHub()
+    hub = AgentHub(store=MemoryHubStore())
     report = hub.run(AgentTask(objective="Quản lý công việc toàn bộ hệ thống marketing và sales"))
 
     assert report.selected_agents == [
@@ -135,7 +137,7 @@ def test_broad_objective_routes_to_all_specialists():
 
 
 def test_video_task_routes_to_video_and_social_domain():
-    hub = AgentHub()
+    hub = AgentHub(store=MemoryHubStore())
     report = hub.run(AgentTask(objective="Tạo video TikTok từ trend AI mới"))
 
     assert AgentName.VIDEO_PRODUCER in report.selected_agents
@@ -144,7 +146,7 @@ def test_video_task_routes_to_video_and_social_domain():
 
 
 def test_crm_follow_up_question_routes_to_crm_and_sales_without_marketing():
-    hub = AgentHub()
+    hub = AgentHub(store=MemoryHubStore())
     report = hub.run(
         AgentTask(objective="Kiểm tra CRM và tìm các lead chưa được chăm sóc")
     )
@@ -153,7 +155,7 @@ def test_crm_follow_up_question_routes_to_crm_and_sales_without_marketing():
 
 
 def test_marketing_source_report_routes_only_to_marketing_leader():
-    hub = AgentHub()
+    hub = AgentHub(store=MemoryHubStore())
     report = hub.run(
         AgentTask(objective="Báo cáo hiệu quả marketing theo nguồn trong 30 ngày")
     )
@@ -162,7 +164,7 @@ def test_marketing_source_report_routes_only_to_marketing_leader():
 
 
 def test_campaign_comparison_suggestion_routes_only_to_marketing_leader():
-    hub = AgentHub()
+    hub = AgentHub(store=MemoryHubStore())
     report = hub.run(
         AgentTask(
             objective=(
@@ -178,7 +180,7 @@ def test_campaign_comparison_suggestion_routes_only_to_marketing_leader():
 
 def test_analyze_auto_executes_analytics_read_without_budget_write():
     executor = AnalyticsReadExecutor()
-    hub = AgentHub(executor=executor)
+    hub = AgentHub(executor=executor, store=MemoryHubStore())
     report = hub.run(
         AgentTask(objective="Báo cáo hiệu quả marketing theo nguồn trong 30 ngày")
     )
@@ -201,7 +203,7 @@ def test_analyze_auto_executes_analytics_read_without_budget_write():
 
 def test_analyze_auto_executes_only_crm_reads_and_returns_evidence_based_answer():
     executor = CrmReadExecutor()
-    hub = AgentHub(executor=executor)
+    hub = AgentHub(executor=executor, store=MemoryHubStore())
     report = hub.run(
         AgentTask(objective="Kiểm tra CRM và tìm các lead chưa được chăm sóc")
     )
@@ -230,7 +232,7 @@ def test_analyze_auto_executes_only_crm_reads_and_returns_evidence_based_answer(
 
 
 def test_approval_changes_action_status():
-    hub = AgentHub()
+    hub = AgentHub(store=MemoryHubStore())
     report = hub.run(AgentTask(objective="Quản lý công việc toàn bộ hệ thống"))
     target = report.approvals_required[0]
 
@@ -246,7 +248,7 @@ def test_approval_changes_action_status():
 
 def test_write_execution_is_blocked_until_commander_approval():
     executor = StubExecutor()
-    hub = AgentHub(executor=executor)
+    hub = AgentHub(executor=executor, store=MemoryHubStore())
     report = hub.run(
         AgentTask(
             objective="Đăng video lên TikTok",
@@ -277,7 +279,7 @@ def test_write_execution_is_blocked_until_commander_approval():
 
 def test_failed_write_requires_reapproval_before_retry():
     executor = FailOnceExecutor()
-    hub = AgentHub(executor=executor)
+    hub = AgentHub(executor=executor, store=MemoryHubStore())
     report = hub.run(
         AgentTask(
             objective="Đăng video đã duyệt",
