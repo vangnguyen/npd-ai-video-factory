@@ -1,0 +1,26 @@
+{
+  "task": "AH-P9-RCA-18A5",
+  "baseline_head": "b44d39ee66e41588f0fc625b4167c94329c25417",
+  "existing_db1_memory_functions": 50,
+  "existing_call_sites": 67,
+  "existing_file_dispositions": 22,
+  "existing_local_authority_control_writers": 3,
+  "new_control_journal_writers": [
+    {"path": "services/agent_hub/npd_agent_hub/durable_custody_authority.py", "component": "DurableCustodyAuthority.perform", "guard": "Verified journal transaction; each signed action authenticated; append before ALLOW"},
+    {"path": "services/agent_hub/npd_agent_hub/durable_custody_authority.py", "component": "DurableCustodyAuthority.consume_commit", "guard": "Verified exact commit bound to policy/raw/archive; durable consume before ledger CAS"},
+    {"path": "services/agent_hub/npd_agent_hub/authority_journal.py", "component": "SQLiteFixtureAuthorityJournal.create_fixture", "guard": "Explicit OS-temp local scope; O_EXCL; WAL/FULL genesis transaction only"},
+    {"path": "services/agent_hub/npd_agent_hub/authority_journal.py", "component": "SQLiteFixtureAuthorityJournal._append_commit", "guard": "Private single call inside atomic; immutable prefix and exact digest/chain validation"},
+    {"path": "services/agent_hub/npd_agent_hub/authority_journal.py", "component": "SQLiteFixtureAuthorityJournal.atomic", "guard": "Local-only WAL/FULL BEGIN IMMEDIATE; trust/checkpoint/chain; single commit; no retry"}
+  ],
+  "session_control": [{"component": "SQLiteFixtureAuthorityJournal._connect", "scope": "Connection-only PRAGMA synchronous/query_only, explicit ro/rw URI never auto-create"}],
+  "new_control_call_sites": [
+    {"caller": "DurableCustodyAuthority.perform", "callee": "self.journal.atomic", "count": 1},
+    {"caller": "DurableCustodyAuthority.perform", "callee": "model.perform", "count": 1},
+    {"caller": "DurableCustodyAuthority.consume_commit", "callee": "self.journal.atomic", "count": 1},
+    {"caller": "DurableCustodyAuthority.consume_commit", "callee": "model.consume_commit", "count": 1},
+    {"caller": "SQLiteFixtureAuthorityJournal.atomic", "callee": "self._append_commit", "count": 1}
+  ],
+  "known_unprotected_static_boundaries": 0,
+  "actual_live_production_census": "NOT_RUN_NOT_AUTHORIZED",
+  "production_activation": "NOT_AUTHORIZED"
+}
