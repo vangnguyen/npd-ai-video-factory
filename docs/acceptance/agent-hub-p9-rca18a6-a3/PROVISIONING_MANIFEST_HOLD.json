@@ -1,0 +1,147 @@
+{
+  "audience": "npd-agent-hub-custody-p9",
+  "base_HEAD": "86869aefd9fd942d37eda8fd9e116ae43915aaf5",
+  "blockers": [
+    "actual verified Google Owner sub is absent from retained production context",
+    "named trust admin and separate verifier/custodian credential/rotation/revocation controller IDs unbound",
+    "real public keys/kids/fingerprints intentionally ungenerated and unenrolled",
+    "production storage ownership/permissions/controllers and authorized installation location unbound",
+    "production PostgreSQL journal/trust revocation atomic fence and real archive acceptance remain separate gates"
+  ],
+  "branch": "feat/agent-hub-p9-rca18a6a3-hybrid-identity",
+  "executed": false,
+  "existing_custody_issuer": false,
+  "hold_release": "DEFERRED_NO_CAPABILITY_OR_ENDPOINT",
+  "human_requester": {
+    "audience": "230976622228-5c97p3ne179k1ssiqseet98kspu38pht.apps.googleusercontent.com",
+    "binding": "separately enrolled exact issuer/sub pin AND current authorized Owner mapping",
+    "capability": "custody.hold.request",
+    "issuer": "https://accounts.google.com",
+    "subject": "ACTUAL_VERIFIED_GOOGLE_SUB_UNBOUND"
+  },
+  "issuer_model": "CONTROLLED_PUBLIC_ENROLLMENT_NAMESPACE_WITH_PER_SUBJECT_DELEGATED_SIGNING;NOT_GENERAL_AGENT_HUB_IDP",
+  "kind": "SCOPED_CUSTODY_IDENTITY_BOOTSTRAP_PREPARATION_ONLY",
+  "known_future_write_shape": "12 enumerated public configuration/enrollment/custody actions plus 4 separately controlled private credential actions; NOT an exact executable write count while targets/controllers/sub/keys are unbound",
+  "owner_approval": "NOT_GRANTED",
+  "private_future_actions": [
+    {
+      "action": "generate verifier RSA>=2048 key at credential boundary",
+      "controller": "NAMED_VERIFIER_CREDENTIAL_CONTROLLER_UNBOUND",
+      "id": "K01",
+      "status": "NOT_AUTHORIZED"
+    },
+    {
+      "action": "store verifier private credential 0600 under distinct controller",
+      "controller": "NAMED_VERIFIER_CREDENTIAL_CONTROLLER_UNBOUND",
+      "id": "K02",
+      "status": "NOT_AUTHORIZED",
+      "target": "PROPOSED /var/lib/npd-custody-verifier/private/service-key; actual UID/storage controller UNBOUND"
+    },
+    {
+      "action": "generate independent custodian RSA>=2048 key",
+      "controller": "NAMED_CUSTODIAN_CREDENTIAL_CONTROLLER_UNBOUND",
+      "id": "K03",
+      "status": "NOT_AUTHORIZED"
+    },
+    {
+      "action": "store custodian private credential 0600 in separate boundary",
+      "controller": "NAMED_CUSTODIAN_CREDENTIAL_CONTROLLER_UNBOUND",
+      "id": "K04",
+      "status": "NOT_AUTHORIZED",
+      "target": "PROPOSED /var/lib/npd-custody-custodian/private/service-key; actual UID/storage controller UNBOUND"
+    }
+  ],
+  "production_token_issuance": "SEPARATE_NOT_AUTHORIZED; no issuer/server process is implemented or started",
+  "production_writes_this_task": 0,
+  "prohibited": [
+    "general hold release/delete",
+    "shared credentials",
+    "production runtime activation",
+    "PG/S3/KMS resources",
+    "Redis/audit trim",
+    "CRM/Sales/VF/Internal Campaign/Lead",
+    "JIT/pilot"
+  ],
+  "proposed_issuer": "urn:npd:agent-hub:custody:phase9",
+  "public_future_actions": [
+    {
+      "action": "register scoped canonical issuer identifier",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P01",
+      "target": "urn:npd:agent-hub:custody:phase9"
+    },
+    {
+      "action": "create-only epoch-1 public trust bundle",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P02",
+      "target": "PROPOSED /opt/npd-agent-hub/custody/public/trust-epoch-0001.json"
+    },
+    {
+      "action": "register exact Google Owner origin pin",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P03",
+      "target": "actual verified issuer/sub plus current Owner mapping; sub UNBOUND"
+    },
+    {
+      "action": "register verifier stable service subject",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P04",
+      "target": "npd-agent-hub-custody-verifier-p9"
+    },
+    {
+      "action": "register custodian stable service subject",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P05",
+      "target": "npd-agent-hub-custody-custodian-p9"
+    },
+    {
+      "action": "enroll verifier public kid/SPKI fingerprint",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P06",
+      "target": "VERIFIER_PUBLIC_KEY_AND_KID_UNBOUND"
+    },
+    {
+      "action": "enroll custodian independent public kid/SPKI fingerprint",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P07",
+      "target": "CUSTODIAN_PUBLIC_KEY_AND_KID_UNBOUND"
+    },
+    {
+      "action": "bind requester request-only capability",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P08",
+      "target": "custody.hold.request"
+    },
+    {
+      "action": "bind verifier verify-only capability",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P09",
+      "target": "custody.archive.verify"
+    },
+    {
+      "action": "bind custodian write/commit capabilities only",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P10",
+      "target": [
+        "custody.archive.write",
+        "custody.commit"
+      ]
+    },
+    {
+      "action": "initialize trust epoch and subject/kid/JTI revocation registry",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P11",
+      "target": "proposed public trust schema v2, epoch1, empty revoked sets"
+    },
+    {
+      "action": "seal/readback public manifest, independent acceptance and checkpoint custody",
+      "controller": "NAMED_AUTHENTICATED_ISSUER_TRUST_ADMIN_UNBOUND",
+      "id": "P12",
+      "target": "exact deployment filesystem/account/controller/permissions UNBOUND"
+    }
+  ],
+  "rollback": "disable new scoped bindings/issuance through new revocation epoch; preserve old bundles, receipts and journal; no erase or downgrade; existing business login unchanged",
+  "status": "HOLD_NOT_PREPARED",
+  "task": "AH-P9-RCA-18A6-A3",
+  "trust_epoch_initial": 1
+}

@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 from fastapi import Header, HTTPException, Request, status
 
 from .config import HubSettings, settings as default_settings
+from .custody_identity import StableGoogleContext
 
 
 SESSION_COOKIE = "npd_agent_session"
@@ -47,6 +48,7 @@ class Principal:
     role: Role
     subject: str
     auth_method: str = "bearer"
+    stable_context: StableGoogleContext | None = None
 
 
 def _b64encode(value: bytes) -> str:
@@ -166,17 +168,19 @@ class StaticTokenAuthorizer:
         ) as exc:
             raise HTTPException(status_code=401, detail="invalid or expired session") from exc
 
-    def create_session(self, email: str, role: Role, *, now: int | None = None) -> str:
+    def create_session(self, email: str, role: Role, *, now: int | None = None,
+                       stable_context: StableGoogleContext | None = None) -> str:
         issued_at = int(time.time()) if now is None else now
-        return self.sign_payload(
-            {
+        payload = {
                 "typ": "session",
                 "sub": email.strip().lower(),
                 "role": role.name.lower(),
                 "iat": issued_at,
                 "exp": issued_at + self.settings.session_ttl_seconds,
             }
-        )
+        if stable_context is not None:
+            payload["custody_origin"] = StableGoogleContext.model_validate(stable_context).model_dump()
+        return self.sign_payload(payload)
 
     def authenticate_session(self, session_cookie: str) -> Principal:
         if not self.browser_login_enabled:
@@ -188,7 +192,15 @@ class StaticTokenAuthorizer:
         allowed_role = self.role_for_email(email)
         if allowed_role is None or payload.get("role") != allowed_role.name.lower():
             raise HTTPException(status_code=403, detail="account is not authorized")
-        return Principal(role=allowed_role, subject=email, auth_method="session")
+        stable_context = None
+        if "custody_origin" in payload:
+            try:
+                stable_context = StableGoogleContext.model_validate(payload["custody_origin"])
+                if stable_context.audience != self.settings.google_client_id:
+                    raise ValueError("audience mismatch")
+            except (ValueError, TypeError) as exc:
+                raise HTTPException(status_code=401, detail="invalid stable session context") from exc
+        return Principal(role=allowed_role, subject=email, auth_method="session", stable_context=stable_context)
 
     def authenticate(
         self,

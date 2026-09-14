@@ -7,11 +7,15 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from fastapi import HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .auth import OAUTH_STATE_COOKIE, SESSION_COOKIE, StaticTokenAuthorizer
 from .config import HubSettings
+from .custody_identity import (GOOGLE_ISSUER, StableGoogleContext, VerifiedGoogleIdentity,
+                              canonical, digest, origin_principal)
 
 
 GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -78,7 +82,7 @@ def begin_google_login(authorizer: StaticTokenAuthorizer) -> RedirectResponse:
     return response
 
 
-def verify_google_id_token(id_token: str, settings: HubSettings, nonce: str) -> str:
+def verify_google_identity(id_token: str, settings: HubSettings, nonce: str) -> VerifiedGoogleIdentity:
     try:
         signing_key = jwt.PyJWKClient(GOOGLE_JWKS_ENDPOINT).get_signing_key_from_jwt(id_token)
         claims = jwt.decode(
@@ -101,10 +105,32 @@ def verify_google_id_token(id_token: str, settings: HubSettings, nonce: str) -> 
     email = str(claims.get("email", "")).strip().lower()
     if not email:
         raise HTTPException(status_code=401, detail="Google identity verification failed")
-    return email
+    stable = None
+    # Legacy business sessions work; missing sub never confers custody authority.
+    if "sub" in claims:
+        try:
+            header = jwt.get_unverified_header(id_token)
+            key = signing_key.key
+            if not isinstance(key, RSAPublicKey) or key.key_size < 2048:
+                raise ValueError("weak key")
+            stable = StableGoogleContext(
+                issuer=GOOGLE_ISSUER, subject=claims["sub"],
+                principal_id=origin_principal(GOOGLE_ISSUER, claims["sub"]),
+                audience=claims["aud"], algorithm="RS256", kid=header["kid"],
+                public_key_sha256=digest(key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)),
+                verified_claims_sha256=digest(canonical(claims)), verified_at=int(time.time()),
+                issued_at=claims["iat"], expires_at=claims["exp"])
+        except (ValueError, TypeError, KeyError) as exc:
+            raise HTTPException(status_code=401, detail="Google stable identity verification failed") from exc
+    return VerifiedGoogleIdentity(email, stable)
 
 
-def exchange_google_code(code: str, settings: HubSettings, nonce: str) -> str:
+def verify_google_id_token(id_token: str, settings: HubSettings, nonce: str) -> str:
+    """Backward-compatible email projection; callback uses complete identity."""
+    return verify_google_identity(id_token, settings, nonce).email
+
+
+def exchange_google_code(code: str, settings: HubSettings, nonce: str) -> VerifiedGoogleIdentity:
     try:
         response = httpx.post(
             GOOGLE_TOKEN_ENDPOINT,
@@ -123,7 +149,7 @@ def exchange_google_code(code: str, settings: HubSettings, nonce: str) -> str:
         raise HTTPException(status_code=502, detail="Google login could not be completed") from exc
     if not id_token:
         raise HTTPException(status_code=502, detail="Google login did not return an identity")
-    return verify_google_id_token(id_token, settings, nonce)
+    return verify_google_identity(id_token, settings, nonce)
 
 
 def complete_google_login(
@@ -138,11 +164,14 @@ def complete_google_login(
         str(payload.get("state", "")), state
     ):
         raise HTTPException(status_code=401, detail="invalid login state")
-    email = exchange_google_code(code, authorizer.settings, str(payload.get("nonce", "")))
+    identity = exchange_google_code(code, authorizer.settings, str(payload.get("nonce", "")))
+    # Older isolated email-only callers can create only a legacy business session.
+    email = identity.email if isinstance(identity, VerifiedGoogleIdentity) else identity
     role = authorizer.role_for_email(email)
     if role is None:
         raise HTTPException(status_code=403, detail="account is not authorized")
-    session = authorizer.create_session(email, role)
+    session = authorizer.create_session(email, role, stable_context=(
+        identity.stable_context if isinstance(identity, VerifiedGoogleIdentity) else None))
     response = RedirectResponse("/command-center", status_code=303)
     response.set_cookie(
         SESSION_COOKIE,

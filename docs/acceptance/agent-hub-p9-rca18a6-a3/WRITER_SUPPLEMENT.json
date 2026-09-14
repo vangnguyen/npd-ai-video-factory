@@ -1,0 +1,39 @@
+{
+  "base_HEAD": "86869aefd9fd942d37eda8fd9e116ae43915aaf5",
+  "changed_control_boundary": "existing SQLite.atomic gains optional final commit fence; v1 defaults/schema/domain unchanged; v2 uses separate schema/domain",
+  "changed_session_emitters": [
+    "StaticTokenAuthorizer.create_session",
+    "complete_google_login"
+  ],
+  "db1_memory_functions": 50,
+  "existing_call_sites": 67,
+  "existing_journal_control_writers": 5,
+  "file_custody_helpers": 22,
+  "kind": "STATIC_SOURCE_CENSUS_NOT_PRODUCTION_ACTIVATION",
+  "known_unprotected_static_boundaries": 0,
+  "new_control_writers": [
+    {
+      "component": "HybridCustodyAuthority._perform",
+      "guard": "v2 SQL BEGIN IMMEDIATE; verified issuer/sub/key/cap/action/tx; JTI single-use; receipt chain; trust+Owner map+expiry commit fence; production mode DENIED",
+      "path": "services/agent_hub/npd_agent_hub/hybrid_custody_authority.py"
+    },
+    {
+      "component": "HybridCustodyAuthority.consume_commit",
+      "guard": "durable one-use before retention CAS; exact input/archive/receipt; expiry/trust/Owner mapping fence; no retry",
+      "path": "services/agent_hub/npd_agent_hub/hybrid_custody_authority.py"
+    },
+    {
+      "component": "LocalFixtureTrustStore.__init__",
+      "guard": "initial immutable public bundle; explicit local synthetic only; production mode DENIED",
+      "path": "services/agent_hub/npd_agent_hub/scoped_custody_issuer.py"
+    },
+    {
+      "component": "LocalFixtureTrustStore.replace_fixture",
+      "guard": "local-only expected prior digest + epoch exactly+1; no revocation rollback, key alias substitution or automatic retry",
+      "path": "services/agent_hub/npd_agent_hub/scoped_custody_issuer.py"
+    }
+  ],
+  "production_activation": "NOT_AUTHORIZED",
+  "real_multi_host_redis_postgres_s3_acceptance": "NOT_RUN_NOT_AUTHORIZED",
+  "session_scope": "existing signed cookie only; legacy business API bootstrap unchanged; no new custody routes mounted"
+}

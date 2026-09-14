@@ -62,13 +62,13 @@ def strict_json(raw):
         raise CustodyBlocked("AUTHORITY_JOURNAL_CORRUPT_HOLD") from error
 
 
-def empty_snapshot():
-    return {"schema": SCHEMA, "receipts": [], "seen_token_ids": [], "transactions": {}}
+def empty_snapshot(schema=SCHEMA):
+    return {"schema": schema, "receipts": [], "seen_token_ids": [], "transactions": {}}
 
 
-def validate_extension(previous, current):
+def validate_extension(previous, current, schema=SCHEMA):
     if (not isinstance(current, dict) or set(current) != set(empty_snapshot())
-        or current["schema"] != SCHEMA or not isinstance(current["receipts"], list)
+        or current["schema"] != schema or not isinstance(current["receipts"], list)
         or not isinstance(current["transactions"], dict) or not isinstance(current["seen_token_ids"], list)):
         raise CustodyBlocked("AUTHORITY_JOURNAL_UNKNOWN_STATE_HOLD")
     if any(not isinstance(token, str) for token in current["seen_token_ids"]):
@@ -134,6 +134,8 @@ class LocalJournalScope:
 class SQLiteFixtureAuthorityJournal:
     """Actual local disk transactions, no production/network filesystem support."""
     synthetic_local_only = True
+    schema = SCHEMA
+    domain = DOMAIN
 
     def __init__(self, *, scope: LocalJournalScope, name: str, journal_id: str,
                  trust_sha256: str, minimum_checkpoint: JournalCheckpoint,
@@ -175,10 +177,10 @@ class SQLiteFixtureAuthorityJournal:
             connection.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             connection.execute("CREATE TABLE commits (sequence INTEGER PRIMARY KEY, previous_sha256 TEXT NOT NULL, state BLOB NOT NULL, state_sha256 TEXT NOT NULL, commit_sha256 TEXT NOT NULL)")
             connection.executemany("INSERT INTO metadata VALUES (?,?)", [
-                ("schema", SCHEMA), ("journal_id", journal_id), ("trust_sha256", trust_sha256)])
-            raw = raw_json(empty_snapshot())
+                ("schema", cls.schema), ("journal_id", journal_id), ("trust_sha256", trust_sha256)])
+            raw = raw_json(empty_snapshot(cls.schema))
             state_sha = sha(raw)
-            tip = sha(DOMAIN + raw_json([journal_id, trust_sha256, 0, ZERO, state_sha]))
+            tip = sha(cls.domain + raw_json([journal_id, trust_sha256, 0, ZERO, state_sha]))
             connection.execute("INSERT INTO commits VALUES (?,?,?,?,?)", (0, ZERO, raw, state_sha, tip))
             connection.commit()
         finally:
@@ -213,20 +215,20 @@ class SQLiteFixtureAuthorityJournal:
         if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
             raise CustodyBlocked("AUTHORITY_JOURNAL_CORRUPT_HOLD")
         meta = dict(connection.execute("SELECT key,value FROM metadata"))
-        if meta != {"schema": SCHEMA, "journal_id": self.journal_id, "trust_sha256": self.trust_sha256}:
+        if meta != {"schema": self.schema, "journal_id": self.journal_id, "trust_sha256": self.trust_sha256}:
             raise CustodyBlocked("AUTHORITY_JOURNAL_IDENTITY_OR_TRUST_DRIFT_HOLD")
-        previous = empty_snapshot()
+        previous = empty_snapshot(self.schema)
         prior_tip = ZERO
         checkpoint = None
         count = 0
         for sequence, parent, raw, state_sha, tip in connection.execute("SELECT * FROM commits ORDER BY sequence"):
             if sequence != count or parent != prior_tip or not isinstance(raw, bytes) or sha(raw) != state_sha:
                 raise CustodyBlocked("AUTHORITY_JOURNAL_CHAIN_OR_DIGEST_MISMATCH_HOLD")
-            expected = sha(DOMAIN + raw_json([self.journal_id, self.trust_sha256, sequence, parent, state_sha]))
+            expected = sha(self.domain + raw_json([self.journal_id, self.trust_sha256, sequence, parent, state_sha]))
             if tip != expected:
                 raise CustodyBlocked("AUTHORITY_JOURNAL_CHAIN_OR_DIGEST_MISMATCH_HOLD")
             state = strict_json(raw)
-            validate_extension(previous, state)
+            validate_extension(previous, state, self.schema)
             checkpoint = JournalCheckpoint(self.journal_id, sequence, tip, state_sha)
             if self.minimum_checkpoint and self.minimum_checkpoint.sequence == sequence:
                 if self.minimum_checkpoint != checkpoint:
@@ -240,16 +242,16 @@ class SQLiteFixtureAuthorityJournal:
         return previous, checkpoint
 
     def _append_commit(self, connection, previous, state, checkpoint):
-        validate_extension(previous, state)
+        validate_extension(previous, state, self.schema)
         raw = raw_json(state)
         state_sha = sha(raw)
-        tip = sha(DOMAIN + raw_json([self.journal_id, self.trust_sha256,
+        tip = sha(self.domain + raw_json([self.journal_id, self.trust_sha256,
             checkpoint.sequence + 1, checkpoint.commit_sha256, state_sha]))
         connection.execute("INSERT INTO commits VALUES (?,?,?,?,?)", (
             checkpoint.sequence + 1, checkpoint.commit_sha256, raw, state_sha, tip))
 
     @contextmanager
-    def atomic(self):
+    def atomic(self, *, commit_fence=None):
         connection = None
         committing = False
         try:
@@ -260,6 +262,8 @@ class SQLiteFixtureAuthorityJournal:
             yield state
             if state != previous:
                 self._append_commit(connection, previous, state, checkpoint)
+            if commit_fence is not None:
+                commit_fence()
             committing = True
             connection.commit()
         except sqlite3.Error as error:
