@@ -73,6 +73,11 @@ def validate_extension(previous, current):
         raise CustodyBlocked("AUTHORITY_JOURNAL_UNKNOWN_STATE_HOLD")
     if any(not isinstance(token, str) for token in current["seen_token_ids"]):
         raise CustodyBlocked("AUTHORITY_JOURNAL_UNKNOWN_TOKEN_STATE_HOLD")
+    for custody_id, transaction in current["transactions"].items():
+        if (not isinstance(custody_id, str) or not isinstance(transaction, dict)
+            or not isinstance(transaction.get("state"), str) or transaction["state"] not in ORDER
+            or type(transaction.get("consumed")) is not bool or type(transaction.get("expires_at")) is not int):
+            raise CustodyBlocked("AUTHORITY_JOURNAL_UNKNOWN_TRANSACTION_STATE_HOLD")
     if (current["receipts"][:len(previous["receipts"])] != previous["receipts"]
         or not set(previous["seen_token_ids"]) <= set(current["seen_token_ids"])
         or len(current["seen_token_ids"]) != len(set(current["seen_token_ids"]))):

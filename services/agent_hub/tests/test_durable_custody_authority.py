@@ -255,7 +255,7 @@ def test_backend_failure_has_no_authority_fallback(setup, failure):
         assert not path.exists()
 
 
-@pytest.mark.parametrize("tamper", ["raw", "parent", "state_digest", "commit_digest", "unknown", "token_type", "actor", "receipt_chain"])
+@pytest.mark.parametrize("tamper", ["raw", "parent", "state_digest", "commit_digest", "unknown", "token_type", "actor", "receipt_chain", "transaction_state_array", "transaction_state_null"])
 def test_corrupt_or_semantically_invalid_chain_denies_even_rehashed_state(setup, tamper):
     authority, keys = setup
     advance(setup, 3)
@@ -280,6 +280,8 @@ def test_corrupt_or_semantically_invalid_chain_denies_even_rehashed_state(setup,
                 state["receipts"][-1]["actor_subject"] = OWNER
             elif tamper == "receipt_chain":
                 state["receipts"][-1]["previous_receipt_sha256"] = "0" * 64
+            elif tamper.startswith("transaction_state"):
+                next(iter(state["transactions"].values()))["state"] = [] if tamper.endswith("array") else None
             raw = raw_json(state)
             digest = sha(raw)
             tip = sha(DOMAIN + raw_json([authority.journal.journal_id, authority.journal.trust_sha256,
