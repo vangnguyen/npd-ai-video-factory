@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from .auth import (
     OAUTH_STATE_COOKIE,
@@ -100,6 +102,8 @@ from .routers.delivery import router as delivery_router
 from .routers.journeys import router as journeys_router
 from .routers.provider_health import router as provider_health_router
 from .tool_registry import ToolCapability, list_tool_capabilities
+from .phase9_creation_runtime import Phase9CreationDenied, allows_read, validate_creation
+from .config import settings as runtime_settings
 from .video_factory.router import (
     disabled_boundary as disabled_video_factory_boundary,
     router as video_factory_router,
@@ -128,6 +132,22 @@ app.include_router(video_factory_router)
 app.state.video_factory_boundary = disabled_video_factory_boundary
 schema_reader = EspoSchemaReader()
 mapping_reader = EspoMappingReader(schema_reader)
+
+
+@app.middleware("http")
+async def phase9_creation_boundary(request: Request, call_next):
+    settings = getattr(hub.executor, "settings", None) or runtime_settings
+    if settings.runtime_mode != "phase9_creation":
+        return await call_next(request)
+    if allows_read(settings, request.method, request.url.path):
+        return await call_next(request)
+    if request.method == "POST" and request.url.path == "/api/v1/campaigns":
+        try:
+            validate_creation(settings, await request.json())
+        except (ValueError, ValidationError, Phase9CreationDenied):
+            return JSONResponse(status_code=403, content={"detail":"PHASE9_CREATION_REQUEST_DENIED"})
+        return await call_next(request)
+    return JSONResponse(status_code=403, content={"detail":"PHASE9_CREATION_ROUTE_DENIED"})
 
 
 @app.middleware("http")

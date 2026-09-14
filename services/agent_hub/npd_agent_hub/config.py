@@ -48,9 +48,27 @@ class HubSettings:
     phase9_internal_cohort_binding_file: str = ""
     provider_health_scheduler_enabled: bool = False
     provider_health_scheduler_interval_seconds: int = 300
+    runtime_mode: str = "normal"
+    phase9_creation_campaign_id: str = ""
+    phase9_creation_owner_id: str = ""
+
+    def __post_init__(self) -> None:
+        if self.runtime_mode not in {"normal", "phase9_creation"}:
+            raise ValueError("AGENT_RUNTIME_MODE must be normal or phase9_creation")
+        if self.runtime_mode == "phase9_creation":
+            if self.provider_health_scheduler_enabled is not False:
+                raise ValueError("phase9_creation requires scheduler explicitly disabled")
+            if not self.phase9_creation_campaign_id.strip() or not self.phase9_creation_owner_id.strip():
+                raise ValueError("phase9_creation requires exact Campaign and Owner bindings")
 
     @classmethod
     def from_env(cls) -> "HubSettings":
+        runtime_mode = os.getenv("AGENT_RUNTIME_MODE", "normal").strip()
+        if runtime_mode == "phase9_creation" and os.getenv(
+            "AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED", ""
+        ).strip().lower() != "false":
+            raise ValueError("phase9_creation requires an explicit scheduler false setting")
+
         def boolean(name: str, default: bool = False) -> bool:
             raw = os.getenv(name, "true" if default else "false").strip().lower()
             if raw not in {"true", "false"}:
@@ -135,6 +153,9 @@ class HubSettings:
             provider_health_scheduler_interval_seconds=int(
                 os.getenv("AGENT_PROVIDER_HEALTH_SCHEDULER_INTERVAL_SECONDS", "300")
             ),
+            runtime_mode=runtime_mode,
+            phase9_creation_campaign_id=os.getenv("AGENT_PHASE9_CREATION_CAMPAIGN_ID", "").strip(),
+            phase9_creation_owner_id=os.getenv("AGENT_PHASE9_CREATION_OWNER_ID", "").strip(),
         )
 
 
