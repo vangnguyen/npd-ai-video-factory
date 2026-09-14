@@ -1,0 +1,23 @@
+{
+  "kind": "STATIC_SOURCE_AUTHORITY_COVERAGE_SUPPLEMENT",
+  "legacy_inventory": "docs/acceptance/agent-hub-p9-rca18a2/SOURCE_INTEGRATION_INVENTORY.json",
+  "legacy_db1_memory_functions": 50,
+  "legacy_business_call_sites": 67,
+  "new_control_memory_functions": [
+    {"function": "LocalCustodyAuthority.perform", "boundary": "RLock, credential authentication, explicit capability and transaction, single-use token, receipt chain"},
+    {"function": "LocalCustodyAuthority._receipt", "boundary": "Private; both runtime callers are inside authenticated perform's lock; immutable receipts and sanitized unauthenticated denial"},
+    {"function": "LocalCustodyAuthority.consume_commit", "boundary": "RLock, exact current transaction/input/archive/receipt digest and deadline; consumed before ledger CAS"}
+  ],
+  "new_control_and_integration_call_sites": [
+    {"caller": "LocalCustodyAuthority.perform", "callee": "self._receipt", "count": 2},
+    {"caller": "AuthenticatedCommitHook.__call__", "callee": "self.authority.consume_commit", "count": 1},
+    {"caller": "CustodyCoordinator.finalize", "callee": "self.authority_gate", "count": 1}
+  ],
+  "new_production_db1_writers": 0,
+  "new_production_file_writers": 0,
+  "new_source_control_memory_writers": 3,
+  "known_unprotected_static_boundaries": 0,
+  "actual_live_census": "NOT_RUN_NOT_PROVEN",
+  "factory_activation": "INACTIVE_HOLD",
+  "production_activation": "NOT_AUTHORIZED"
+}

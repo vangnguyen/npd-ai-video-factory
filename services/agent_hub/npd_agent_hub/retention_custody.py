@@ -144,10 +144,14 @@ _ACTIVE: ContextVar[dict] = ContextVar('agent_hub_custody_batches', default={})
 
 class CustodyCoordinator:
     def __init__(self, *, policy=None, archive=None, classify: Callable | None=None,
-                 resolve_links: Callable | None=None, local_only=True, inactive=False):
+                 resolve_links: Callable | None=None, local_only=True, inactive=False,
+                 authority_gate: Callable | None=None):
         self.policy = policy; self.archive = archive; self.classify = classify
         self.local_only = local_only; self.inactive = inactive; self.lock = RLock()
         self.resolve_links=resolve_links;self._guards=[]
+        # Optional only for explicit local fixtures. Persistent factory remains
+        # inactive; aliases in CustodyPolicy never authenticate production actors.
+        self.authority_gate=authority_gate
         self.holds = set(); self.references = set(); self.generation = 0
         self.receipts = []; self.uncertain = False; self.local_prior_versions = {};self.busy_task=None;self._async_lock=None;self._async_loop=None
     def async_lock(self):
@@ -199,10 +203,12 @@ class CustodyCoordinator:
             victims.append(RawRecord(row.source,row.identifier,row.raw,links))
         if isinstance(session,RedisBatch):session.assert_unreferenced(victims)
         receipts=self.preserve(victims)
-        if session.configuration!=(self.policy,self.archive,self.classify,self.resolve_links):
+        if session.configuration!=(self.policy,self.archive,self.classify,self.resolve_links,self.authority_gate):
             raise CustodyBlocked('POLICY_OR_BACKEND_CHANGED_NO_RETRY')
         if self.generation!=generation:raise CustodyBlocked('HOLD_OR_REFERENCE_CHANGED')
         for row,receipt in zip(victims,receipts):self.archive.verify(row,self.policy,receipt)
+        if victims and self.authority_gate is not None:
+            self.authority_gate(self.policy,tuple(victims),tuple(receipts))
         session.commit();self.receipts.extend(receipts)
     @contextmanager
     def batch(self, owner):
@@ -225,7 +231,7 @@ class CustodyCoordinator:
             generation=self.generation
             is_redis=isinstance(getattr(owner,'redis',None),GuardedRedis)
             session=RedisBatch(owner.redis) if is_redis else MemoryBatch(owner,self)
-            session.configuration=(self.policy,self.archive,self.classify,self.resolve_links)
+            session.configuration=(self.policy,self.archive,self.classify,self.resolve_links,self.authority_gate)
             try:self.busy_task=asyncio.current_task()
             except RuntimeError:self.busy_task=None
             token=_ACTIVE.set({**active,id(owner):session})
