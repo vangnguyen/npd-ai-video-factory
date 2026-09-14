@@ -368,7 +368,13 @@ def create_campaign(
     request: CampaignCreate,
     principal: Principal = Depends(require_operator),
 ) -> Campaign:
-    return hub.campaigns.create(request, actor=principal.subject)
+    if request.internal_cohort is not None and principal.role != Role.OWNER:
+        raise HTTPException(status_code=403, detail="internal cohort requires Owner")
+    try:
+        return hub.campaigns.create(request, actor=principal.subject,
+                                    owner_authorized=principal.role == Role.OWNER)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/campaigns/from-brief", response_model=Campaign, status_code=201)

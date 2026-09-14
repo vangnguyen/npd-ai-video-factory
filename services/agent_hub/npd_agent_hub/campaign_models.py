@@ -10,6 +10,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field, model_validator
 
 from .currency import DEFAULT_CURRENCY, VndCurrency
+from .phase9_cohort_models import Phase9InternalCohort
 
 
 CAMPAIGN_ID_PATTERN = re.compile(
@@ -242,6 +243,7 @@ class Campaign(BaseModel):
     zalo_zbs_sequence_refs: list[SequenceDraft] = Field(default_factory=list)
     crm_source_refs: dict[str, str] = Field(default_factory=dict)
     attribution_refs: dict[str, str] = Field(default_factory=dict)
+    internal_cohort: Phase9InternalCohort | None = None
     tracking: TrackingContract
     sales_handoff: SalesHandoff = Field(default_factory=SalesHandoff)
     approval_package: list[ApprovalRequirement] = Field(default_factory=list)
@@ -255,6 +257,16 @@ class Campaign(BaseModel):
             raise ValueError("end_date must not be before start_date")
         if self.tracking.campaign_id != self.campaign_id:
             raise ValueError("tracking campaign_id must match Campaign campaign_id")
+        if self.internal_cohort is not None:
+            cohort = self.internal_cohort
+            if (cohort.canonical_campaign_id != self.campaign_id
+                    or cohort.owner_id != self.audit_metadata.owner
+                    or self.budget.amount != 0
+                    or self.sales_handoff.first_response_sla_minutes != 15
+                    or self.crm_source_refs.get("write_mode", "disabled") != "disabled"
+                    or self.channel_plans or self.email_sequence_refs
+                    or self.zalo_zbs_sequence_refs or self.landing_pages):
+                raise ValueError("internal cohort requires exact owner/campaign, zero budget, 15-minute SLA and no channel execution")
         assert_no_secrets(self.model_dump(mode="python"))
         return self
 
@@ -272,6 +284,7 @@ class CampaignCreate(BaseModel):
     owner: str = Field(min_length=1, max_length=200)
     crm_source_refs: dict[str, str] = Field(default_factory=dict)
     attribution_refs: dict[str, str] = Field(default_factory=dict)
+    internal_cohort: Phase9InternalCohort | None = None
 
     @model_validator(mode="after")
     def reject_secret_fields(self) -> "CampaignCreate":

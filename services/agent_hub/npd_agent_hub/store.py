@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from threading import RLock
 
 from redis import Redis
 
@@ -30,6 +31,8 @@ from .provider_health_models import (
 )
 from .redis_connection import create_redis_client
 from .repositories.protocol import HubStore
+from .phase9_internal_audit import INTERNAL_AUDIT_CAP, Phase9AuditDenied
+from .phase9_internal_store import memory_commit, redis_commit, redis_append_campaign_audit
 
 
 HEARTBEAT_RECEIPT_RETENTION = 5000
@@ -38,6 +41,7 @@ PROVIDER_HEALTH_SNAPSHOT_RETENTION = 5000
 
 @dataclass
 class MemoryHubStore:
+    _phase9_lock: object = field(default_factory=RLock, repr=False, compare=False)
     backend_name: str = "memory"
     tasks: dict[str, AgentTask] = field(default_factory=dict)
     reports: dict[str, CommandCenterReport] = field(default_factory=dict)
@@ -133,8 +137,9 @@ class MemoryHubStore:
         return items[:limit]
 
     def save_campaign(self, campaign: Campaign) -> None:
-        self.campaigns[campaign.campaign_id] = campaign.model_copy(deep=True)
-        self.campaign_updated_at[campaign.campaign_id] = campaign.updated_at
+        with self._phase9_lock:
+            self.campaigns[campaign.campaign_id] = campaign.model_copy(deep=True)
+            self.campaign_updated_at[campaign.campaign_id] = campaign.updated_at
 
     def get_campaign(self, campaign_id: str) -> Campaign | None:
         campaign = self.campaigns.get(campaign_id)
@@ -155,9 +160,19 @@ class MemoryHubStore:
         return [campaign.model_copy(deep=True) for campaign in rows[:limit]]
 
     def append_campaign_audit(self, event: CampaignAuditEvent) -> None:
-        bucket = self.campaign_audit.setdefault(event.campaign_id, [])
-        bucket.append(event.model_copy(deep=True))
-        del bucket[:-2000]
+        with self._phase9_lock:
+            campaign = self.campaigns.get(event.campaign_id)
+            bucket = self.campaign_audit.get(event.campaign_id, [])
+            internal = campaign is not None and campaign.internal_cohort is not None
+            if internal and (len(bucket) + 1 > INTERNAL_AUDIT_CAP
+                             or any(row.event_id == event.event_id for row in bucket)):
+                raise Phase9AuditDenied("PHASE9_INTERNAL_AUDIT:CAPACITY_OR_REPLAY")
+            self.campaign_audit.setdefault(event.campaign_id, []).append(event.model_copy(deep=True))
+            if not internal:
+                del self.campaign_audit[event.campaign_id][:-2000]
+
+    def commit_phase9_internal_delivery(self, bundle) -> None:
+        memory_commit(self, bundle)
 
     def list_campaign_audit(
         self, campaign_id: str, limit: int = 100
@@ -169,14 +184,16 @@ class MemoryHubStore:
         ][::-1]
 
     def append_touchpoint(self, event: TouchpointEvent) -> None:
-        if event.event_id in self.touchpoints:
-            raise ValueError("touchpoint event_id already exists")
-        self.touchpoints[event.event_id] = event.model_copy(deep=True)
+        with self._phase9_lock:
+            if event.event_id in self.touchpoints:
+                raise ValueError("touchpoint event_id already exists")
+            self.touchpoints[event.event_id] = event.model_copy(deep=True)
 
     def save_identity_mapping(self, mapping: CampaignIdentityMapping) -> None:
-        if mapping.mapping_id in self.identity_mappings:
-            raise ValueError("identity mapping_id already exists")
-        self.identity_mappings[mapping.mapping_id] = mapping.model_copy(deep=True)
+        with self._phase9_lock:
+            if mapping.mapping_id in self.identity_mappings:
+                raise ValueError("identity mapping_id already exists")
+            self.identity_mappings[mapping.mapping_id] = mapping.model_copy(deep=True)
 
     def get_identity_mapping(
         self, mapping_id: str
@@ -204,9 +221,8 @@ class MemoryHubStore:
     def save_attribution_quality_snapshot(
         self, snapshot: AttributionDataQualitySnapshot
     ) -> None:
-        self.attribution_quality_snapshots[snapshot.snapshot_id] = snapshot.model_copy(
-            deep=True
-        )
+        with self._phase9_lock:
+            self.attribution_quality_snapshots[snapshot.snapshot_id] = snapshot.model_copy(deep=True)
 
     def list_attribution_quality_snapshots(
         self, limit: int = 50
@@ -244,12 +260,11 @@ class MemoryHubStore:
     def save_attribution_delivery_receipt(
         self, receipt: AttributionDeliveryReceipt
     ) -> None:
-        existing = self.attribution_delivery_receipts.get(receipt.receipt_id)
-        if existing is not None and existing != receipt:
-            raise ValueError("delivery receipt is immutable")
-        self.attribution_delivery_receipts[receipt.receipt_id] = receipt.model_copy(
-            deep=True
-        )
+        with self._phase9_lock:
+            existing = self.attribution_delivery_receipts.get(receipt.receipt_id)
+            if existing is not None and existing != receipt:
+                raise ValueError("delivery receipt is immutable")
+            self.attribution_delivery_receipts[receipt.receipt_id] = receipt.model_copy(deep=True)
 
     def get_attribution_delivery_receipt(
         self, receipt_id: str
@@ -628,11 +643,17 @@ class RedisHubStore:
         return filtered[:limit]
 
     def append_campaign_audit(self, event: CampaignAuditEvent) -> None:
+        campaign = self.get_campaign(event.campaign_id)
+        if campaign is not None and campaign.internal_cohort is not None:
+            return redis_append_campaign_audit(self, event, campaign)
         key = self._key("campaign-os", "audit", event.campaign_id)
         pipe = self.redis.pipeline()
         pipe.rpush(key, event.model_dump_json())
         pipe.ltrim(key, -2000, -1)
         pipe.execute()
+
+    def commit_phase9_internal_delivery(self, bundle) -> None:
+        redis_commit(self, bundle)
 
     def list_campaign_audit(
         self, campaign_id: str, limit: int = 100

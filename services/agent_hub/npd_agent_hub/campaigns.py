@@ -146,7 +146,9 @@ class CampaignService:
             ApprovalRequirement(scope="customer_contact", action="customer contact", target_system="Sales/customer channels", reason="Customer contact must be owner-approved and attributable."),
         ]
 
-    def create(self, request: CampaignCreate, *, actor: str) -> Campaign:
+    def create(self, request: CampaignCreate, *, actor: str, owner_authorized: bool = False) -> Campaign:
+        if request.internal_cohort is not None and not owner_authorized:
+            raise PermissionError("internal cohort classification requires authenticated Owner authorization")
         campaign_id = self._next_id(request)
         campaign = Campaign(
             campaign_id=campaign_id,
@@ -171,6 +173,7 @@ class CampaignService:
                 "model": "first_touch+last_touch placeholder",
                 "revenue_attribution": "phase_7_not_implemented",
             },
+            internal_cohort=request.internal_cohort,
             approval_package=self._approval_package(),
             audit_metadata=AuditMetadata(
                 created_by=actor,
@@ -251,6 +254,8 @@ class CampaignService:
 
     def update_draft(self, campaign_id: str, update: CampaignDraftUpdate, *, actor: str) -> Campaign:
         campaign = self.get(campaign_id)
+        if campaign.internal_cohort is not None:
+            raise ValueError("internal cohort binding is immutable; separate Owner review is required")
         if campaign.status not in {CampaignStatus.DRAFT, CampaignStatus.PLANNED}:
             raise ValueError("draft-safe fields can only be updated in draft/planned status")
         before = campaign.model_dump(mode="json")
@@ -276,6 +281,8 @@ class CampaignService:
 
     def refresh_plans(self, campaign_id: str, *, actor: str) -> Campaign:
         campaign = self.get(campaign_id)
+        if campaign.internal_cohort is not None:
+            raise ValueError("internal cohort cannot generate external channel plans")
         if campaign.status not in {CampaignStatus.DRAFT, CampaignStatus.PLANNED}:
             raise ValueError("channel plans can only be generated in draft/planned status")
         total = campaign.budget.amount

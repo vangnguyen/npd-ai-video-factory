@@ -45,6 +45,7 @@ class HubSettings:
     attribution_verification_keys_file: str = ""
     attribution_delivery_max_attempts: int = 4
     attribution_freshness_slos_json: str = ""
+    phase9_internal_cohort_binding_file: str = ""
     provider_health_scheduler_enabled: bool = False
     provider_health_scheduler_interval_seconds: int = 300
 
@@ -124,6 +125,9 @@ class HubSettings:
             ),
             attribution_freshness_slos_json=os.getenv(
                 "AGENT_ATTRIBUTION_FRESHNESS_SLOS_JSON", ""
+            ).strip(),
+            phase9_internal_cohort_binding_file=os.getenv(
+                "AGENT_PHASE9_INTERNAL_COHORT_BINDING_FILE", ""
             ).strip(),
             provider_health_scheduler_enabled=boolean(
                 "AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED"

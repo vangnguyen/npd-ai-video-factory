@@ -10,6 +10,7 @@ from typing import Callable
 from pydantic import BaseModel
 
 from .attribution import AttributionService
+from .phase9_internal_audit import ingest_internal, internal_attempt, load_binding, Phase9AuditDenied
 from .attribution_models import (
     AttributionAuditEvent,
     IdentitySource,
@@ -66,6 +67,7 @@ class AttributionDeliveryService:
         self.store = store
         self.attribution = attribution
         self.settings = settings or default_settings
+        self.attribution.settings = self.settings
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.freshness_slos = self._parse_slos(
             self.settings.attribution_freshness_slos_json
@@ -318,6 +320,9 @@ class AttributionDeliveryService:
     ) -> AttributionDeliveryReceipt:
         self._require_configured()
         self._validate_attempt_budget(envelope.attempt_number, envelope.max_attempts)
+        binding = load_binding(self.settings)
+        if internal_attempt(self.store, envelope.events, envelope.metadata, binding):
+            return ingest_internal(self, envelope, actor=actor, binding=binding)
         payload_digest = self._digest_model(envelope)
         receipt_id = self._receipt_id(envelope.delivery_id, envelope.attempt_number)
         existing = self._existing_or_conflict(
@@ -336,20 +341,26 @@ class AttributionDeliveryService:
         snapshot = self.attribution.ingest_source_touchpoints(
             SourceTouchpointIngestRequest(events=envelope.events), actor=actor
         )
+        receipt = self._receipt_for_snapshot(envelope, snapshot)
+        self.store.save_attribution_delivery_receipt(receipt)
+        self._audit_received(envelope, receipt, snapshot, actor=actor)
+        return receipt
+
+    def _receipt_for_snapshot(self, envelope, snapshot) -> AttributionDeliveryReceipt:
         outcome = (
             DeliveryOutcome.PARTIAL
             if snapshot.unknown or snapshot.conflicts
             else DeliveryOutcome.ACCEPTED
         )
-        receipt = self._build_receipt(
-            receipt_id=receipt_id,
+        return self._build_receipt(
+            receipt_id=self._receipt_id(envelope.delivery_id, envelope.attempt_number),
             delivery_id=envelope.delivery_id,
             producer=envelope.producer,
             source_system=envelope.source_system,
             attempt_number=envelope.attempt_number,
             max_attempts=envelope.max_attempts,
             outcome=outcome,
-            payload_digest=payload_digest,
+            payload_digest=self._digest_model(envelope),
             snapshot_id=snapshot.snapshot_id,
             received=snapshot.received,
             resolved=snapshot.resolved,
@@ -359,7 +370,8 @@ class AttributionDeliveryService:
             conflicts=snapshot.conflicts,
             received_at=self.clock(),
         )
-        self.store.save_attribution_delivery_receipt(receipt)
+
+    def _audit_received(self, envelope, receipt, snapshot, *, actor: str) -> None:
         self._audit(
             event_type="signed_delivery_received",
             actor=actor,
@@ -372,12 +384,14 @@ class AttributionDeliveryService:
                 "snapshot_id": snapshot.snapshot_id,
             },
         )
-        return receipt
 
     def record_failure(
         self, failure: AttributionDeliveryFailure, *, actor: str
     ) -> AttributionDeliveryReceipt:
         self._require_configured()
+        binding = load_binding(self.settings)
+        if (binding is not None and failure.delivery_id == binding.delivery_id):
+            raise Phase9AuditDenied("PHASE9_INTERNAL_AUDIT:NO_FAILURE_FALLBACK")
         self._validate_attempt_budget(failure.attempt_number, failure.max_attempts)
         payload_digest = self._digest_model(failure)
         receipt_id = self._receipt_id(failure.delivery_id, failure.attempt_number)

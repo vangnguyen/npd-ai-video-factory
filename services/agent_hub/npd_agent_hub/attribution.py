@@ -34,6 +34,8 @@ from .attribution_models import (
     TouchpointEvent,
 )
 from .store import HubStore
+from .config import settings as default_settings
+from .phase9_internal_audit import commercial_event, internal_attempt, load_binding, Phase9AuditDenied
 
 
 class AttributionService:
@@ -41,6 +43,7 @@ class AttributionService:
 
     def __init__(self, store: HubStore) -> None:
         self.store = store
+        self.settings = default_settings
 
     @staticmethod
     def _mapping_identity(mapping: CampaignIdentityMapping) -> tuple[object, ...]:
@@ -318,6 +321,13 @@ class AttributionService:
     def ingest_source_touchpoints(
         self, request: SourceTouchpointIngestRequest, *, actor: str
     ) -> AttributionDataQualitySnapshot:
+        if internal_attempt(self.store, request.events, {}, load_binding(self.settings)):
+            raise Phase9AuditDenied("PHASE9_INTERNAL_AUDIT:SIGNED_DELIVERY_REQUIRED")
+        return self._ingest_source_touchpoints(request, actor=actor)
+
+    def _ingest_source_touchpoints(
+        self, request: SourceTouchpointIngestRequest, *, actor: str
+    ) -> AttributionDataQualitySnapshot:
         inserted = duplicates = resolved = unknown = conflicts = 0
         issues: list[TouchpointIngestIssue] = []
         resolved_times: list[datetime] = []
@@ -475,7 +485,7 @@ class AttributionService:
         snapshots = self.store.list_attribution_quality_snapshots(limit=1)
         return AttributionIdentityStatus(
             mapping_count=len(self.store.list_identity_mappings(limit=5000)),
-            touchpoint_count=len(self.store.list_touchpoints(limit=5000)),
+            touchpoint_count=len(self.list_touchpoints(limit=5000)),
             pending_intake_issues=len(
                 self.store.list_attribution_intake_issues(status="pending", limit=1000)
             ),
@@ -598,6 +608,12 @@ class AttributionService:
     def backfill(
         self, request: TouchpointBackfillRequest, *, actor: str
     ) -> dict[str, int | bool]:
+        binding = load_binding(self.settings)
+        if any(not commercial_event(self.store, event) or binding is not None and (
+            event.campaign_id == binding.cohort.canonical_campaign_id
+            or f"lead:{event.lead_id}" == binding.cohort.subject_ref
+        ) for event in request.touchpoints):
+            raise Phase9AuditDenied("PHASE9_INTERNAL_AUDIT:NO_BACKFILL_FALLBACK")
         seen: set[str] = set()
         pending: list[TouchpointEvent] = []
         duplicates = 0
@@ -649,12 +665,17 @@ class AttributionService:
         lead_id: str | None = None,
         limit: int = 200,
     ) -> list[TouchpointEvent]:
-        return self.store.list_touchpoints(
+        rows = self.store.list_touchpoints(
             campaign_id=campaign_id,
             opportunity_id=opportunity_id,
             lead_id=lead_id,
             limit=limit,
         )
+        # Exact subject reads are Phase 9 evidence. Aggregate/commercial reads
+        # exclude internal cohorts, including records whose campaign is missing.
+        if lead_id or opportunity_id:
+            return rows
+        return [event for event in rows if commercial_event(self.store, event)]
 
     def _ledger_fingerprint(self) -> str:
         events = self.store.list_touchpoints(limit=5000)
@@ -671,6 +692,7 @@ class AttributionService:
             raise ValueError("reconciliation requires one latest snapshot per opportunity_id")
 
         matches: list[OpportunityMatch] = []
+        commercial_observations: list[OpportunityObservation] = []
         for observation in request.observations:
             events = self.store.list_touchpoints(
                 opportunity_id=observation.opportunity_id, limit=1000
@@ -681,6 +703,11 @@ class AttributionService:
                     lead_id=observation.lead_id, limit=1000
                 )
                 method = "lead_id"
+            hint = self.store.get_campaign(observation.campaign_id_hint) if observation.campaign_id_hint else None
+            if (any(not commercial_event(self.store, event) for event in events)
+                    or hint is not None and hint.internal_cohort is not None):
+                continue
+            commercial_observations.append(observation)
             events = sorted(events, key=lambda item: (item.occurred_at, item.event_id))
             campaign_ids = list(dict.fromkeys(event.campaign_id for event in events))
             issues: list[str] = []
@@ -708,10 +735,12 @@ class AttributionService:
                 )
             )
 
-        quality = self._quality(request.observations, matches)
+        if not commercial_observations:
+            raise Phase9AuditDenied("PHASE9_INTERNAL_AUDIT:NON_COMMERCIAL_RECONCILIATION")
+        quality = self._quality(commercial_observations, matches)
         reconciliation = AttributionReconciliation(
             ledger_fingerprint=self._ledger_fingerprint(),
-            observations=request.observations,
+            observations=commercial_observations,
             matches=matches,
             quality=quality,
             state=(
@@ -846,6 +875,9 @@ class AttributionService:
         for observation in reconciliation.observations:
             match = match_by_opportunity[observation.opportunity_id]
             campaign_ids = match.campaign_ids
+            if any((campaign := self.store.get_campaign(cid)) is not None
+                   and campaign.internal_cohort is not None for cid in campaign_ids):
+                continue  # Never reallocate an internal opportunity's revenue.
             if not campaign_ids:
                 continue
             if model == AttributionModel.FIRST_TOUCH:
@@ -899,7 +931,7 @@ class AttributionService:
         reconciliations = self.store.list_attribution_reconciliations(limit=1)
         latest = reconciliations[0] if reconciliations else None
         return AttributionStatus(
-            touchpoint_count=len(self.store.list_touchpoints(limit=5000)),
+            touchpoint_count=len(self.list_touchpoints(limit=5000)),
             reconciliation_count=self.store.count_attribution_reconciliations(),
             latest_reconciliation_id=latest.reconciliation_id if latest else None,
             latest_state=latest.state if latest else "not_started",
