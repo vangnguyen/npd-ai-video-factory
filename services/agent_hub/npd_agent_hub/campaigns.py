@@ -94,7 +94,13 @@ class CampaignService:
         metadata: dict[str, object] | None = None,
     ) -> None:
         self.store.append_campaign_audit(
-            CampaignAuditEvent(
+            self._audit_event(campaign, event_type=event_type, actor=actor,
+                              from_status=from_status, scope=scope, detail=detail, metadata=metadata)
+        )
+
+    @staticmethod
+    def _audit_event(campaign, *, event_type, actor, from_status=None, scope=None, detail=None, metadata=None):
+        return CampaignAuditEvent(
                 campaign_id=campaign.campaign_id,
                 event_type=event_type,
                 actor=actor,
@@ -103,7 +109,6 @@ class CampaignService:
                 scope=scope,
                 detail=detail,
                 metadata=metadata or {},
-            )
         )
 
     def _next_id(self, request: CampaignCreate) -> str:
@@ -182,6 +187,14 @@ class CampaignService:
                 source_request=None,
             ),
         )
+        if campaign.internal_cohort is not None:
+            from .phase9_internal_audit import Phase9AuditDenied
+            create = getattr(self.store, "create_phase9_internal_campaign", None)
+            if create is None:
+                raise Phase9AuditDenied("PHASE9_INTERNAL_AUDIT:ATOMIC_STORE_UNAVAILABLE")
+            create(campaign, self._audit_event(campaign, event_type="campaign_created", actor=actor,
+                   metadata={"planning_only": True, "production_write_enabled": False}))
+            return campaign
         self.store.save_campaign(campaign)
         self._audit(
             campaign,
@@ -415,6 +428,8 @@ class CampaignService:
 
     def request_approval(self, campaign_id: str, *, scope: str, actor: str, note: str | None = None) -> Campaign:
         campaign = self.get(campaign_id)
+        if campaign.internal_cohort is not None:
+            raise ValueError("internal cohort lifecycle is frozen; separate Owner review is required")
         if campaign.status != CampaignStatus.PLANNED:
             raise ValueError("campaign approval can only be requested from planned status")
         valid_scopes = {"campaign", *[plan.channel.value for plan in campaign.channel_plans]}
@@ -441,6 +456,8 @@ class CampaignService:
         actor: str,
     ) -> Campaign:
         campaign = self.get(campaign_id)
+        if campaign.internal_cohort is not None:
+            raise ValueError("internal cohort lifecycle is frozen; separate Owner review is required")
         if campaign.status != CampaignStatus.AWAITING_APPROVAL:
             raise ValueError("campaign is not awaiting approval")
         matching = [plan for plan in campaign.channel_plans if scope == "campaign" or plan.channel.value == scope]
@@ -479,6 +496,8 @@ class CampaignService:
 
     def transition(self, campaign_id: str, *, target: CampaignStatus, actor: str, owner_authorized: bool, note: str | None = None) -> Campaign:
         campaign = self.get(campaign_id)
+        if campaign.internal_cohort is not None:
+            raise ValueError("internal cohort lifecycle is frozen; separate Owner review is required")
         if target not in ALLOWED_TRANSITIONS[campaign.status]:
             raise ValueError(f"invalid campaign transition: {campaign.status.value} -> {target.value}")
         if target in SIDE_EFFECT_STATUSES and not owner_authorized:

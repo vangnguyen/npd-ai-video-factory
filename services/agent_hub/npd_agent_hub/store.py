@@ -32,7 +32,7 @@ from .provider_health_models import (
 from .redis_connection import create_redis_client
 from .repositories.protocol import HubStore
 from .phase9_internal_audit import INTERNAL_AUDIT_CAP, Phase9AuditDenied
-from .phase9_internal_store import memory_commit, redis_commit, redis_append_campaign_audit
+from .phase9_internal_store import memory_commit, redis_commit, redis_append_campaign_audit, create_internal_campaign
 
 
 HEARTBEAT_RECEIPT_RETENTION = 5000
@@ -173,6 +173,9 @@ class MemoryHubStore:
 
     def commit_phase9_internal_delivery(self, bundle) -> None:
         memory_commit(self, bundle)
+
+    def create_phase9_internal_campaign(self, campaign, audit) -> None:
+        create_internal_campaign(self, campaign, audit)
 
     def list_campaign_audit(
         self, campaign_id: str, limit: int = 100
@@ -654,6 +657,9 @@ class RedisHubStore:
 
     def commit_phase9_internal_delivery(self, bundle) -> None:
         redis_commit(self, bundle)
+
+    def create_phase9_internal_campaign(self, campaign, audit) -> None:
+        create_internal_campaign(self, campaign, audit)
 
     def list_campaign_audit(
         self, campaign_id: str, limit: int = 100

@@ -20,7 +20,9 @@ false. The five reporting exclusions are true. Campaign budget is zero, SLA is
 
 The existing authenticated Owner dependency controls creation of this typed
 classification; Operator/Viewer and caller-supplied role strings cannot assign it.
-The classification cannot be updated through the draft endpoint. Names,
+The internal Campaign lifecycle is frozen outside a separate Owner-reviewed
+change: draft updates, channel plans, lifecycle transitions and channel approval
+mutations are denied before any save. Names,
 project codes, missing contact details and inactivity provide no authority.
 
 In addition, `AGENT_PHASE9_INTERNAL_COHORT_BINDING_FILE` must identify an
@@ -73,6 +75,11 @@ part of this ingest path; internal Campaign channel plans are blocked.
 
 Store: existing `<namespace>:campaign-os:audit:<canonical_campaign_id>`.
 Cap: **2,000**, unchanged. Required successful-ingest budget: **2 audit entries**.
+
+Internal Campaign creation also commits its Campaign, index and creation audit
+atomically, checking room for one creation audit plus the two future ingest
+audits before any Campaign write. This is a capacity check, not a reservation
+or production creation authorization; ingest rechecks live capacity at commit.
 
 Redis uses one explicit WATCH/MULTI/EXEC attempt. Before the first business
 mutation it watches and validates Campaign content, audit list/capacity, source

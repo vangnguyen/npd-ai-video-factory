@@ -16,6 +16,51 @@ def deny(reason):
     raise Phase9AuditDenied(f"PHASE9_INTERNAL_AUDIT:{reason}")
 
 
+def create_internal_campaign(store, campaign, audit):
+    campaign = Campaign.model_validate(campaign.model_dump())
+    if (campaign.internal_cohort is None or audit.campaign_id != campaign.campaign_id
+            or audit.event_type != "campaign_created" or audit.to_status != campaign.status):
+        deny("CAMPAIGN_BINDING_INVALID")
+    required = 1 + INTERNAL_AUDIT_BUDGET  # Creation audit plus room for mandatory ingest audits.
+    cid = campaign.campaign_id
+    lead = campaign.internal_cohort.subject_ref.removeprefix("lead:")
+    if hasattr(store, "_phase9_lock"):
+        with store._phase9_lock:
+            bucket = store.campaign_audit.get(cid, [])
+            if cid in store.campaigns or any(e.lead_id == lead for e in store.touchpoints.values()):
+                deny("REPLAY_OR_SUBJECT_NOT_EMPTY")
+            if len(bucket) + required > INTERNAL_AUDIT_CAP:
+                deny("CAPACITY_INSUFFICIENT")
+            model = campaign.model_copy(deep=True)
+            record = audit.model_copy(deep=True)
+            store.campaigns[cid] = model
+            store.campaign_updated_at[cid] = model.updated_at
+            store.campaign_audit[cid] = [*bucket, record]
+        return
+    campaign_key = store._key("campaign-os", "campaign", cid)
+    audit_key = store._key("campaign-os", "audit", cid)
+    index = store._key("campaign-os", "campaigns")
+    lead_index = store._key("attribution-os", "lead", lead, "touchpoints")
+    with store.redis.pipeline() as pipe:
+        try:
+            pipe.watch(campaign_key, audit_key, index, lead_index)
+            for target, expected in ((campaign_key,"string"),(audit_key,"list"),
+                                     (index,"zset"),(lead_index,"zset")):
+                if pipe.type(target) not in ("none",expected):
+                    deny("STORE_TYPE_INVALID")
+            if pipe.exists(campaign_key) or pipe.zcard(lead_index):
+                deny("REPLAY_OR_SUBJECT_NOT_EMPTY")
+            if pipe.llen(audit_key) + required > INTERNAL_AUDIT_CAP:
+                deny("CAPACITY_INSUFFICIENT")
+            pipe.multi()
+            pipe.set(campaign_key, campaign.model_dump_json(), nx=True)
+            pipe.zadd(index, {cid:campaign.updated_at.timestamp()})
+            pipe.rpush(audit_key, audit.model_dump_json())
+            pipe.execute()
+        except WatchError as exc:
+            raise Phase9AuditDenied("PHASE9_INTERNAL_AUDIT:CONCURRENT_CHANGE") from exc
+
+
 def memory_commit(store, bundle):
     bundle.validate()
     with store._phase9_lock:

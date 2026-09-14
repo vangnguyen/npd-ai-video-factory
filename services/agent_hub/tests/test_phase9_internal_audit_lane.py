@@ -22,7 +22,8 @@ from npd_agent_hub.attribution_models import (
     SourceTouchpointEvent, SourceTouchpointIngestRequest, TouchpointBackfillRequest,
 )
 from npd_agent_hub.auth import authorizer
-from npd_agent_hub.campaign_models import CampaignAuditEvent, CampaignBudget, CampaignCreate, KPITarget
+from npd_agent_hub.campaign_models import (CampaignAuditEvent, CampaignBudget, CampaignCreate,
+    CampaignDraftUpdate, CampaignApprovalDecision, CampaignStatus, KPITarget)
 from npd_agent_hub.campaigns import CampaignService
 from npd_agent_hub.config import HubSettings
 from npd_agent_hub.delivery_models import AttributionDeliveryEnvelope, AttributionDeliveryFailure
@@ -510,3 +511,61 @@ def test_phase9_task_report_uses_internal_exact_subject_without_external_executi
     assert "overdue_missing_evidence" in serialized
     assert "first_response_sla_deadline_at" in serialized
     assert len(store.tasks) == 1 and len(store.reports) == 1
+
+
+@pytest.mark.parametrize("backend", ["memory", "redis"])
+@pytest.mark.parametrize("existing,passes", [(0, True), (1997, True), (1998, False), (2000, False)])
+def test_internal_campaign_creation_guards_capacity_before_first_campaign_write(tmp_path, backend, existing, passes):
+    _, campaign, cohort, _, _, _ = rig(tmp_path)
+    store = MemoryHubStore() if backend == "memory" else RedisHubStore(
+        client=fakeredis.FakeRedis(decode_responses=True), namespace="LOCAL-CREATION")
+    request = CampaignCreate.model_validate({**campaign.model_dump(), "owner":cohort.owner_id})
+    records = [CampaignAuditEvent(event_id=f"LOCAL-OLD-{i}",campaign_id=CID,event_type="local",actor="local") for i in range(existing)]
+    if isinstance(store, MemoryHubStore): store.campaign_audit[CID] = records
+    elif records: store.redis.rpush(store._key("campaign-os","audit",CID),*(a.model_dump_json() for a in records))
+    before = state(store)
+    if passes:
+        created = CampaignService(store).create(request,actor="LOCAL-OWNER",owner_authorized=True)
+        assert created.campaign_id == CID
+        count = len(store.campaign_audit[CID]) if isinstance(store,MemoryHubStore) else store.redis.llen(store._key("campaign-os","audit",CID))
+        assert count == existing+1
+    else:
+        with pytest.raises(Phase9AuditDenied,match="CAPACITY"):
+            CampaignService(store).create(request,actor="LOCAL-OWNER",owner_authorized=True)
+        assert state(store) == before and store.get_campaign(CID) is None
+
+
+def test_internal_campaign_creation_watch_conflict_writes_no_campaign(tmp_path, monkeypatch):
+    _,campaign,cohort,_,_,_ = rig(tmp_path)
+    request = CampaignCreate.model_validate({**campaign.model_dump(),"owner":cohort.owner_id})
+    store=RedisHubStore(client=fakeredis.FakeRedis(decode_responses=True),namespace="LOCAL-CREATION")
+    pipeline=store.redis.pipeline
+    def conflict(*a,**kw):
+        pipe=pipeline(*a,**kw)
+        execute=pipe.execute
+        def fail(*a,**kw):
+            store.redis.rpush(store._key("campaign-os","audit",CID),CampaignAuditEvent(campaign_id=CID,event_type="local_concurrent",actor="local").model_dump_json())
+            return execute(*a,**kw)
+        pipe.execute=fail
+        return pipe
+    monkeypatch.setattr(store.redis,"pipeline",conflict)
+    with pytest.raises(Phase9AuditDenied,match="CONCURRENT_CHANGE"):
+        CampaignService(store).create(request,actor="LOCAL-OWNER",owner_authorized=True)
+    assert store.get_campaign(CID) is None
+    assert store.redis.zcard(store._key("campaign-os","campaigns")) == 0
+    assert store.redis.llen(store._key("campaign-os","audit",CID)) == 1
+
+
+@pytest.mark.parametrize("backend", ["memory", "redis"])
+def test_internal_campaign_lifecycle_cannot_save_before_denied_audit(tmp_path, backend):
+    store,_,_,_,_,_=rig(tmp_path,backend)
+    service=CampaignService(store,execution_enabled=True)
+    before=state(store)
+    attempts=[lambda:service.update_draft(CID,CampaignDraftUpdate(objective="Changed"),actor="local"),
+              lambda:service.refresh_plans(CID,actor="local"),
+              lambda:service.request_approval(CID,scope="campaign",actor="local"),
+              lambda:service.decide_approval(CID,scope="campaign",decision=CampaignApprovalDecision(approved=True),actor="local"),
+              lambda:service.transition(CID,target=CampaignStatus.CANCELLED,actor="local",owner_authorized=True)]
+    for attempt in attempts:
+        with pytest.raises(ValueError): attempt()
+        assert state(store) == before
