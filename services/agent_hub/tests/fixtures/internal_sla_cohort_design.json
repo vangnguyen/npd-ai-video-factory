@@ -1,0 +1,60 @@
+{
+  "artifact_kind": "SYNTHETIC_LOCAL_STATIC_DESIGN_NOT_PRODUCTION_EVIDENCE",
+  "owner_policy_adoption": "NOT_GRANTED",
+  "owner_cohort_creation": "NOT_GRANTED",
+  "campaign": {
+    "proposed_campaign_id": "CMP-AHINTERNAL-P9SLACOHORT-202609-01",
+    "name": "P9 SLA Cohort",
+    "project": "Agent Hub internal first-response acceptance",
+    "project_code": "AHINTERNAL",
+    "purpose": "An actual internal service inquiry by the approved Owner team; no customer lead, sales routing or revenue attribution",
+    "first_response_sla_minutes": 15,
+    "owner": "static_internal_owner_001",
+    "budget": 0,
+    "lifecycle_days": 7,
+    "business_scope": "internal_non_customer",
+    "production_reporting_exclusion": "REQUIRES_FUTURE_ENFORCEMENT_NOT_IMPLEMENTED_BY_THIS_FIXTURE"
+  },
+  "source": {
+    "system": "espocrm",
+    "entity": "Lead",
+    "static_record_id": "static_native_lead_001",
+    "event_type": "lead_created",
+    "original_created_at_UTC": "2026-09-14T00:00:00+00:00",
+    "assigned_owner": "static_internal_owner_001",
+    "native_source_campaign_relation": "static_native_campaign_001",
+    "source_event_id_rule": "native creation audit/event ID; otherwise deterministic digest of exact native record ID, original createdAt and original creation custody",
+    "subject_rule": "lead:<exact native EspoCRM Lead ID>",
+    "creation_audit_kind": "STATIC_NATIVE_SHAPE_NOT_AUTHENTIC_PRODUCTION_AUDIT"
+  },
+  "positive_non_customer_proof_required": [
+    "Owner-approved business scope registry binds exact native Lead ID, native/canonical Campaign mapping and source raw digests",
+    "Dedicated campaign purpose and independently verified internal Owner/team identity",
+    "Affirmative no real customer relationship and no response/customer-contact obligation",
+    "Exact single source ID allowlist; naming or lead: prefix alone grants no exemption",
+    "Internal subject exclusion from normal sales/revenue attribution verified before creation/delivery"
+  ],
+  "delivery": {
+    "authenticated_producer": "Existing authorized read-only EspoCRM export under operator RBAC; dedicated Lead conversion/audit verification still required",
+    "source_system": "espocrm",
+    "attempt_number": 1,
+    "max_attempts": 1,
+    "event_count": 1,
+    "production_delivery": "NOT_AUTHORIZED"
+  },
+  "cases": [
+    {"name": "A", "as_of_minutes": 14, "response_minutes": null, "clock": true, "expected": "pending"},
+    {"name": "BOUNDARY", "as_of_minutes": 15, "response_minutes": null, "clock": true, "expected": "pending"},
+    {"name": "B", "as_of_minutes": 16, "response_minutes": null, "clock": true, "expected": "overdue_missing_evidence"},
+    {"name": "C", "as_of_minutes": 16, "response_minutes": 10, "clock": true, "expected": "met"},
+    {"name": "D", "as_of_minutes": 16, "response_minutes": null, "clock": false, "expected": "not_evaluable"}
+  ],
+  "cleanup": {
+    "source": "Close/archive through a separately approved native source lifecycle; no hard deletion or timestamp editing",
+    "campaign": "Pause/complete after cohort expiry; preserve scope registry, policy and mapping provenance",
+    "Agent_Hub": "Retain immutable event, delivery receipt, task/report/audit/NBA review and raw package/capture/recovery provenance under approved custody",
+    "automatic_cleanup": false
+  },
+  "execution_authorized": false,
+  "production_writes": 0
+}
