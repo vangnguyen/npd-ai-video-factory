@@ -96,7 +96,8 @@ def static() -> None:
         compile(path.read_text(encoding="utf-8"), str(path), "exec")
     receipt = {"schema": "npd.agent-hub.phase9.owner-fence-rebind.static-preparation.v2",
                "attempt_id": ATTEMPT, "gate_sha256": GATE_SHA, "approval_sha256": APPROVAL_SHA,
-               "candidate_head": head, "source_count": len(old["source_sha256"]),
+               "candidate_head": old["candidate_head"], "tooling_source_head": head,
+               "source_count": len(old["source_sha256"]),
                "override_sha256": sha(override), "package_binding_contract_sha256": sha((ROOT / "package_binding_contract.py").read_bytes()),
                "begin_template_sha256": sha((ROOT / "owner_rebind_begin.template.py").read_bytes()),
                "execute_template_sha256": sha((ROOT / "owner_rebind_execute.template.py").read_bytes()),
