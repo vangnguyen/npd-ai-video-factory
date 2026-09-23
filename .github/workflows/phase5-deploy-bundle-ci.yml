@@ -121,6 +121,66 @@ jobs:
       - name: Build production Agent Hub image
         run: docker build -f services/agent_hub/Dockerfile -t npd-agent-hub:phase5-ci .
 
+      - name: Configure immutable OCI builder
+        if: github.event_name == 'workflow_dispatch'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build immutable linux/amd64 Phase 9 delivery OCI archive
+        if: github.event_name == 'workflow_dispatch'
+        id: phase9_oci
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/agent_hub/Dockerfile
+          platforms: linux/amd64
+          outputs: type=oci,dest=${{ runner.temp }}/agent-hub-phase9-delivery.oci.tar
+          provenance: mode=max
+          sbom: true
+
+      - name: Record Phase 9 OCI archive and source provenance
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          IMAGE_MANIFEST_DIGEST: ${{ steps.phase9_oci.outputs.digest }}
+          BUILD_METADATA: ${{ steps.phase9_oci.outputs.metadata }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}"
+          sha256sum agent-hub-phase9-delivery.oci.tar > agent-hub-phase9-delivery.oci.tar.sha256
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          archive = pathlib.Path(os.environ["RUNNER_TEMP"]) / "agent-hub-phase9-delivery.oci.tar"
+          metadata = json.loads(os.environ["BUILD_METADATA"])
+          receipt = {
+              "schema": "npd.agent-hub.phase9.delivery-oci-build.v1",
+              "source_sha": os.environ["GITHUB_SHA"],
+              "source_repository": os.environ["GITHUB_REPOSITORY"],
+              "source_ref": os.environ["GITHUB_REF"],
+              "platform": "linux/amd64",
+              "image_manifest_digest": os.environ["IMAGE_MANIFEST_DIGEST"],
+              "image_config_digest": metadata.get("containerimage.config.digest"),
+              "archive": archive.name,
+              "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+              "production_build": False,
+              "production_push": False,
+          }
+          output = archive.with_name("BUILD_RECEIPT.json")
+          output.write_text(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload immutable Phase 9 delivery candidate
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-hub-phase9-delivery-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/agent-hub-phase9-delivery.oci.tar
+            ${{ runner.temp }}/agent-hub-phase9-delivery.oci.tar.sha256
+            ${{ runner.temp }}/BUILD_RECEIPT.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
