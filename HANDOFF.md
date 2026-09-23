@@ -300,11 +300,11 @@ NEXT_SAFE_ACTION:
   protected services 18/18 with canonical SHA-256
   `6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e`,
   and custody intact. This observation must be revalidated JIT before mutation.
-- Gate 2 is prepared but not approved or executed. Operation
+- Gate 2 is Owner-approved but not yet executed. Operation
   `AH-P9-ONE-DELIVERY-7f30c64e-9d40-483f-ac90-ae1acdb7faed`; immutable package
   manifest SHA-256
   `63dc77f39b1c0244c38dd0c09f33f5c33a9b93224c85102d328f77d4c653bb3b`;
-  proposed window 20:00–21:30 ICT on 24/09/2026, latest target mutation start
+  approved window 20:00–21:30 ICT on 24/09/2026, latest target mutation start
   before 20:20 ICT. Target is only `npd-agent-hub-prod/agent-hub` and delivery
   `P9DELIVERY:e340bc60-7e98-4593-8414-0cca844507c0`, attempt 1/1, no retry.
 - Gate 2 target archive SHA-256
@@ -343,5 +343,15 @@ NEXT_SAFE_ACTION:
   `19767fb88cc368f81143b5824fe2b292f04aa871af87fcf61fa35e0e90f042cf`.
 - Production access/writes, real-provider calls and actual cost for this
   fast-track preparation: `0/0/0`. Phase 10 remains NO-GO.
-- NEXT_SAFE_ACTION: Owner may grant the exact manifest-bound Gate 2 consent;
-  do not execute it without that new message and fresh JIT validation.
+- Owner consent was received verbatim and materialized outside the immutable
+  package. Consent SHA-256
+  `d0d22521aaac7fe91933a8366a78e80c753edd1474a81c30c16350ebbd5d3d59`;
+  approval-record SHA-256
+  `c93ec2320e90f5a4ae143f632d9fc46fb8da05b7b2ac285551725c5a7a0b47f6`;
+  approval evidence-manifest SHA-256
+  `c72e8e1c2dae001f461f3f95dbcb76120ff77f6793a2442313a8f7a564a31c62`.
+  Static package/authority verification is PASS without `--execute`, SSH,
+  claim, stage or production access.
+- NEXT_SAFE_ACTION: wait for the approved window, then perform fresh JIT
+  validation and execute only if every bound invariant passes and target
+  mutation can begin before 20:20 ICT. No automation was created.
