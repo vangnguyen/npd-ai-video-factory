@@ -273,3 +273,75 @@ NEXT_SAFE_ACTION:
 - OPERATION_EXECUTION/CLAIM/STAGE/DEPLOY NONE; production/VF writes, real
   provider calls and actual cost all zero. Other workstreams remain closed.
 - NEXT_SAFE_ACTION: OWNER REVIEW + EXPLICIT EXECUTION APPROVAL. Stop.
+
+## Fast-track to Phase 9 closure — 2026-09-23
+
+- Task: `AH-P9-FAST-TRACK-TO-CLOSURE`; workstream: Agent Hub only.
+- Product/artifact source HEAD: `915ba10845e25de60aacb474b4b2a4c7f623fddc` on
+  `feat/agent-hub-p9-owner-fence-canonical-contract`. The bounded
+  `phase9_delivery` runtime permits only the exact server-owned one-delivery
+  binding; scheduler initialization and unrelated routes remain denied.
+- ACL RCA classification: `ACL_RESPONSE_CONTRACT_MISMATCH`, not a real QC
+  permission denial. The App/user response carries `acl.table.Lead.create` as
+  the effective string representation; the old runner re-entered the already
+  extracted ACL map through a second `acl` lookup. The shared canonical parser
+  now accepts the exact authenticated QC shape, remains fail-closed for
+  missing/unknown/wrong-QC input and contains no QC-ID special case.
+- Gate C is historical, terminal and already consumed successfully. Attempt
+  `8c10479e-8a74-40f9-a25f-2a724f2fb4d3` produced Lead
+  `6aabc611758efd76b` (`createdBy=6aab5af0215b97ba2`,
+  `assignedUserId=6a4dd6d5c8ee64bed`) and Campaign
+  `CMP-AHINTERNAL-P9SLACOHORT-202609-01`; terminal verdict
+  `AUTHENTIC_INTERNAL_COHORT_CREATED_VERIFIED`, receipt SHA-256
+  `43c5e075371d55e6c2467767e8e61cd2277d6406e2bd22df2801953a06a10783`.
+  It is not a reusable Gate C authority.
+- Fresh read-only runtime observation: `phase9_creation`, health/ready PASS,
+  scheduler disabled, Owner fence `6a4dd6d5c8ee64bed`, DB1 10,700 keys,
+  protected services 18/18 with canonical SHA-256
+  `6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e`,
+  and custody intact. This observation must be revalidated JIT before mutation.
+- Gate 2 is prepared but not approved or executed. Operation
+  `AH-P9-ONE-DELIVERY-7f30c64e-9d40-483f-ac90-ae1acdb7faed`; immutable package
+  manifest SHA-256
+  `63dc77f39b1c0244c38dd0c09f33f5c33a9b93224c85102d328f77d4c653bb3b`;
+  proposed window 20:00–21:30 ICT on 24/09/2026, latest target mutation start
+  before 20:20 ICT. Target is only `npd-agent-hub-prod/agent-hub` and delivery
+  `P9DELIVERY:e340bc60-7e98-4593-8414-0cca844507c0`, attempt 1/1, no retry.
+- Gate 2 target archive SHA-256
+  `03b03412617fc3320fdefec3310596933c82258a2d0a895ea63b98bf7b08c9df`,
+  target Docker config
+  `sha256:2097e3cb4e711f0dc6a6479f2b51ac524432910576a12e932c0be030efb1e6d7`,
+  rollback config
+  `sha256:dce8d804e0b1b5186b2571a617ca9985682d2eb0e2d5b46b5c942fc729232056`.
+- Gate 2 runner proves strict pinned SSH, claim-before-stage, exact staged code,
+  exact Operator bearer identity, one business POST, durable post-intent,
+  no retry, signed receipt, direct DB1 record and five-index readbacks,
+  Lead-index 0→1, exactly +2 internal Campaign audits, unchanged identity
+  mappings/global attribution audit, protected-service parity, and bounded
+  Agent-Hub-only pre-POST rollback. Any post-launch ambiguity preserves state.
+- Downstream delivery/SLA preparation is fully bound to the authentic Gate C
+  values. The SLA clock is `2026-09-17T10:50:57Z`, deadline
+  `2026-09-17T11:05:57Z`; no backdating or synthetic response evidence is
+  allowed. The authentic SLA result remains pending the one delivery and real
+  response-evidence evaluation.
+- Final UAT is `READY_FOR_REAL_COHORT`; acceptance dossier is
+  `READY_FOR_FINAL_EVIDENCE`. Remaining authentic evidence is the delivery/SLA
+  receipt, final bounded production UAT, and Owner internal-use acceptance.
+- Failure contracts are sealed: pre-Lead abort has no business mutation;
+  partial/ambiguous Gate C states preserve evidence without deletion or retry;
+  delivery and UAT failures preserve state and require Owner review.
+- Verification: Gate 2 focused 49/49, delivery/SLA 90/90, final UAT/dossier
+  36/36, failure-contract focused 18/18, Agent Hub regression 509/509,
+  evaluator 20/20, ops 187 PASS/1 skipped, exact-source GitHub checks 4/4,
+  package integrity 15/15 and secret scan 0 findings.
+- Exact Gate 2 package:
+  `C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-gate-20260923`.
+  External seal evidence SHA-256:
+  `62524d1b213ca1480d58c2fe81a992b9cb46210ad2342aadf94409eaa8c98198`.
+- Independent post-seal audit: 21/21 negative/harness checks and 3/3
+  AST/static checks PASS; audit manifest SHA-256
+  `19767fb88cc368f81143b5824fe2b292f04aa871af87fcf61fa35e0e90f042cf`.
+- Production access/writes, real-provider calls and actual cost for this
+  fast-track preparation: `0/0/0`. Phase 10 remains NO-GO.
+- NEXT_SAFE_ACTION: Owner may grant the exact manifest-bound Gate 2 consent;
+  do not execute it without that new message and fresh JIT validation.

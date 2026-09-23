@@ -1,10 +1,11 @@
 {
   "schema": "npd.repository-handoff.v1",
-  "updated_at_utc": "2026-09-12T11:53:16.807294+00:00",
+  "updated_at_utc": "2026-09-23T11:53:58.233551+00:00",
   "repository": {
     "name": "vangnguyen/npd-ai-video-factory",
     "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
-    "branch": "fix/agent-hub-p9-preflight-capture-20260912",
+    "branch": "feat/agent-hub-p9-owner-fence-canonical-contract",
+    "current_product_source_head": "915ba10845e25de60aacb474b4b2a4c7f623fddc",
     "source_baseline_sha": "43a1cca354d12893ee33b6e43cd9117794f78e04",
     "layout": "agent_hub_and_legacy_video_factory_integration",
     "active_video_factory_repository": "https://github.com/vangnguyen/npd-video-factory-v2.git",
@@ -54,14 +55,14 @@
   },
   "workstreams": {
     "agent_hub": {
-      "state": "RCA06_FINAL_FRESH_RECEIPT_WINDOW_AND_CURRENT_HEAD_CI_REQUIRED",
+      "state": "GATE_C_PASS_GATE2_READY_FOR_OWNER_AUTHORITY",
       "authorized_target": "npd-agent-hub-prod/agent-hub",
       "automation_authorized": false,
       "phase10_authorized": false,
       "ah_r01_authorized": false,
       "ah_03": "NO_GO",
       "ah_04": "NO_GO",
-      "rca_task": "AH-P9-RCA-06",
+      "rca_task": "AH-P9-GATE-C-QC-ACL-CONTRACT-RCA-FIX-RESEAL",
       "rca_underlying_reason": "PROTECTED_SERVICE_DRIFT",
       "rca_failure_layer": [
         "ENVIRONMENT_CONFIG_BINDING",
@@ -71,14 +72,14 @@
       "changed_protected_service": "n8n-marketing-pricing-policy-sync-1",
       "repository_binding": "VALID",
       "rca_capture_gap": "Historical SSH-child stdout, child return code, and generated invocation UUID were not persisted",
-      "final_readonly_preflight_recorded": false,
+      "final_readonly_preflight_recorded": true,
       "operation_claim_created": false,
       "candidate_staged": false,
       "target_mutation_started": false,
       "operation_reusable": false,
       "observation": "NOT_STARTED",
       "phase9_uat_business_acceptance": "NOT_COMPLETED",
-      "current_authority": "PREPARATION_ONLY_WITH_EXACT_FOUR_DB0_READ_EVIDENCE_EXCEPTION",
+      "current_authority": "GATE2_PREPARED_OWNER_AUTHORITY_NOT_GRANTED",
       "historical_execution_window_expired": true,
       "source_capture_candidate": {
         "path": "scripts/ops/agent_hub_phase9/remote_preflight_capture.py",
@@ -89,27 +90,26 @@
         "adopted_into_readonly_evidence_collectors": true,
         "full_snapshot_and_package_binding_required": true
       },
-      "fresh_gate_preparation": "PREPARED_ONLY_IF_CURRENT_HEAD_FRESH_FINAL_RECEIPT_AND_PACKAGE_PASS",
-      "fresh_operation_created": false,
+      "fresh_gate_preparation": "GATE2_IMMUTABLE_PACKAGE_VERIFIED_READY_FOR_OWNER_REVIEW",
+      "fresh_operation_created": true,
       "fresh_approval_created": false,
       "fresh_confirmation_token_created": false,
-      "fresh_window_bound": false,
-      "sales_sla_evidence": "OPEN",
+      "fresh_window_bound": true,
+      "sales_sla_evidence": "READY_FOR_AUTHENTIC_DELIVERY_AND_RESPONSE_EVIDENCE",
       "backup_copy2": "OPEN",
       "ah_t01b_observation": "OPEN",
       "critical_path": [
-        "PHASE9_UAT_BUSINESS_ACCEPTANCE",
-        "SALES_SLA_AND_BACKUP_COPY2",
-        "AH_T01B",
-        "AH_R01",
-        "AH_03"
+        "ONE_AUTHENTIC_LEAD_CREATED_DELIVERY",
+        "AUTHENTIC_SLA_RESULT",
+        "FINAL_PHASE9_PRODUCTION_UAT",
+        "OWNER_INTERNAL_USE_ACCEPTANCE"
       ],
       "root_cause_disposition": "PROTECTED_DRIFT_CONFIRMED_ACCEPTED_NEW_BASELINE_FRESH_SUBSTITUTION_NO_HISTORICAL_CAPTURE_RECOVERY",
       "fresh_passive_snapshot_id": "AH-P9-RCA-03-SNAPSHOT-247cd494-a466-426a-956a-983f01c009af",
       "full_execution_snapshot_complete": true,
       "fresh_execution_dependencies_resealed": "VERIFY_CURRENT_HEAD_EXTERNAL_FINAL_SEAL",
       "review_package_seal_authorizes_execution": false,
-      "candidate_code_head": "4a3ab94ca72398afd11aa10e1509741f5866da91",
+      "candidate_code_head": "915ba10845e25de60aacb474b4b2a4c7f623fddc",
       "fresh_pilot_dispatcher_created": true,
       "owner_disposition_sha256": "5119b51224d70bfb553f0c5a10727e1b9c8e1cd55ec8cdbdccc063641ef6cb8c",
       "fresh_evidence_sha256": {
@@ -132,9 +132,9 @@
         "sealed_protected_service_sha256": "dafe99c16a9f3059cb20d5d5e746c35ae5438668fe8155d5df034a87b02d9302",
         "dispatch_started_at_utc": "2026-09-11T13:00:19.4406767Z"
       },
-      "operation_id": "PHASE9-LIMITED-PILOT-RCA06-9459bd18-56a2-4bdf-8592-54b7d94abc7b",
+      "operation_id": "AH-P9-ONE-DELIVERY-7f30c64e-9d40-483f-ac90-ae1acdb7faed",
       "operation_execution": "NONE",
-      "execution_window": "EXACT_EXTERNAL_FINAL_RECEIPT_REQUIRED",
+      "execution_window": "PROPOSED_2026-09-24T13:00:00Z_2026-09-24T14:30:00Z_NOT_AUTHORIZED",
       "owner_evidence_only_exception_sha256": "f523cc2a7df00459fab545e1a4d8e3a82733555efe09acf93fa819fbf247e4e6",
       "video_factory_workstream_opened": false,
       "fresh_evidence_pointers": {
@@ -160,6 +160,72 @@
         "counter_receipt_expired": true,
         "receipt_sha256": "cff12b170e2fe4572ea04ffb1be1a9ca87183a97febfe2389925cf993d190f29",
         "execution_approval": "NOT_GRANTED"
+      },
+      "fast_track_to_closure": {
+        "task": "AH-P9-FAST-TRACK-TO-CLOSURE",
+        "acl_classification": "ACL_RESPONSE_CONTRACT_MISMATCH",
+        "gate_c": {
+          "status": "AUTHENTIC_INTERNAL_COHORT_CREATED_VERIFIED",
+          "attempt": "8c10479e-8a74-40f9-a25f-2a724f2fb4d3",
+          "terminal_receipt_sha256": "43c5e075371d55e6c2467767e8e61cd2277d6406e2bd22df2801953a06a10783",
+          "lead_id": "6aabc611758efd76b",
+          "campaign_id": "CMP-AHINTERNAL-P9SLACOHORT-202609-01",
+          "reusable": false
+        },
+        "runtime": {
+          "mode": "phase9_creation",
+          "healthy": true,
+          "ready": true,
+          "scheduler_enabled": false,
+          "owner_fence": "6a4dd6d5c8ee64bed",
+          "db1_keys_observed": 10700,
+          "protected_services": 18,
+          "protected_sha256": "6e0167343174e4cb719b3799015dc5d438b8cdcc545774dc72d53f61cf2c648e",
+          "custody": "INTACT",
+          "jit_revalidation_required": true
+        },
+        "gate2": {
+          "status": "READY_FOR_OWNER_GATE_2_NOT_AUTHORIZED_NOT_EXECUTED",
+          "operation_id": "AH-P9-ONE-DELIVERY-7f30c64e-9d40-483f-ac90-ae1acdb7faed",
+          "package_manifest_sha256": "63dc77f39b1c0244c38dd0c09f33f5c33a9b93224c85102d328f77d4c653bb3b",
+          "target_source_head": "915ba10845e25de60aacb474b4b2a4c7f623fddc",
+          "target_docker_config": "sha256:2097e3cb4e711f0dc6a6479f2b51ac524432910576a12e932c0be030efb1e6d7",
+          "rollback_docker_config": "sha256:dce8d804e0b1b5186b2571a617ca9985682d2eb0e2d5b46b5c942fc729232056",
+          "delivery_id": "P9DELIVERY:e340bc60-7e98-4593-8414-0cca844507c0",
+          "attempt": 1,
+          "max_attempts": 1,
+          "automatic_retry": false,
+          "independent_audit": "PASS",
+          "independent_audit_manifest_sha256": "19767fb88cc368f81143b5824fe2b292f04aa871af87fcf61fa35e0e90f042cf",
+          "window_ict": "2026-09-24T20:00:00+07:00/2026-09-24T21:30:00+07:00",
+          "latest_target_mutation_start_ict_exclusive": "2026-09-24T20:20:00+07:00",
+          "owner_authority": "NOT_GRANTED"
+        },
+        "downstream": {
+          "delivery": "READY_FOR_EXACT_AUTHENTIC_EXECUTION",
+          "sla": "READY_FOR_AUTHENTIC_CLOCK_AND_RESPONSE_EVIDENCE",
+          "uat": "READY_FOR_REAL_COHORT",
+          "acceptance_dossier": "READY_FOR_FINAL_EVIDENCE",
+          "remaining_critical_items": 4
+        },
+        "tests": {
+          "gate2_focused": "49/49 PASS",
+          "delivery_sla": "90/90 PASS",
+          "uat_acceptance": "36/36 PASS",
+          "failure_contracts": "18/18 PASS",
+          "agent_hub_regression": "509/509 PASS",
+          "business_evaluator": "20/20 PASS",
+          "ops": "187 PASS, 1 SKIPPED",
+          "exact_source_ci": "4/4 PASS",
+          "package_integrity": "15/15 PASS",
+          "secret_scan_findings": 0
+        },
+        "evidence": {
+          "gate2_package": "C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-gate-20260923",
+          "gate2_external_seal_sha256": "62524d1b213ca1480d58c2fe81a992b9cb46210ad2342aadf94409eaa8c98198",
+          "uat_acceptance_bundle": "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-fast-track-uat-acceptance-20260923",
+          "failure_contract_bundle": "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-fast-track-failure-contracts-20260923"
+        }
       }
     },
     "video_factory": {
@@ -171,13 +237,14 @@
     }
   },
   "latest_milestone": {
-    "task": "AH-P9-RCA-06",
+    "task": "AH-P9-FAST-TRACK-TO-CLOSURE",
     "verdict": "REVIEW_REQUIRED",
-    "operation_id": "PHASE9-LIMITED-PILOT-RCA06-9459bd18-56a2-4bdf-8592-54b7d94abc7b",
-    "gate": "PREPARED_ONLY_IF_CURRENT_HEAD_FRESH_FINAL_RECEIPT_AND_PACKAGE_PASS",
+    "gate_c": "AUTHENTIC_INTERNAL_COHORT_CREATED_VERIFIED_ALREADY_CONSUMED",
+    "operation_id": "AH-P9-ONE-DELIVERY-7f30c64e-9d40-483f-ac90-ae1acdb7faed",
+    "gate": "GATE2_READY_FOR_EXACT_OWNER_CONSENT",
     "owner_execution_approval": "NOT_GRANTED",
-    "execution_window": "EXACT_EXTERNAL_FINAL_RECEIPT_REQUIRED",
-    "final_receipt": "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-06-20260912\\HANDOFF_RECEIPT.json",
+    "execution_window": "PROPOSED_20:00-21:30_ICT_2026-09-24",
+    "package_manifest_sha256": "63dc77f39b1c0244c38dd0c09f33f5c33a9b93224c85102d328f77d4c653bb3b",
     "operation_execution": "NONE",
     "claim": "NONE",
     "stage": "NONE",
@@ -186,7 +253,7 @@
     "video_factory_writes": 0,
     "provider_calls": 0,
     "actual_cost": 0,
-    "next_safe_action": "OWNER REVIEW + EXPLICIT EXECUTION APPROVAL"
+    "next_safe_action": "OWNER MAY GRANT EXACT MANIFEST-BOUND GATE2 CONSENT"
   },
   "evidence_pointers": [
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-gate-20260910-d55d6333",
@@ -206,6 +273,11 @@
     "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an\\work\\agent-hub-p9-rca\\docs\\AH_P9_COUNTER_EVIDENCE_BRIDGE_PILOT_RESEAL_20260912.md",
     "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-05-20260912\\HANDOFF_RECEIPT.json",
     "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an\\work\\agent-hub-p9-rca\\docs\\AH_P9_FINAL_FRESHNESS_WINDOW_BINDING_20260912.md",
-    "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-06-20260912\\HANDOFF_RECEIPT.json"
+    "C:\\Users\\VANG NGUYEN\\Documents\\Codex\\2026-09-12\\referenced-chatgpt-conversation-this-is-an-2\\outputs\\ah-p9-rca-06-20260912\\HANDOFF_RECEIPT.json",
+    "C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-gate-20260923/PACKAGE_MANIFEST.json",
+    "C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-gate-20260923-seal-evidence/SEAL_VERIFICATION.json",
+    "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-gate2-one-delivery-audit-harness-20260923/AUDIT_MANIFEST.json",
+    "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-fast-track-uat-acceptance-20260923/PACKAGE_MANIFEST.json",
+    "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-fast-track-failure-contracts-20260923/PACKAGE_MANIFEST.json"
   ]
 }
