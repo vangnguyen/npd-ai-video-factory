@@ -1,0 +1,56 @@
+name: Phase 9 Delivery OCI Artifact
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build immutable linux/amd64 OCI archive
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/agent_hub/Dockerfile
+          platforms: linux/amd64
+          outputs: type=oci,dest=${{ runner.temp }}/agent-hub-phase9-delivery.oci.tar
+          provenance: mode=max
+          sbom: true
+      - name: Record archive and source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}"
+          sha256sum agent-hub-phase9-delivery.oci.tar > agent-hub-phase9-delivery.oci.tar.sha256
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          archive = pathlib.Path(os.environ["RUNNER_TEMP"]) / "agent-hub-phase9-delivery.oci.tar"
+          receipt = {
+              "schema": "npd.agent-hub.phase9.delivery-oci-build.v1",
+              "source_sha": os.environ["GITHUB_SHA"],
+              "source_repository": os.environ["GITHUB_REPOSITORY"],
+              "source_ref": os.environ["GITHUB_REF"],
+              "platform": "linux/amd64",
+              "archive": archive.name,
+              "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+              "production_build": False,
+              "production_push": False,
+          }
+          output = archive.with_name("BUILD_RECEIPT.json")
+          output.write_text(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+          PY
+      - name: Upload immutable candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-hub-phase9-delivery-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/agent-hub-phase9-delivery.oci.tar
+            ${{ runner.temp }}/agent-hub-phase9-delivery.oci.tar.sha256
+            ${{ runner.temp }}/BUILD_RECEIPT.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
