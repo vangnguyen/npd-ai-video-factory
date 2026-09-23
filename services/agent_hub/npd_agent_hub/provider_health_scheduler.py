@@ -73,8 +73,8 @@ class ProviderHealthScheduler:
         return stored
 
     async def run_once(self, *, force: bool = False) -> ProviderHealthSchedulerStatus:
-        if self.settings.runtime_mode == "phase9_creation":
-            raise ValueError("PHASE9_CREATION_RUNTIME_SCHEDULER_DENIED")
+        if self.settings.runtime_mode in {"phase9_creation", "phase9_delivery"}:
+            raise ValueError("PHASE9_BOUNDED_RUNTIME_SCHEDULER_DENIED")
         current = self.status()
         if not self.enabled and not force:
             return current
@@ -154,9 +154,9 @@ class ProviderHealthScheduler:
                 continue
 
     async def start(self) -> None:
-        if self.settings.runtime_mode == "phase9_creation":
+        if self.settings.runtime_mode in {"phase9_creation", "phase9_delivery"}:
             # Do not initialize status, acquire a lease or spawn even a disabled
-            # scheduler in the bounded creation runtime.
+            # scheduler in a bounded Phase 9 runtime.
             return
         if self.store.get_provider_health_scheduler_status() is None:
             self.store.save_provider_health_scheduler_status(self._initial_status())

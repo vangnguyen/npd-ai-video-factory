@@ -103,7 +103,14 @@ from .routers.journeys import router as journeys_router
 from .routers.provider_health import router as provider_health_router
 from .tool_registry import ToolCapability, list_tool_capabilities
 from .phase9_creation_runtime import Phase9CreationDenied, allows_read, validate_creation
-from .config import settings as runtime_settings
+from .phase9_delivery_runtime import (
+    Phase9DeliveryDenied,
+    allows_read as allows_delivery_read,
+    validate_delivery,
+    validate_receipt_verification,
+    verify_delivery_fence,
+)
+from .config import HubSettings, settings as runtime_settings
 from .video_factory.router import (
     disabled_boundary as disabled_video_factory_boundary,
     router as video_factory_router,
@@ -136,18 +143,34 @@ mapping_reader = EspoMappingReader(schema_reader)
 
 @app.middleware("http")
 async def phase9_creation_boundary(request: Request, call_next):
-    settings = getattr(hub.executor, "settings", None) or runtime_settings
-    if settings.runtime_mode != "phase9_creation":
+    candidate = getattr(getattr(hub, "executor", None), "settings", None)
+    settings = candidate if isinstance(candidate, HubSettings) else runtime_settings
+    if settings.runtime_mode == "normal":
         return await call_next(request)
-    if allows_read(settings, request.method, request.url.path):
-        return await call_next(request)
-    if request.method == "POST" and request.url.path == "/api/v1/campaigns":
+    if settings.runtime_mode == "phase9_creation":
+        if allows_read(settings, request.method, request.url.path):
+            return await call_next(request)
+        if request.method == "POST" and request.url.path == "/api/v1/campaigns":
+            try:
+                validate_creation(settings, await request.json())
+            except (ValueError, ValidationError, Phase9CreationDenied):
+                return JSONResponse(status_code=403, content={"detail":"PHASE9_CREATION_REQUEST_DENIED"})
+            return await call_next(request)
+        return JSONResponse(status_code=403, content={"detail":"PHASE9_CREATION_ROUTE_DENIED"})
+    if settings.runtime_mode == "phase9_delivery":
         try:
-            validate_creation(settings, await request.json())
-        except (ValueError, ValidationError, Phase9CreationDenied):
-            return JSONResponse(status_code=403, content={"detail":"PHASE9_CREATION_REQUEST_DENIED"})
-        return await call_next(request)
-    return JSONResponse(status_code=403, content={"detail":"PHASE9_CREATION_ROUTE_DENIED"})
+            if allows_delivery_read(settings, request.method, request.url.path):
+                return await call_next(request)
+            if request.method == "POST" and request.url.path == "/api/v1/attribution/deliveries":
+                validate_delivery(settings, await request.json())
+                return await call_next(request)
+            if request.method == "POST" and request.url.path == "/api/v1/attribution/deliveries/receipts/verify":
+                validate_receipt_verification(settings, await request.json())
+                return await call_next(request)
+        except (ValueError, ValidationError, Phase9DeliveryDenied):
+            return JSONResponse(status_code=403, content={"detail":"PHASE9_DELIVERY_REQUEST_DENIED"})
+        return JSONResponse(status_code=403, content={"detail":"PHASE9_DELIVERY_ROUTE_DENIED"})
+    return JSONResponse(status_code=503, content={"detail":"RUNTIME_MODE_INVALID"})
 
 
 @app.middleware("http")
@@ -171,6 +194,10 @@ def readyz() -> dict[str, str]:
     try:
         if not hub.storage_health():
             raise RuntimeError("storage ping failed")
+        candidate = getattr(getattr(hub, "executor", None), "settings", None)
+        settings = candidate if isinstance(candidate, HubSettings) else runtime_settings
+        if settings.runtime_mode == "phase9_delivery":
+            verify_delivery_fence(settings)
         auth_errors = authorizer.configuration_errors()
         if auth_errors:
             raise RuntimeError("; ".join(auth_errors))
