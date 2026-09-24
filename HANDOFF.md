@@ -395,3 +395,34 @@ NEXT_SAFE_ACTION:
   roadmap items; use the existing Gate-2 authority only in its exact window and
   only after all JIT invariants pass. After `PHASE_9_PASS`, start Wave 1 static
   preparation and ask Owner to select the first Phase-10 channel.
+
+## Gate 2 terminal pre-claim abort — 2026-09-24
+
+- Task: execute exact Owner-approved Gate 2 operation
+  `AH-P9-ONE-DELIVERY-7f30c64e-9d40-483f-ac90-ae1acdb7faed`.
+- Static authority/package verification PASS with package manifest
+  `63dc77f39b1c0244c38dd0c09f33f5c33a9b93224c85102d328f77d4c653bb3b`
+  and the exact approved consent/record/archive hashes.
+- The first remote action aborted at `2026-09-24T13:02:39.707497Z`, before
+  the remote preflight runner started. Terminal reason:
+  `STRICT_KNOWN_HOSTS_PATH_REPRESENTATION_INVALID`.
+- Root cause: the immutable Windows launcher passed an unquoted
+  `UserKnownHostsFile` value containing the `VANG NGUYEN` path segment.
+  Windows OpenSSH split it into two filenames, so it did not read the exact
+  pinned known-hosts file and correctly failed strict host-key verification.
+- No trust check was weakened and no alias/global-known-hosts workaround was
+  installed. A read-only diagnostic proved the same exact file works when the
+  option value is quoted; this diagnostic was not used to bypass the sealed
+  launcher.
+- Strict post-abort readback: claim/attempt/stage/runtime all absent; Agent Hub
+  remains running and healthy on rollback image
+  `sha256:dce8d804e0b1b5186b2571a617ca9985682d2eb0e2d5b46b5c942fc729232056`,
+  restart count 0. Candidate load/deploy, delivery POST, DB1 write, provider
+  call and Video Factory action all remain zero. Rollback was not required.
+- This operation, package and approval are terminal and not reusable. The
+  minimal next step is source-only launcher remediation, real Windows OpenSSH
+  parser coverage, fresh reseal and a new Owner gate. Do not retry this gate.
+- Evidence:
+  `C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-execution-20260924`;
+  evidence manifest SHA-256
+  `afb61bc7773f4d269038deeb37f8d868b00fe13b7fd8ec20ab9ce5f8a3351413`.
