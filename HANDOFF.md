@@ -469,3 +469,34 @@ NEXT_SAFE_ACTION:
 - NEXT_SAFE_ACTION: Owner reviews and, only if accepted, repeats the exact line
   in `OWNER_CONSENT_TO_APPROVE.txt`. Do not execute or materialize an approved
   record before that fresh gate.
+
+## Gate 2 retry Owner approval materialized — 2026-09-24
+
+- Task: `AH-P9-GATE2-RETRY-OWNER-APPROVAL-MATERIALIZATION`; verdict `PASS`.
+- Owner approved exact operation
+  `AH-P9-ONE-DELIVERY-7d8dcca6-b1df-4e1f-a8ad-7dfa6e89e0e9` for the bounded
+  window `20:00–21:30 ICT` on 25/09/2026 (`13:00–14:30Z`), with target
+  mutation required to start strictly before `20:20 ICT` (`13:20Z`).
+- Exact consent SHA-256:
+  `8661b7453bf6f39a292c1cd96261f64848cbe3e54667d5a8efd4ee16c34e041e`.
+  Exact external `APPROVED` record SHA-256:
+  `46f8aacc206cede2ffda457ac500a159d20b61e7ebc875914bd7886586566b4d`.
+- The immutable package remains unchanged at manifest SHA-256
+  `63057926338ece41def10cb6abda627251d97dc4d73c062fe4524012a562842b`;
+  the eligible strict-transport rehearsal receipt remains
+  `6b452462a3d2286de13ba32b8e8b5d14f2a8c4f49249c63478bb4e6aa65e53e9`.
+- The sealed launcher was run without `--execute` and returned
+  `STATIC_PACKAGE_VERIFIED`. That validation made no network SSH call and
+  created no runtime evidence, claim, stage, deployment, DB1 write, provider
+  call, customer action or Video Factory action.
+- Approval evidence:
+  `C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-owner-approval-r2-20260924-7d8dcca6`;
+  manifest SHA-256
+  `a422af65a1e0d6fa9f3ecc51dfd5f7c57b99bc5779d590eb572c1454d8139a58`.
+- Current state is `WAITING_FOR_AUTHORIZED_WINDOW`. No automation or scheduler
+  was created. This approval must not be used before the window or after its
+  expiry and must not be reused after a terminal outcome.
+- NEXT_SAFE_ACTION: at or after `20:00 ICT` on 25/09/2026 and still before
+  `20:20 ICT`, perform fresh JIT validation of every sealed invariant. Invoke
+  the launcher with `--execute` only if all checks pass and the operation is
+  still unclaimed; otherwise abort fail-closed. Do not pre-stage.
