@@ -426,3 +426,46 @@ NEXT_SAFE_ACTION:
   `C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-execution-20260924`;
   evidence manifest SHA-256
   `afb61bc7773f4d269038deeb37f8d868b00fe13b7fd8ec20ab9ce5f8a3351413`.
+
+## Gate 2 transport remediation and fresh reseal — 2026-09-24
+
+- Task: `AH-P9-GATE2-TRANSPORT-REMEDIATION-RESEAL`; verdict
+  `REVIEW_REQUIRED` because a fresh Owner production gate is now the only
+  remaining authority prerequisite. No production execution is authorized by
+  this handoff.
+- Canonical Windows OpenSSH transport now quotes the `UserKnownHostsFile`
+  value for OpenSSH's second-stage option parser and normalizes separators to
+  forward slashes. SSH and SCP share the same validated renderer. Source/test
+  commit: `0c6329669092d347cb800f8f28dc03b07e939203`.
+- Verification: Phase 9 ops 192 PASS / 1 Linux-only skip, Agent Hub 509/509,
+  business evaluator 20/20, candidate Gate 2 55/55, delivery/SLA contract
+  46/46, syntax 5/5, package integrity 16/16, secret scan zero findings and
+  exact-head GitHub Actions run `36004874392` 3/3 PASS, including Windows.
+- Fresh operation:
+  `AH-P9-ONE-DELIVERY-7d8dcca6-b1df-4e1f-a8ad-7dfa6e89e0e9`.
+  Proposed window: 20:00–21:30 ICT on 25/09/2026, latest mutation start before
+  20:20 ICT. Owner approval is `NOT_GRANTED`.
+- Fresh immutable package manifest SHA-256:
+  `63057926338ece41def10cb6abda627251d97dc4d73c062fe4524012a562842b`.
+  The application image was not rebuilt; exact verified artifact policy is
+  `REUSED_VERIFIED_IMAGE_ARTIFACTS` with archive SHA-256
+  `03b03412617fc3320fdefec3310596933c82258a2d0a895ea63b98bf7b08c9df`.
+- Final package-bound strict-transport rehearsal used only remote command
+  `true`: parser PASS, exit 0, stdout/stderr 0 bytes, no claim, no SCP, no
+  stage and no write. Final eligible receipt SHA-256:
+  `6b452462a3d2286de13ba32b8e8b5d14f2a8c4f49249c63478bb4e6aa65e53e9`.
+  Preliminary receipt `7097fee1...` is superseded and ineligible because the
+  package was subsequently resealed.
+- Old operation/package/approval remain terminal and non-reusable. This task
+  created no `APPROVED` record and performed no claim, staging, deployment,
+  business delivery, DB1 write, provider call, customer action or Video
+  Factory action.
+- Package:
+  `C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-gate-r2-20260925`.
+  Readiness evidence:
+  `C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-gate-r2-20260925-evidence`;
+  evidence manifest SHA-256
+  `bb5114b7bbb9917243a003e453e7f7da9ab748d4e6ae0906e937a2e813673991`.
+- NEXT_SAFE_ACTION: Owner reviews and, only if accepted, repeats the exact line
+  in `OWNER_CONSENT_TO_APPROVE.txt`. Do not execute or materialize an approved
+  record before that fresh gate.
