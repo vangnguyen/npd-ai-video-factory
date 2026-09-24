@@ -355,3 +355,43 @@ NEXT_SAFE_ACTION:
 - NEXT_SAFE_ACTION: wait for the approved window, then perform fresh JIT
   validation and execute only if every bound invariant passes and target
   mutation can begin before 20:20 ICT. No automation was created.
+
+## Post-Phase-9 roadmap reconciliation — 2026-09-24
+
+- Task: `AH-POST-P9-ROADMAP-RECONCILIATION`; verdict `PASS` for planning.
+  The audit was read-only with respect to production. Production writes,
+  provider calls and cost were `0/0/0`.
+- Phase 9 remains P0. The only remaining terminal outcomes are the approved but
+  unexecuted authentic `lead_created` delivery, authentic SLA result, final
+  production UAT and Owner internal-use acceptance. Copy 2, AH-T01B, AH-R01 and
+  V1 retirement are not Phase-9 closure dependencies.
+- Post-Phase-9 work is split into two independent lanes:
+  1. product value: `PHASE_9_PASS` -> choose one Phase-10 channel -> bounded
+     implementation/gate/acceptance;
+  2. legacy risk: AH-T01B + AH-R01 + portable Copy 2/custody + accepted
+     bridge/catalog -> fresh pre-AH03 snapshot -> staged V1 retirement.
+- There is no authoritative strict dependency from the legacy lane to Phase-10
+  entry. Phase 10 remains `NO-GO` until Phase 9 passes and one channel has an
+  exact least-privilege preview/idempotency/rollback/acceptance package.
+- AH-01/01B/01C and AH-02 source work are complete. AH-T01B production and its
+  14-day observation are not started. AH-R01 M0 is offline PASS; M1–M4 are not
+  executed. Copy 2 and portable recovery remain open.
+- AH-03 remains required only if V1 retirement proceeds. The standalone AH-04
+  label is retired from planning and merged into shutdown Stages B–E; it must
+  not generate an invented Owner gate.
+- V1 retirement and generalized RCA16–18A custody hardening are moved off the
+  Phase-10 product critical path. Minimal Phase-9 pieces are already absorbed;
+  the remaining generalized retention/PG/S3/issuer/KMS/Google-sub work is
+  trigger-based hardening, not a default prerequisite.
+- Evidence-based progress: Phase-9 implementation preparation is complete;
+  Phase-9 acceptance is `0/4` remaining outcomes. Across accepted terminal
+  product and legacy outcome groups, `10/18 = 55.6%` are complete. This count
+  excludes merged AH-04 and optional hardening and does not treat source-ready
+  work as production acceptance.
+- Authoritative detail, inventory, dependency DAG, fast-track waves, gate count
+  and acceptance criteria:
+  `docs/AH_POST_P9_ROADMAP_RECONCILIATION_20260924.md`.
+- NEXT_SAFE_ACTION remains unchanged for the active Phase-9 lane: do not execute
+  roadmap items; use the existing Gate-2 authority only in its exact window and
+  only after all JIT invariants pass. After `PHASE_9_PASS`, start Wave 1 static
+  preparation and ask Owner to select the first Phase-10 channel.

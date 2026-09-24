@@ -1,6 +1,6 @@
 {
   "schema": "npd.repository-handoff.v1",
-  "updated_at_utc": "2026-09-23T12:26:01.6042133+00:00",
+  "updated_at_utc": "2026-09-24T04:01:07.0337815+00:00",
   "repository": {
     "name": "vangnguyen/npd-ai-video-factory",
     "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
@@ -232,6 +232,63 @@
           "uat_acceptance_bundle": "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-fast-track-uat-acceptance-20260923",
           "failure_contract_bundle": "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-fast-track-failure-contracts-20260923"
         }
+      },
+      "post_phase9_roadmap_reconciliation": {
+        "task": "AH-POST-P9-ROADMAP-RECONCILIATION",
+        "verdict": "PASS_PLANNING_ONLY",
+        "evidence_cut_utc": "2026-09-24T04:01:07.0337815+00:00",
+        "authoritative_document": "docs/AH_POST_P9_ROADMAP_RECONCILIATION_20260924.md",
+        "authoritative_document_sha256": "964646cb88f5490f623c13e19d59dfb3feee827f681118db1a0fbf91997ced31",
+        "handoff_md_sha256": "9f0335ea8185e8ff4fd5e560b9bb55df8a416c5c007bf3e38a4922417d20b1b5",
+        "phase9": {
+          "priority": "P0",
+          "implementation_preparation": "COMPLETE",
+          "acceptance_remaining_complete": 0,
+          "acceptance_remaining_total": 4,
+          "critical_path": [
+            "ONE_AUTHENTIC_LEAD_CREATED_DELIVERY",
+            "AUTHENTIC_SLA_RESULT",
+            "FINAL_PHASE9_PRODUCTION_UAT",
+            "OWNER_INTERNAL_USE_ACCEPTANCE"
+          ]
+        },
+        "post_phase9_lanes": {
+          "product": "PHASE_9_PASS_THEN_ONE_CONTROLLED_PHASE10_CHANNEL",
+          "legacy": "AH_T01B_PLUS_AH_R01_PLUS_COPY2_PLUS_BRIDGE_CATALOG_THEN_STAGED_V1_RETIREMENT",
+          "strict_dependency_between_lanes": false
+        },
+        "dispositions": {
+          "ah_01_01b_01c": "ALREADY_SATISFIED",
+          "ah_02_source": "ALREADY_SATISFIED",
+          "ah_t01b": "REQUIRED_FOR_V1_RETIREMENT_NOT_PHASE10_ENTRY",
+          "ah_r01": "REQUIRED_FOR_V1_RETIREMENT_NOT_PHASE10_ENTRY",
+          "portable_copy2": "MERGE_WITH_LEGACY_CUSTODY_REQUIRED_BEFORE_DISABLE",
+          "ah_03": "REQUIRED_ONLY_IF_V1_RETIREMENT_PROCEEDS",
+          "ah_04": "MERGE_WITH_V1_STAGES_B_TO_E",
+          "v1_retirement": "DEFER_FROM_PHASE10_CRITICAL_PATH",
+          "generalized_custody_hardening": "DEFER_TRIGGER_BASED",
+          "unsafe_custody_alternatives": "DROP_NOT_NEEDED",
+          "phase10": "REQUIRED_PRODUCT_LANE_NO_GO"
+        },
+        "completion": {
+          "phase9_implementation_percent": 100,
+          "phase9_acceptance_remaining_outcomes_percent": 0,
+          "terminal_outcome_groups_complete": 10,
+          "terminal_outcome_groups_total": 18,
+          "entire_roadmap_terminal_estimate_percent": 55.6,
+          "basis": "8_of_12_product_phases_plus_2_of_6_legacy_outcome_groups; source readiness is not acceptance"
+        },
+        "owner_boundaries": {
+          "new_decisions_through_first_phase10_channel_and_v1_stage_e": 16,
+          "known_production_access_or_action_windows_including_current_gate2": 12,
+          "known_windows_requiring_fresh_authority": 11,
+          "optional_data_deletion_gate_excluded": true,
+          "additional_channels_variable": true
+        },
+        "production_writes": 0,
+        "provider_calls": 0,
+        "actual_cost": 0,
+        "phase10": "NO_GO"
       }
     },
     "video_factory": {
@@ -243,11 +300,11 @@
     }
   },
   "latest_milestone": {
-    "task": "AH-P9-ONE-DELIVERY-GATE2-APPROVAL-MATERIALIZATION",
+    "task": "AH-POST-P9-ROADMAP-RECONCILIATION",
     "verdict": "PASS",
     "gate_c": "AUTHENTIC_INTERNAL_COHORT_CREATED_VERIFIED_ALREADY_CONSUMED",
     "operation_id": "AH-P9-ONE-DELIVERY-7f30c64e-9d40-483f-ac90-ae1acdb7faed",
-    "gate": "GATE2_OWNER_APPROVED_WAITING_WINDOW",
+    "gate": "GATE2_OWNER_APPROVED_WAITING_WINDOW_UNCHANGED",
     "owner_execution_approval": "GRANTED_WINDOW_BOUND",
     "execution_window": "APPROVED_20:00-21:30_ICT_2026-09-24",
     "package_manifest_sha256": "63dc77f39b1c0244c38dd0c09f33f5c33a9b93224c85102d328f77d4c653bb3b",
@@ -259,7 +316,8 @@
     "video_factory_writes": 0,
     "provider_calls": 0,
     "actual_cost": 0,
-    "next_safe_action": "WAIT FOR WINDOW THEN JIT REVALIDATE AND EXECUTE EXACT GATE2 ONLY IF ALL INVARIANTS PASS BEFORE CUTOFF"
+    "roadmap_document": "docs/AH_POST_P9_ROADMAP_RECONCILIATION_20260924.md",
+    "next_safe_action": "DO NOT EXECUTE ROADMAP ITEMS; ACTIVE PHASE9 LANE WAITS FOR THE EXISTING GATE2 WINDOW AND JIT REVALIDATION"
   },
   "evidence_pointers": [
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-gate-20260910-d55d6333",
@@ -285,6 +343,7 @@
     "C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-gate-20260923-seal-evidence/SEAL_VERIFICATION.json",
     "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-gate2-one-delivery-audit-harness-20260923/AUDIT_MANIFEST.json",
     "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-fast-track-uat-acceptance-20260923/PACKAGE_MANIFEST.json",
-    "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-fast-track-failure-contracts-20260923/PACKAGE_MANIFEST.json"
+    "C:/Users/VANG NGUYEN/Documents/Codex/2026-09-12/referenced-chatgpt-conversation-this-is-an-2/outputs/ah-p9-fast-track-failure-contracts-20260923/PACKAGE_MANIFEST.json",
+    "docs/AH_POST_P9_ROADMAP_RECONCILIATION_20260924.md"
   ]
 }
