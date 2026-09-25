@@ -533,3 +533,50 @@ NEXT_SAFE_ACTION:
   transport and semantic model digests as distinct evidence, add a
   production-shape regression, reseal a fresh operation and request a new
   Owner gate. Do not retry this operation.
+
+## Gate 2 digest-domain remediation and fresh R4 reseal — 2026-09-25
+
+- Task: `AH-P9-GATE2-DIGEST-DOMAIN-REMEDIATION-RESEAL`; verdict
+  `REVIEW_REQUIRED` because the source/package remediation is complete and a
+  fresh Owner production gate is the only remaining authority prerequisite.
+- Canonical Gate-2 verification now treats authenticated raw HTTP bytes and
+  Agent Hub semantic campaign content as separate named digest domains. It
+  rejects missing, swapped, wrong-field, wrong-type and secret-bearing inputs.
+  Source/test commit: `c75dc44a1f4913e3c873756d52dcaf1cc767eb7a`.
+- Verification: Phase 9 ops 201 PASS / 1 platform skip, Agent Hub 509/509,
+  business evaluator 20/20, delivery/SLA 46/46, candidate package 69/69,
+  syntax 6/6, package integrity 20/20 and exact-source GitHub Actions run
+  `36141806761` 3/3 PASS.
+- R3 failed safely during read-only rehearsal because its embedded probe
+  reused the HTTP `raw` variable for a decoded Redis string. The failure was
+  before claim, staging, mutation or POST. R4 preserves the HTTP bytes and has
+  an exact embedded-probe regression covering the production-shaped Redis
+  decode path.
+- Fresh R4 operation:
+  `AH-P9-ONE-DELIVERY-6369ae1d-4b41-4d47-8463-24deacfec75c`.
+  Proposed-only window: 20:00–21:30 ICT on 26/09/2026, with target mutation
+  required to start strictly before 20:20 ICT. Owner approval is
+  `NOT_GRANTED`; no approved record or automation exists.
+- Fresh immutable package manifest SHA-256:
+  `0f8875f5a653c01825537bb5e62890b50c0c1c54003716b35293bec303d2149a`.
+  Runner SHA-256:
+  `44cd2d865428c8f6cb95158c05e5c36b07f7d3921c14664d14f416ba68157155`.
+  Helper SHA-256:
+  `d26bda14f00ab556a229e8c192acdecc5d04c739cf59cc47670202f661edaa86`.
+- Final package-bound strict transport rehearsal PASS receipt SHA-256:
+  `a02ea4153d6d75cc71d97fcebacac4a1747e008e9322b5dfc2f6f1104fe12aaa`.
+  Final exact sealed read-only preflight PASS receipt SHA-256:
+  `80a20bd25e50247b167b27a26bd1b7a775b08337a0296641d322d29de45194d7`.
+  It proved raw HTTP SHA-256 `60cb41b0da6384ee8677fff7d7cc5b89d6a759e0355ac6b0c56d8e7ae4c50cd8`
+  and semantic model SHA-256 `8c06ad499c8bffc40ff26fe2361e0ae7a4226ff4d5d738ecd41f73bc938614ec`
+  simultaneously, with claim/stage/delivery state absent and protected state
+  unchanged.
+- Evidence:
+  `C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-gate-r4-readonly-rehearsal-20260925`;
+  evidence manifest SHA-256
+  `ae005418c467db3724d2e621c360b53fcb6a94c2607080b66b18e3583f56ce95`.
+- Production writes, DB1 writes, provider calls, Video Factory actions, claim,
+  stage, image load, deployment and delivery POST remain zero/absent.
+- NEXT_SAFE_ACTION: Owner reviews and, only if accepted, repeats the exact line
+  in the R4 `OWNER_CONSENT_TO_APPROVE.txt`. Do not materialize an approved
+  record or execute this operation before that fresh gate.
