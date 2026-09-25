@@ -500,3 +500,36 @@ NEXT_SAFE_ACTION:
   `20:20 ICT`, perform fresh JIT validation of every sealed invariant. Invoke
   the launcher with `--execute` only if all checks pass and the operation is
   still unclaimed; otherwise abort fail-closed. Do not pre-stage.
+
+## Gate 2 retry terminal pre-claim abort — 2026-09-25
+
+- Exact operation
+  `AH-P9-ONE-DELIVERY-7d8dcca6-b1df-4e1f-a8ad-7dfa6e89e0e9` started inside
+  its approved window. Invocation:
+  `56c41df5-806c-4de5-bc23-fab4d394dd53`.
+- The sealed launcher aborted fail-closed at remote business preflight, before
+  atomic claim creation. Terminal classification:
+  `GATE2_RETRY_TERMINAL_ABORTED_PRECLAIM`; launcher reason
+  `PREFLIGHT_CLAIM_FAILED`; remote reason `IN_CONTAINER_PREFLIGHT_FAILED`.
+- Root cause is proven as `DIGEST_DOMAIN_REPRESENTATION_MISMATCH`, not campaign
+  content drift. Gate C bound the raw authenticated HTTP response SHA-256
+  `60cb41b0da6384ee8677fff7d7cc5b89d6a759e0355ac6b0c56d8e7ae4c50cd8`,
+  while the Gate-2 preflight recomputed the semantic Pydantic model digest
+  `8c06ad499c8bffc40ff26fe2361e0ae7a4226ff4d5d738ecd41f73bc938614ec`
+  and incorrectly compared the two digest domains.
+- A read-only authenticated GET inside the unchanged container proved both
+  hashes simultaneously over the same HTTP 200 response and exact campaign
+  identity. No raw bearer, response body or secret was exported.
+- Post-abort state: claim/attempt/stage/runtime absent; candidate load,
+  deployment and delivery POST absent; DB1 writes, provider calls and external
+  actions all zero. Agent Hub remains on rollback image
+  `sha256:dce8d804e0b1b5186b2571a617ca9985682d2eb0e2d5b46b5c942fc729232056`,
+  running, healthy, restart count 0. Rollback was not required.
+- This operation/package approval is terminal and non-reusable. Evidence:
+  `C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-execution-r2-20260925`;
+  manifest SHA-256
+  `f45fffa6ab6110aa3aeef07f7b27684c7d123caf50effc1c0e6fcf96b338b9f7`.
+- NEXT_SAFE_ACTION: prepare a source/package-only digest-domain fix, bind raw
+  transport and semantic model digests as distinct evidence, add a
+  production-shape regression, reseal a fresh operation and request a new
+  Owner gate. Do not retry this operation.
