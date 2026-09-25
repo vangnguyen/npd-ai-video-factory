@@ -1,0 +1,11 @@
+{
+  "schema": "npd.agent-hub.phase9.gate2-campaign-digest-evidence.v1",
+  "hash_contract": "raw-http-response-bytes+semantic-pydantic-model.v1",
+  "campaign_id": "CMP-AHINTERNAL-P9SLACOHORT-202609-01",
+  "http_status": 200,
+  "raw_response_bytes": 4326,
+  "raw_transport_sha256": "60cb41b0da6384ee8677fff7d7cc5b89d6a759e0355ac6b0c56d8e7ae4c50cd8",
+  "semantic_model_sha256": "8c06ad499c8bffc40ff26fe2361e0ae7a4226ff4d5d738ecd41f73bc938614ec",
+  "body_exported": false,
+  "secrets_exported": false
+}
