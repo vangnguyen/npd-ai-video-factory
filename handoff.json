@@ -1,11 +1,11 @@
 {
   "schema": "npd.repository-handoff.v1",
-  "updated_at_utc": "2026-09-25T13:50:49.2415567Z",
+  "updated_at_utc": "2026-09-25T13:55:14.5482387Z",
   "repository": {
     "name": "vangnguyen/npd-ai-video-factory",
     "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
     "branch": "feat/agent-hub-p9-owner-fence-canonical-contract",
-    "current_worktree_head": "c75dc44a1f4913e3c873756d52dcaf1cc767eb7a",
+    "current_worktree_head": "dfb5b71c3b273a51306d625c764eae97446c2a74",
     "current_product_source_head": "915ba10845e25de60aacb474b4b2a4c7f623fddc",
     "source_baseline_sha": "43a1cca354d12893ee33b6e43cd9117794f78e04",
     "layout": "agent_hub_and_legacy_video_factory_integration",
@@ -56,7 +56,7 @@
   },
   "workstreams": {
     "agent_hub": {
-      "state": "GATE_C_PASS_GATE2_R4_READY_FOR_FRESH_OWNER_GATE",
+      "state": "GATE_C_PASS_GATE2_R4_OWNER_CONSENT_EXACT_TEXT_HOLD",
       "authorized_target": "npd-agent-hub-prod/agent-hub",
       "automation_authorized": false,
       "phase10_authorized": false,
@@ -80,7 +80,7 @@
       "operation_reusable": false,
       "observation": "NOT_STARTED",
       "phase9_uat_business_acceptance": "NOT_COMPLETED",
-      "current_authority": "NOT_GRANTED_FRESH_OWNER_GATE_REQUIRED",
+      "current_authority": "NOT_GRANTED_EXACT_OWNER_CONSENT_RETRANSMISSION_REQUIRED",
       "historical_execution_window_expired": true,
       "source_capture_candidate": {
         "path": "scripts/ops/agent_hub_phase9/remote_preflight_capture.py",
@@ -91,7 +91,7 @@
         "adopted_into_readonly_evidence_collectors": true,
         "full_snapshot_and_package_binding_required": true
       },
-      "fresh_gate_preparation": "READY_FOR_OWNER_GATE_2_FRESH",
+      "fresh_gate_preparation": "READY_EXCEPT_OWNER_CONSENT_EXACT_TEXT_MISMATCH",
       "fresh_operation_created": true,
       "fresh_approval_created": false,
       "fresh_confirmation_token_created": false,
@@ -273,7 +273,7 @@
           "terminal_evidence_manifest_sha256": "f45fffa6ab6110aa3aeef07f7b27684c7d123caf50effc1c0e6fcf96b338b9f7"
         },
         "gate2_r4": {
-          "status": "READY_FOR_OWNER_GATE_2_FRESH",
+          "status": "OWNER_CONSENT_EXACT_TEXT_HOLD",
           "operation_id": "AH-P9-ONE-DELIVERY-6369ae1d-4b41-4d47-8463-24deacfec75c",
           "proposed_window_ict": "2026-09-26T20:00:00+07:00/2026-09-26T21:30:00+07:00",
           "latest_target_mutation_start_ict_exclusive": "2026-09-26T20:20:00+07:00",
@@ -296,6 +296,11 @@
             "cross_substitution_allowed": false
           },
           "owner_authority": "NOT_GRANTED",
+          "owner_intent_received": true,
+          "owner_consent_exact_match": false,
+          "owner_consent_received_sha256": "dfe3bed56aa2025747d360e2e13bbaaae7af5c45019117cdf1fc653bc7ee79d3",
+          "owner_consent_review_manifest_sha256": "0ab216818e0278b8f2de56113300ae0162aefaf7ece7212007d9baef0eac6405",
+          "owner_consent_mismatch": "THREE_U_PLUS_2013_EN_DASH_CHARACTERS_IN_PLACE_OF_ASCII_DOUBLE_HYPHENS",
           "approved_record_created": false,
           "automation_created": false,
           "claim": "NONE",
@@ -412,11 +417,11 @@
     }
   },
   "latest_milestone": {
-    "task": "AH-P9-GATE2-DIGEST-DOMAIN-REMEDIATION-RESEAL",
+    "task": "AH-P9-GATE2-R4-OWNER-CONSENT-EXACT-TEXT-REVIEW",
     "verdict": "REVIEW_REQUIRED",
     "gate_c": "AUTHENTIC_INTERNAL_COHORT_CREATED_VERIFIED_ALREADY_CONSUMED",
     "operation_id": "AH-P9-ONE-DELIVERY-6369ae1d-4b41-4d47-8463-24deacfec75c",
-    "gate": "READY_FOR_OWNER_GATE_2_FRESH",
+    "gate": "OWNER_CONSENT_EXACT_TEXT_HOLD",
     "owner_execution_approval": "NOT_GRANTED",
     "execution_window": "PROPOSED_20:00-21:30_ICT_2026-09-26_LATEST_MUTATION_START_BEFORE_20:20_NOT_APPROVED",
     "package_manifest_sha256": "0f8875f5a653c01825537bb5e62890b50c0c1c54003716b35293bec303d2149a",
@@ -439,7 +444,11 @@
     "owner_approval_record": "NONE",
     "static_authority_validation": "PASS_NO_EXECUTE_NO_CLAIM_NO_STAGE_NO_MUTATION",
     "evidence_manifest_sha256": "ae005418c467db3724d2e621c360b53fcb6a94c2607080b66b18e3583f56ce95",
-    "next_safe_action": "OWNER_REVIEW_AND_REPEAT_EXACT_R4_CONSENT_IF_ACCEPTED; DO_NOT_EXECUTE_BEFORE_FRESH_GATE"
+    "owner_intent_received": true,
+    "owner_consent_exact_match": false,
+    "owner_consent_received_sha256": "dfe3bed56aa2025747d360e2e13bbaaae7af5c45019117cdf1fc653bc7ee79d3",
+    "owner_consent_review_manifest_sha256": "0ab216818e0278b8f2de56113300ae0162aefaf7ece7212007d9baef0eac6405",
+    "next_safe_action": "OWNER_REPEAT_EXISTING_R4_CONSENT_WITH_ASCII_DOUBLE_HYPHENS; DO_NOT_NORMALIZE_OR_EXECUTE"
   },
   "evidence_pointers": [
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-gate-20260910-d55d6333",
@@ -473,6 +482,7 @@
     "C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-owner-approval-r2-20260924-7d8dcca6/SHA256_MANIFEST.json",
     "C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-execution-r2-20260925/SHA256_MANIFEST.json",
     "C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-gate-r4-20260926/PACKAGE_MANIFEST.json",
-    "C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-gate-r4-readonly-rehearsal-20260925/EVIDENCE_MANIFEST.json"
+    "C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-gate-r4-readonly-rehearsal-20260925/EVIDENCE_MANIFEST.json",
+    "C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-owner-approval-r4-20260925/SHA256_MANIFEST.json"
   ]
 }

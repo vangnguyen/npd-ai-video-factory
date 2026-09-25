@@ -580,3 +580,24 @@ NEXT_SAFE_ACTION:
 - NEXT_SAFE_ACTION: Owner reviews and, only if accepted, repeats the exact line
   in the R4 `OWNER_CONSENT_TO_APPROVE.txt`. Do not materialize an approved
   record or execute this operation before that fresh gate.
+
+## Gate 2 R4 owner-consent exact-text hold — 2026-09-25
+
+- Owner approval intent was received for operation
+  `AH-P9-ONE-DELIVERY-6369ae1d-4b41-4d47-8463-24deacfec75c`, but the received
+  text is not byte-equal to the sealed consent template.
+- The only differences are three Unicode EN DASH characters (`U+2013`) in
+  `–no-deps`, `–no-build`, and `–pull`; the sealed template requires the ASCII
+  double-hyphen flags `--no-deps`, `--no-build`, and `--pull`.
+- The launcher explicitly rejects non-exact consent. No normalization was
+  applied and no `APPROVED` authority record was materialized.
+- R4 package, operation, proposed window, hashes and evidence remain unchanged.
+  No production access, claim, staging, deployment, delivery POST, DB1 write,
+  provider call or Video Factory action occurred.
+- Evidence:
+  `C:/Users/VANG NGUYEN/Documents/Codex/2026-08-28/ho-n-t-t-to-n/outputs/ah-p9-one-delivery-owner-approval-r4-20260925`;
+  evidence manifest SHA-256
+  `0ab216818e0278b8f2de56113300ae0162aefaf7ece7212007d9baef0eac6405`.
+- NEXT_SAFE_ACTION: Owner repeats the existing R4 consent with the three ASCII
+  double-hyphen flags unchanged. Do not execute or create an approved record
+  until exact-text validation passes.
