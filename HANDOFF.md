@@ -601,3 +601,29 @@ NEXT_SAFE_ACTION:
 - NEXT_SAFE_ACTION: Owner repeats the existing R4 consent with the three ASCII
   double-hyphen flags unchanged. Do not execute or create an approved record
   until exact-text validation passes.
+
+## Gate 2 R4 Owner approval materialized — 2026-09-25
+
+- Owner retransmitted the R4 consent with the required ASCII Compose flags.
+  The `lead\_created` and `max\_attempts` sequences in the thread are CommonMark
+  presentation escapes and render as the exact sealed tokens `lead_created`
+  and `max_attempts`; no substantive binding changed.
+- Canonical consent is byte-equal to the sealed expected text. Consent SHA-256:
+  `28f85014ceaa1ad7cb4b7a75474d6b40fe3915256648175e01a78841b5875d13`.
+- External `APPROVED` record SHA-256:
+  `c6bae39b84f554ccc476e54d861519ba644865412f256380e47c76143b202fa7`.
+  Approval evidence manifest SHA-256:
+  `6e6eda6863895ad131fee937754376cffb4a0b7730a08a5bd36cd376ecaa946e`.
+- The sealed launcher was run without `--execute` and returned
+  `STATIC_PACKAGE_VERIFIED`. Static validation receipt SHA-256:
+  `cc263d06c62a638742d39e8be2860e772645d18d589b2a9c1faead34f42a92e9`.
+- Operation
+  `AH-P9-ONE-DELIVERY-6369ae1d-4b41-4d47-8463-24deacfec75c` is approved only
+  for 20:00–21:30 ICT on 26/09/2026, with target mutation beginning strictly
+  before 20:20 ICT. No scheduler or automation was created.
+- Production access, claim, staging, image load, deployment, delivery POST,
+  DB1 write, provider call and Video Factory action remain zero/absent.
+- NEXT_SAFE_ACTION: wait for the approved window. At or after 20:00 ICT and
+  still before 20:20 ICT, run fresh fail-closed JIT validation, then invoke the
+  exact sealed launcher with `--execute` only if every binding remains valid.
+  Do not pre-stage or execute early.
