@@ -627,3 +627,59 @@ NEXT_SAFE_ACTION:
   still before 20:20 ICT, run fresh fail-closed JIT validation, then invoke the
   exact sealed launcher with `--execute` only if every binding remains valid.
   Do not pre-stage or execute early.
+
+## Canonical Phase-9 lineage reconciliation and Gate-0 stop — 2026-09-28
+
+- Task: `AH-P9-CANONICAL-LINEAGE-RECONCILIATION-AND-RESUME`; verdict
+  `BLOCKED_GATE_0`. No production access, claim, stage, deploy, delivery POST,
+  Redis mutation, provider/customer action or Video Factory action occurred.
+- The latest legitimate pre-reconciliation Phase-9 repository HEAD is
+  `309dee2ee2c507241a2a9d7b41e77519e4bd6680` on
+  `origin/feat/agent-hub-p9-owner-fence-canonical-contract`. Commit
+  `e5d3510d0b7e38a18990cdd27a56cc2491e0b295` is its strict ancestor with a
+  0/21 ahead/behind relationship and is therefore
+  `SUPERSEDED_NO_MERGE_REQUIRED`, not a divergent source of changes.
+- Required later lineage is preserved, including `f4365037`, `538c30bd`,
+  `225792b6`, the product image/source binding at `915ba108`, the Gate-2
+  digest-domain source fix at `c75dc44`, and repository/evidence HEAD
+  `309dee2e`.
+- The only still-required static-worktree changes were seven GitHub Actions
+  version substitutions in `.github/workflows/agent-hub-ci.yml` and
+  `.github/workflows/phase9-preflight-capture-ci.yml`. They were ported alone
+  in `c6878b1a906e8b43bc7637e05f2715632d2e0707`. The stale HANDOFF and
+  `handoff.json` rewrites were not adopted.
+- Source validation: Phase-9 ops 201 PASS / 1 Windows platform skip, focused
+  Agent Hub 208/208, Gate C source contracts 135/135, Gate 2 source contracts
+  19/19, full Agent Hub 509/509 and business evaluator 20/20. The ops and
+  service suites include the repository tamper/failure matrices. A
+  supplemental high-confidence scan of 380 tracked files found zero private
+  key, AWS, GitHub, Slack or Google API-key patterns; no canonical
+  `gitleaks`/`trufflehog` executable was available, so this is not represented
+  as an authoritative third-party secret-scan result.
+- Historical exact-head CI run `36144994699` passed 3/3 at `309dee2e`. A new
+  exact-head run is required after the reconciliation commits are pushed.
+- Source and production evidence remain separate. Gate D, recovery and
+  Owner-fence rebound are historical-valid. Gate C and its authentic cohort
+  remain current-valid but already consumed. Lead `6aabc611758efd76b`, QC
+  creator `6aab5af0215b97ba2`, Owner `6a4dd6d5c8ee64bed` and Campaign
+  `CMP-AHINTERNAL-P9SLACOHORT-202609-01` are not recreated. Later task evidence
+  classifies R4 operation
+  `AH-P9-ONE-DELIVERY-6369ae1d-4b41-4d47-8463-24deacfec75c` as
+  `TERMINAL_NOT_REUSABLE`; its old approval/window/claim/JIT material must not
+  be reused. Production writes remain zero.
+- Gate 0 requested `FULL_ACCESS_LOCAL`. Durable create/write/fsync/read/rename/
+  cross-process-read/delete probes passed for repo work, TEMP and the evidence
+  parent. Canonical Python 3.12.14 is usable. Gate 0 then stopped fail-closed
+  because the required identity and pinned `known_hosts` files are absent.
+  Network, pinned SSH, authenticated remote read and bounded-stability probes
+  were not run. Verdict: `EXECUTION_ENVIRONMENT_GATE_0=FAIL_MISSING_SSH_MATERIAL`.
+- R5 was not created, package integrity is not applicable, and Owner approval
+  was not requested. The historical R4 package is absent on this host and is
+  not a substitute for a fresh R5.
+- Downstream readiness is preserved: SLA
+  `READY_FOR_AUTHENTIC_DELIVERY_RECEIPT`, UAT `READY_FOR_REAL_SLA_RESULT`,
+  acceptance dossier `READY_FOR_FINAL_EVIDENCE`, failure contracts `READY`.
+- NEXT_SAFE_ACTION: restore or freshly bind the exact identity, pinned
+  `known_hosts`, fingerprint/profile hashes and R5 package inputs; rerun Gate 0
+  from the start. Only after Gate 0 PASS may a brand-new R5 be prepared and a
+  fresh Owner gate requested. Phase 10 remains `NO-GO`.

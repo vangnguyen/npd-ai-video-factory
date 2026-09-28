@@ -420,7 +420,7 @@
       "next_action_requires_fresh_state_and_authority": true
     }
   },
-  "latest_milestone": {
+  "historical_repo_milestone_at_309dee2": {
     "task": "AH-P9-GATE2-R4-OWNER-APPROVAL-MATERIALIZATION",
     "verdict": "PASS",
     "gate_c": "AUTHENTIC_INTERNAL_COHORT_CREATED_VERIFIED_ALREADY_CONSUMED",
@@ -453,6 +453,71 @@
     "owner_consent_exact_match": true,
     "owner_consent_received_sha256": "28f85014ceaa1ad7cb4b7a75474d6b40fe3915256648175e01a78841b5875d13",
     "next_safe_action": "WAIT_FOR_APPROVED_WINDOW; FRESH_JIT_VALIDATE; EXECUTE_ONCE_ONLY_IF_ALL_BINDINGS_PASS; DO_NOT_PRESTAGE"
+  },
+  "latest_milestone": {
+    "task": "AH-P9-CANONICAL-LINEAGE-RECONCILIATION-AND-RESUME",
+    "verdict": "BLOCKED_GATE_0",
+    "old_static_head": "e5d3510d0b7e38a18990cdd27a56cc2491e0b295",
+    "old_static_classification": "ANCESTOR_SUPERSEDED_NO_MERGE_REQUIRED",
+    "latest_valid_pre_reconciliation_head": "309dee2ee2c507241a2a9d7b41e77519e4bd6680",
+    "canonical_source_reconciliation_head": "c6878b1a906e8b43bc7637e05f2715632d2e0707",
+    "source_fix_head": "c75dc44a1f4913e3c873756d52dcaf1cc767eb7a",
+    "product_image_source_head": "915ba108",
+    "static_adoption": "SEVEN_ACTION_VERSION_SUBSTITUTIONS_ONLY",
+    "tests": {
+      "phase9_ops": "201 PASS / 1 PLATFORM SKIP",
+      "focused_agent_hub": "208/208 PASS",
+      "gate_c_source": "135/135 PASS",
+      "gate_2_source": "19/19 PASS",
+      "agent_hub_regression": "509/509 PASS",
+      "business_evaluator": "20/20 PASS",
+      "tamper": "PASS_WITHIN_REPOSITORY_OPS_AND_SERVICE_SUITES",
+      "supplemental_secret_pattern_scan": "380 TRACKED FILES / 0 HIGH_CONFIDENCE FINDINGS",
+      "authoritative_third_party_secret_scan": "NOT_RUN_TOOL_UNAVAILABLE",
+      "r5_package_integrity": "NOT_APPLICABLE_R5_NOT_CREATED"
+    },
+    "historical_exact_head_ci": {
+      "head": "309dee2ee2c507241a2a9d7b41e77519e4bd6680",
+      "run": "36144994699",
+      "result": "3/3 PASS"
+    },
+    "production_evidence": {
+      "gate_d": "HISTORICAL_VALID",
+      "recovery": "HISTORICAL_VALID",
+      "owner_fence": "HISTORICAL_VALID",
+      "gate_c": "CURRENT_VALID_ALREADY_CONSUMED",
+      "lead": "6aabc611758efd76b",
+      "created_by_qc": "6aab5af0215b97ba2",
+      "assigned_owner": "6a4dd6d5c8ee64bed",
+      "campaign": "CMP-AHINTERNAL-P9SLACOHORT-202609-01",
+      "gate_2_r4": "TERMINAL_NOT_REUSABLE",
+      "production_writes": 0,
+      "provider_calls": 0,
+      "actual_cost": 0
+    },
+    "gate_0": {
+      "requested": "FULL_ACCESS_LOCAL",
+      "filesystem": "PASS_DURABLE",
+      "temp": "PASS_DURABLE",
+      "evidence_parent": "PASS_DURABLE",
+      "python": "PASS_3.12.14",
+      "ssh_material": "FAIL_IDENTITY_AND_PINNED_KNOWN_HOSTS_ABSENT",
+      "network": "NOT_RUN_FAIL_CLOSED",
+      "pinned_ssh": "NOT_RUN_FAIL_CLOSED",
+      "remote_read": "NOT_RUN_FAIL_CLOSED",
+      "stability": "NOT_RUN_FAIL_CLOSED",
+      "verdict": "FAIL_MISSING_SSH_MATERIAL"
+    },
+    "r5": "NOT_CREATED",
+    "owner_approval": "NOT_REQUESTED",
+    "downstream": {
+      "sla": "READY_FOR_AUTHENTIC_DELIVERY_RECEIPT",
+      "uat": "READY_FOR_REAL_SLA_RESULT",
+      "acceptance": "READY_FOR_FINAL_EVIDENCE",
+      "failure_contracts": "READY"
+    },
+    "phase10": "NO_GO",
+    "next_safe_action": "RESTORE_EXACT_SSH_TRUST_AND_IDENTITY_BINDINGS_AND_R5_INPUTS; RERUN_GATE_0_FROM_START; PREPARE_FRESH_R5_ONLY_AFTER_PASS"
   },
   "evidence_pointers": [
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-gate-20260910-d55d6333",
