@@ -21,7 +21,7 @@ jobs:
   validate-n8n-workflows:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate V1 decommission inventory
         run: python scripts/ci/validate-v1-decommission-inventory.py
       - name: Validate V1/AH-01C audit tooling syntax
@@ -39,8 +39,8 @@ jobs:
       run:
         working-directory: services/agent_hub
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: python -m pip install --upgrade pip
