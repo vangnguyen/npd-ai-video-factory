@@ -355,9 +355,17 @@ def _validate_existing_path(
     )
     try:
         resolved = path.resolve(strict=True)
+        resolved_stat = resolved.stat()
     except OSError:
         raise lineage.NewLineageStop(reason) from None
-    lineage.require(_same_path(path, resolved), "OFFLINE_RUNTIME_PATH_ESCAPE")
+    # Windows may preserve an 8.3 lexical parent (for example RUNNER~1) while
+    # resolve() returns the long spelling.  Component lstat checks above have
+    # already rejected symlinks, junctions and all other reparse points, so an
+    # equal filesystem identity is the safe alias-aware containment result.
+    lineage.require(
+        _same_path(path, resolved) or os.path.samestat(final_stat, resolved_stat),
+        "OFFLINE_RUNTIME_PATH_ESCAPE",
+    )
     identity = (
         int(final_stat.st_dev),
         int(final_stat.st_ino),

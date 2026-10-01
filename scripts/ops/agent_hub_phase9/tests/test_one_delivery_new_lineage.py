@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -556,7 +557,9 @@ class OfflineFixtureEvidenceTests(unittest.TestCase):
         alternate = Path(self.temp.name) / "caller-selected-journal.json"
         alternate.write_text('{"state":"spoofed"}\n', encoding="utf-8")
         result = self.begin()
-        self.assertEqual(result["evidence_directory"], str(self.evidence_directory))
+        self.assertTrue(
+            os.path.samefile(result["evidence_directory"], self.evidence_directory)
+        )
         self.assertEqual(json.loads(alternate.read_text())["state"], "spoofed")
         self.assertTrue(self.journal.is_file())
 
