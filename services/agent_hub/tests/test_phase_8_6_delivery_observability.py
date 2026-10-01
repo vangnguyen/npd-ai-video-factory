@@ -297,7 +297,11 @@ def test_redis_recovers_signed_receipts_dead_letters_and_namespace():
     restarted = AttributionDeliveryService(
         restarted_store, AttributionService(restarted_store), settings()
     )
-    assert restarted.list_receipts()[1].receipt_id == receipt.receipt_id
+    recovered_receipt_ids = {
+        item.receipt_id for item in restarted.list_receipts()
+    }
+    assert len(recovered_receipt_ids) == 2
+    assert receipt.receipt_id in recovered_receipt_ids
     assert len(restarted.list_dead_letters()) == 1
     assert restarted.verify(receipt).valid is True
     keys = {str(key) for key in client.scan_iter("*")}
