@@ -44,7 +44,9 @@ evidence, a new window and a separate exact Owner execution gate.
 - fail-closed `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW` after any invalid or
   uncertain post-observation fixture result, preserving the original cause
   even when final journal persistence also fails, with no automatic retry or
-  automatic rollback;
+  automatic rollback. The HOLD boundary begins at function entry for an
+  already-observed result, including observation-claim write/collision,
+  crash re-entry, package reverify and evidence-store re-resolution failures;
 - exact readback deltas for the touchpoint, source-event match, receipt,
   two retained Campaign audit events, no dead letter, signed receipt validity
   and the existing 2,000-record internal audit capacity. Snapshot evidence must

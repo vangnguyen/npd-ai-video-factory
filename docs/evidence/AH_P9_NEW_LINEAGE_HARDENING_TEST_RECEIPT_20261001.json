@@ -1,8 +1,8 @@
 {
   "schema": "npd.agent-hub.local-test-receipt.v1",
-  "generated_at_utc": "2026-10-01T07:12:53.2297347Z",
+  "generated_at_utc": "2026-10-01T07:29:27.7931669Z",
   "scope": "AGENT_HUB_OFFLINE_SOURCE_ONLY",
-  "tested_source_commit": "00353dca493001bda07091350ab91b35fe5b03e8",
+  "tested_source_commit": "553d340c5ab270d344b602aad919abc3612ad125",
   "source_baseline": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
   "branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
   "runtime": {
@@ -18,16 +18,16 @@
       "working_directory": "repository root",
       "command": "<interpreter> -m pytest scripts/ops/agent_hub_phase9/tests -q",
       "exit_code": 0,
-      "output_summary_utf8": "217 passed, 1 skipped in 26.72s\n",
-      "output_summary_sha256": "5b0b3bc25ec505af26094315f023cd9386cbc95fada37632d23b71004c069b00"
+      "output_summary_utf8": "221 passed, 1 skipped in 29.43s\n",
+      "output_summary_sha256": "fd847e465409216f4dcb658cbe9480e34acd7f545f64b970029cdfa80855d096"
     },
     {
       "name": "agent_hub_regression",
       "working_directory": "repository root",
       "command": "<interpreter> -m pytest services/agent_hub/tests -q",
       "exit_code": 0,
-      "output_summary_utf8": "510 passed, 1 warning in 6.01s\n",
-      "output_summary_sha256": "b59087c4f2174319565284c2982550346d91f29cfccabb51d8a20172551a4646",
+      "output_summary_utf8": "510 passed, 1 warning in 6.13s\n",
+      "output_summary_sha256": "4db6ee8ee2063de835ac629383e70f8243a8f97fe292a776285e5b1e14e8eb15",
       "warning": "Existing StarletteDeprecationWarning from fastapi.testclient; no new failure."
     },
     {
@@ -40,11 +40,15 @@
     }
   ],
   "focused_coverage_in_phase9_ops": {
-    "new_lineage_and_current_store_tests": 18,
+    "new_lineage_and_current_store_tests": 22,
     "transport_or_callback_injection_absent": true,
     "atomic_claim_race_tested": true,
     "alternate_journal_path_tested": true,
     "post_observation_hold_and_final_journal_failure_tested": true,
+    "observation_claim_write_failure_hold_tested": true,
+    "observation_claim_crash_reentry_hold_tested": true,
+    "package_reverify_failure_hold_tested": true,
+    "store_reresolve_failure_hold_tested": true,
     "strict_cohort_timestamp_and_receipt_schema_tested": true,
     "receipt_hmac_tamper_tested": true,
     "exact_capacity_boundaries_tested": [1998, 1999, 2000],

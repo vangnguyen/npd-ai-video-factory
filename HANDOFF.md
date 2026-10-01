@@ -712,7 +712,11 @@ NEXT_SAFE_ACTION:
   intent, and sends every uncertain post-observation result to
   `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW` without automatic rollback. This
   local journal is offline evidence, not a production-durability claim. There
-  is no injected transport/callback and the module performs no POST.
+  is no injected transport/callback and the module performs no POST. The HOLD
+  boundary now starts at post-observation entry: observation-claim write or
+  collision, crash re-entry, package reverify and evidence-store re-resolution
+  failures all preserve the original cause and durably journal HOLD whenever
+  the operation-bound local store remains writable.
 - Cohort/binding/envelope/timestamp/receipt checks now reproduce the relevant
   strict field, type, pattern and timezone invariants of the current models.
   Receipt acceptance requires both a bound
@@ -727,8 +731,8 @@ NEXT_SAFE_ACTION:
   as `OUT_OF_SCOPE_NOT_COLLECTED`, so production qualification remains blocked
   pending reviewed resolution; no dependency is silently removed.
 - Exact tested source commit:
-  `00353dca493001bda07091350ab91b35fe5b03e8`. Local verification on that
-  commit: Phase-9 ops 217 PASS / 1 Windows skip (including 18 focused
+  `553d340c5ab270d344b602aad919abc3612ad125`. Local verification on that
+  commit: Phase-9 ops 221 PASS / 1 Windows skip (including 22 focused
   new-lineage/current-store tests); Agent Hub 510/510 PASS with one existing
   Starlette deprecation warning; evaluator 20/20 PASS. The pre-existing Agent
   Hub Python 3.12.14 virtual environment was invoked by absolute path because

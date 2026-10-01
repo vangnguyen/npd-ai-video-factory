@@ -1,13 +1,13 @@
 {
   "schema": "npd.repository-handoff.v1",
-  "updated_at_utc": "2026-10-01T07:12:53.2297347Z",
+  "updated_at_utc": "2026-10-01T07:29:27.7931669Z",
   "repository": {
     "name": "vangnguyen/npd-ai-video-factory",
     "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
     "branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
     "current_worktree_head": null,
     "current_worktree_head_note": "The handoff is committed after the tested source, so it does not claim an impossible self-hash. Resolve the documentation commit from Git; tested source is recorded separately.",
-    "current_agent_hub_tested_source_head": "00353dca493001bda07091350ab91b35fe5b03e8",
+    "current_agent_hub_tested_source_head": "553d340c5ab270d344b602aad919abc3612ad125",
     "canonical_agent_hub_source_baseline": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
     "current_product_source_head": "915ba10845e25de60aacb474b4b2a4c7f623fddc",
     "source_baseline_sha": "43a1cca354d12893ee33b6e43cd9117794f78e04",
@@ -526,7 +526,7 @@
     "task": "AH-P9-ONE-DELIVERY-NEW-LINEAGE-OFFLINE-CONTRACT",
     "verdict": "OFFLINE_CONTRACT_HARDENED_REVIEW_REQUIRED",
     "source_baseline": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
-    "tested_source_commit": "00353dca493001bda07091350ab91b35fe5b03e8",
+    "tested_source_commit": "553d340c5ab270d344b602aad919abc3612ad125",
     "working_branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
     "remote_recheck": {
       "fix_agent_hub_head": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
@@ -552,6 +552,7 @@
       "module_post_attempts": 0,
       "offline_evidence_store": "OPERATION_BOUND_ATOMIC_LOCAL_FIXTURE_CLAIM_NOT_PRODUCTION_DURABILITY",
       "post_outcome_ambiguous": "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW_WITH_ORIGINAL_CAUSE",
+      "post_observation_entry_boundary": "CLAIM_WRITE_COLLISION_CRASH_REENTRY_REVERIFY_STORE_RERESOLVE_ALL_HOLD",
       "automatic_retry": false,
       "automatic_rollback_after_post": false,
       "receipt_verification": "STRICT_SCHEMA_PLUS_BOUND_CANONICAL_VERIFICATION_PLUS_HMAC_RECOMPUTE",
@@ -562,8 +563,8 @@
       "proposal": "docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_PROPOSAL_20261001.md"
     },
     "tests": {
-      "new_lineage_and_current_store_focused": "18/18 PASS_INCLUDED_IN_PHASE9_OPS",
-      "phase9_ops": "217 PASS / 1 WINDOWS SKIP",
+      "new_lineage_and_current_store_focused": "22/22 PASS_INCLUDED_IN_PHASE9_OPS",
+      "phase9_ops": "221 PASS / 1 WINDOWS SKIP",
       "agent_hub_regression": "510/510 PASS",
       "business_evaluator": "20/20 PASS",
       "runtime": "PYTHON_3.12.14_PYTEST_8.4.2_EXISTING_AGENT_HUB_VENV_ABSOLUTE_PATH",
