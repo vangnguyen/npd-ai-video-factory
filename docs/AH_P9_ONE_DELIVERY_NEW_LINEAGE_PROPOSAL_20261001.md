@@ -228,6 +228,15 @@ The current receipt is
 the prior receipt remains historical. These fixes still require independent
 exact-source re-review and published exact-head CI.
 
+The first published draft-PR CI exposed one Windows-only lexical alias issue:
+the runner supplied an 8.3 `RUNNER~1` path while `Path.resolve()` returned its
+long spelling. Source commit `3e2820a271b2f124f956953dccdf490254728aac`
+accepts that case only when both paths have the same filesystem identity after
+every component has already passed symlink/junction/reparse rejection. This is
+a portability correction, not a relaxation of containment. Local relevant
+tests are 33/33 PASS and the full Phase-9 ops suite is 256 PASS plus one existing
+unrelated skip; updated exact-head PR CI remains required.
+
 This completes the bounded source milestone, not production qualification. The
 production transport/capture driver, trusted human-scope verifier, fresh real
 candidate and rollback OCI/custody bytes, protected/target and DB0 receipts,

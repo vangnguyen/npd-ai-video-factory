@@ -151,8 +151,14 @@ tests exercise both the source helper and parser extracted from the rendered
 collector. The generated collector and strict argv remain sealed and unexecuted;
 real entry points still refuse execution.
 
-Independently review exact source commit `09beb25`. If both High findings are
-confirmed closed, publish that exact commit for exact-head CI. Do not request or
+The first published Windows CI run then identified a valid 8.3-versus-long-path
+alias as a false escape. Commit `3e2820a271b2f124f956953dccdf490254728aac`
+uses same-file identity only after all path components pass reparse rejection;
+junction/symlink defenses remain fail closed. Local focused and full Phase-9
+tests pass; the updated draft-PR head still requires automatic exact-head CI.
+
+Keep draft PR `#68` unmerged and allow only its automatic exact-head CI. Do not
+request or
 spend the bounded 600-second evidence-only read
 scope until current candidate/rollback OCI and custody bytes plus a trusted
 human-approval verification path exist. The later production transport driver,

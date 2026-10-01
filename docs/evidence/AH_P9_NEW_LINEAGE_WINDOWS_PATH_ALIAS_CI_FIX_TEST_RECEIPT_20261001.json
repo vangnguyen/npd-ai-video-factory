@@ -1,0 +1,75 @@
+{
+  "schema": "npd.agent-hub.local-test-receipt.v1",
+  "generated_at_utc": "2026-10-01T10:57:22.8510275Z",
+  "scope": "AGENT_HUB_NEW_LINEAGE_WINDOWS_PATH_ALIAS_CI_REMEDIATION",
+  "tested_source_commit": "3e2820a271b2f124f956953dccdf490254728aac",
+  "source_parent": "046c5f7363882805ba5c4ea4cfb8eeeca16dd213",
+  "prior_reviewed_source_commit": "09beb25e1d35a24a87c1671cca00b6218652c890",
+  "canonical_source_baseline": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
+  "branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
+  "draft_pr": 68,
+  "failed_ci": {
+    "published_head": "046c5f7363882805ba5c4ea4cfb8eeeca16dd213",
+    "workflow": "Phase 9 Preflight Capture CI",
+    "run_id": 36851766478,
+    "job": "capture (windows-latest)",
+    "cause": "WINDOWS_8DOT3_RUNNER_PATH_AND_RESOLVED_LONG_PATH_SAME_IDENTITY_FALSE_TEXTUAL_ESCAPE",
+    "other_jobs": "PHASE5_PASS_AGENT_HUB_CI_PASS_PHASE9_UBUNTU_AND_AGENT_HUB_PASS"
+  },
+  "remediation": {
+    "path_equivalence": "LEXICAL_EQUALITY_OR_SAME_FILESYSTEM_IDENTITY_AFTER_COMPONENT_REPARSE_REJECTION",
+    "reparse_defense_weakened": false,
+    "junction_symlink_reparse_rejected_before_alias_comparison": true,
+    "outside_path_accepted": false,
+    "evidence_directory_assertion": "SAMEFILE_IDENTITY_NOT_WINDOWS_LEXICAL_SPELLING",
+    "production_capable": false,
+    "execution_approval": "NOT_GRANTED"
+  },
+  "commands": [
+    {
+      "name": "relevant_new_lineage",
+      "command": "<interpreter> -m pytest -q scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage.py scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage_runtime_path.py",
+      "exit_code": 0,
+      "output_summary_utf8": "33 passed in 7.95s\n"
+    },
+    {
+      "name": "phase9_ops_partition_a",
+      "command": "<interpreter> -m pytest -q <first exact partition of scripts/ops/agent_hub_phase9/tests>",
+      "exit_code": 0,
+      "output_summary_utf8": "153 passed in 28.91s\n"
+    },
+    {
+      "name": "phase9_ops_partition_b",
+      "command": "<interpreter> -m pytest -q <second exact partition of scripts/ops/agent_hub_phase9/tests>",
+      "exit_code": 0,
+      "output_summary_utf8": "103 passed, 1 skipped in 14.72s\n",
+      "skip": "Existing unrelated Windows-specific skip."
+    },
+    {
+      "name": "source_compile",
+      "command": "<interpreter> -m py_compile <two changed Python files>",
+      "exit_code": 0,
+      "output_summary_utf8": "PY_COMPILE_PASS\n"
+    }
+  ],
+  "supplemental_secret_pattern_scan": {
+    "scope": "two changed source/test files",
+    "result": "PASS_NO_HIGH_CONFIDENCE_PATTERNS",
+    "authoritative_third_party_scan": false
+  },
+  "network_or_external_effects": {
+    "production_access": "NOT_USED",
+    "production_writes": 0,
+    "provider_calls": 0,
+    "video_factory_actions": 0,
+    "deployment": false,
+    "merge": false,
+    "manual_workflow_dispatch": false,
+    "actual_cost": 0
+  },
+  "ci": "UPDATED_EXACT_HEAD_AUTOMATIC_PR_CI_REQUIRED",
+  "r5": "HOLD_NOT_CREATED_NOT_CLAIMED_NOT_EXECUTED",
+  "phase10": "NO_GO",
+  "authority": "SOURCE_ONLY_CI_PORTABILITY_REMEDIATION_NOT_PRODUCTION_AUTHORITY",
+  "next_safe_action": "PUBLISH_UPDATED_HEAD_TO_DRAFT_PR_68; ALLOW_AUTOMATIC_PR_CI_ONLY; KEEP_PRODUCTION_AND_EXECUTION_GATES_ON_HOLD"
+}

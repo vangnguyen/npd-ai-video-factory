@@ -878,3 +878,34 @@ NEXT_SAFE_ACTION:
   only if both High findings are confirmed closed, publish that exact commit for
   exact-head CI. Keep JIT evidence collection, R5 creation and any execution
   window/approval on HOLD until all separate prerequisites and gates exist.
+
+## New-lineage published Windows path-alias remediation - 2026-10-01
+
+- Owner authorized one public topic branch, one draft PR and automatic PR CI;
+  no merge, manual dispatch, deployment or production action was authorized.
+  Draft PR `#68` targets canonical Agent Hub base
+  `fix/agent-hub-p9-preflight-capture-20260912@a417b7c`.
+- Initial published head `046c5f7363882805ba5c4ea4cfb8eeeca16dd213`
+  produced Phase-5 PASS, Agent Hub CI PASS, Phase-9 Ubuntu capture PASS and
+  Phase-9 Agent Hub PASS. Phase-9 Windows capture failed because the runner's
+  temporary directory used the valid 8.3 spelling `RUNNER~1` while
+  `Path.resolve()` returned the long spelling `runneradmin`; the prior textual
+  equality check incorrectly classified the same directory as an escape.
+- Exact source remediation commit
+  `3e2820a271b2f124f956953dccdf490254728aac` accepts differing lexical spellings
+  only when the already reparse-checked path and resolved path have identical
+  filesystem identity. Symlink, junction and reparse denial remains before this
+  comparison; the fix does not weaken containment or accept an outside target.
+  The evidence-directory assertion now also verifies same-file identity instead
+  of assuming Windows returns one spelling.
+- Local validation on the remediation: relevant new-lineage tests 33/33 PASS;
+  full Phase-9 ops 256 PASS / 1 existing unrelated skip; compile, diff check and
+  bounded secret-pattern scan PASS. Receipt:
+  `docs/evidence/AH_P9_NEW_LINEAGE_WINDOWS_PATH_ALIAS_CI_FIX_TEST_RECEIPT_20261001.json`.
+- Automatic exact-head PR CI must pass on the updated published head before this
+  portability issue is closed. Production/Video Factory writes, provider calls,
+  deployment, merge, manual dispatch and actual cost remain zero. R5 remains
+  `HOLD / NOT_CREATED / NOT_CLAIMED / NOT_EXECUTED`; Phase 10 remains `NO-GO`.
+- NEXT_SAFE_ACTION: publish the exact reviewed portability-fix head to draft PR
+  `#68`, allow only automatic PR CI, inspect any failure, and keep all production
+  and execution gates on HOLD.
