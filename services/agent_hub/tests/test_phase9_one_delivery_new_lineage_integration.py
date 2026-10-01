@@ -16,21 +16,25 @@ from test_phase9_internal_audit_lane import CID, rig
 
 def readback(store, service, binding, *, runtime_mode="phase9_delivery"):
     lead_id = binding.cohort.subject_ref.removeprefix("lead:")
-    touchpoints = store.list_touchpoints(lead_id=lead_id, limit=10)
+    # This integration is intentionally bound to MemoryHubStore internals so the
+    # evidence is an exact cardinality, never a capped list-view approximation.
+    touchpoints = [
+        row for row in store.touchpoints.values() if row.lead_id == lead_id
+    ]
     source_matches = [
         row for row in touchpoints
         if row.metadata.get("source_event_id") == binding.source_event_id
     ]
     receipts = [
-        row for row in store.list_attribution_delivery_receipts(limit=100)
+        row for row in store.attribution_delivery_receipts.values()
         if row.delivery_id == binding.delivery_id
     ]
     dead_letters = [
-        row for row in store.list_attribution_dead_letters(limit=100)
+        row for row in store.attribution_dead_letters.values()
         if row.delivery_id == binding.delivery_id
     ]
-    audits = store.list_campaign_audit(CID, limit=1000)
-    latest_types = [row.event_type for row in reversed(audits[:2])] if len(audits) >= 2 else []
+    audits = list(store.campaign_audit.get(CID, []))
+    latest_types = [row.event_type for row in audits[-2:]] if len(audits) >= 2 else []
     return {
         "schema": lineage.READBACK_SCHEMA,
         "lineage": lineage.LINEAGE,
@@ -43,7 +47,8 @@ def readback(store, service, binding, *, runtime_mode="phase9_delivery"):
         "campaign_audit_count": len(audits),
         "latest_campaign_audit_types": latest_types,
         "dead_letter_match_count": len(dead_letters),
-        "receipt_valid": bool(receipts and service.verify(receipts[0]).valid),
+        "counts_are_exact": True,
+        "query_limit_applied": False,
         "internal_audit_cap": 2000,
         "runtime_mode": runtime_mode,
         "scheduler_enabled": False,
@@ -69,6 +74,7 @@ def test_new_lineage_readback_matches_current_delivery_fence_and_store(tmp_path)
             "source_event_id": binding.source_event_id,
         },
         "delivery_binding": binding.model_dump(mode="json"),
+        "delivery_envelope": validated.model_dump(mode="json"),
         "readback_contract": {
             "touchpoint_delta": 1,
             "source_event_match_delta": 1,
@@ -81,6 +87,8 @@ def test_new_lineage_readback_matches_current_delivery_fence_and_store(tmp_path)
         before,
         after,
         receipt.model_dump(mode="json"),
+        service.verify(receipt).model_dump(mode="json"),
+        {receipt.key_id: service.settings.attribution_receipt_signing_key},
         verified,
     )
     assert result["status"] == "PASS"

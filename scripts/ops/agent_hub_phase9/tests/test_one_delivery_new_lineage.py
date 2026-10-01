@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
+from unittest import mock
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -22,6 +25,7 @@ SOURCE_EVENT = "LOCAL-NEW-LINEAGE-EVENT-01"
 LEAD = "LOCAL-NEW-LINEAGE-LEAD-01"
 SOURCE_RECORD = "1" * 64
 SOURCE_AUDIT = "2" * 64
+SIGNING_KEY = "LOCAL-SYNTHETIC-RECEIPT-KEY-0123456789abcdef"
 
 
 def write_json(path: Path, value: object) -> None:
@@ -216,7 +220,7 @@ def reseal(root: Path, *, operation: str | None = None) -> str:
 
 
 def snapshot(*, touchpoints=0, source_events=0, receipts=0, audits=1,
-             audit_types=None, dead_letters=0, receipt_valid=False):
+             audit_types=None, dead_letters=0, exact=True, limited=False):
     return {
         "schema": lineage.READBACK_SCHEMA,
         "lineage": lineage.LINEAGE,
@@ -229,15 +233,16 @@ def snapshot(*, touchpoints=0, source_events=0, receipts=0, audits=1,
         "campaign_audit_count": audits,
         "latest_campaign_audit_types": audit_types or [],
         "dead_letter_match_count": dead_letters,
-        "receipt_valid": receipt_valid,
+        "counts_are_exact": exact,
+        "query_limit_applied": limited,
         "internal_audit_cap": 2000,
         "runtime_mode": "phase9_delivery",
         "scheduler_enabled": False,
     }
 
 
-def receipt():
-    return {
+def receipt(payload_digest="PLACEHOLDER"):
+    value = {
         "receipt_id": "adr_" + "8" * 24,
         "delivery_id": DELIVERY,
         "producer": "local_new_lineage_fixture",
@@ -245,7 +250,7 @@ def receipt():
         "attempt_number": 1,
         "max_attempts": 1,
         "outcome": "accepted",
-        "payload_digest": "PLACEHOLDER",
+        "payload_digest": payload_digest,
         "snapshot_id": "LOCAL-SNAPSHOT",
         "received": 1,
         "resolved": 1,
@@ -259,44 +264,24 @@ def receipt():
         "error_code": None,
         "received_at": "2026-09-14T12:00:02Z",
         "key_id": "local-key",
-        "signature": "hmac-sha256:" + "9" * 64,
+        "signature": "",
         "shadow_mode": True,
         "external_writes_enabled": False,
     }
+    unsigned = {name: item for name, item in value.items() if name != "signature"}
+    value["signature"] = "hmac-sha256:" + hmac.new(
+        SIGNING_KEY.encode("utf-8"), lineage.canonical_bytes(unsigned), hashlib.sha256
+    ).hexdigest()
+    return value
 
 
-class FakeTransport:
-    kind = lineage.FAKE_TRANSPORT_KIND
-
-    def __init__(self, journal: Path, payload_digest: str, *, fail=False, after=None):
-        self.journal = journal
-        self.payload_digest = payload_digest
-        self.fail = fail
-        self.calls = 0
-        self.rollback_calls = 0
-        self.snapshots = [snapshot(), after or snapshot(
-            touchpoints=1,
-            source_events=1,
-            receipts=1,
-            audits=3,
-            audit_types=list(lineage.AUDIT_TYPES),
-            receipt_valid=True,
-        )]
-
-    def readback(self):
-        return self.snapshots[min(self.calls, 1)]
-
-    def post(self, envelope):
-        intent = json.loads(self.journal.read_text())
-        if intent["state"] != "PRE_POST_INTENT_DURABLE":
-            raise AssertionError("post preceded durable intent")
-        self.calls += 1
-        if self.fail:
-            raise TimeoutError("synthetic ambiguous timeout")
-        value = receipt()
-        value["payload_digest"] = self.payload_digest
-        raw = json.dumps(value, ensure_ascii=False, sort_keys=False).encode("utf-8") + b"\n"
-        return {"status_code": 200, "raw_response": raw, "semantic_receipt": value}
+def receipt_verification(value):
+    return {
+        "receipt_id": value["receipt_id"],
+        "valid": True,
+        "key_id": value["key_id"],
+        "detail": "Signature is valid.",
+    }
 
 
 class NewLineagePackageTests(unittest.TestCase):
@@ -385,6 +370,35 @@ class NewLineagePackageTests(unittest.TestCase):
         with self.assertRaisesRegex(lineage.NewLineageStop, "ONE_ATTEMPT_NO_RETRY_REQUIRED"):
             self.verify()
 
+    def test_cohort_missing_extra_malformed_and_timestamp_types_fail_when_resealed(self):
+        mutations = (
+            ("missing_owner", lambda cohort, binding, envelope: cohort.pop("owner_id")),
+            ("extra_field", lambda cohort, binding, envelope: cohort.update({"unexpected": True})),
+            ("empty_owner", lambda cohort, binding, envelope: cohort.update({"owner_id": ""})),
+            ("wrong_scope", lambda cohort, binding, envelope: cohort.update({"scope": "production"})),
+            ("wrong_boolean_type", lambda cohort, binding, envelope: cohort.update({"customer_contact": 0})),
+            ("naive_timestamp", lambda cohort, binding, envelope: binding.update({"occurred_at": "2026-09-14T12:00:00"})),
+        )
+        for name, mutate in mutations:
+            with self.subTest(name=name):
+                package_fixture(self.root)
+                binding = json.loads((self.root / "DELIVERY_BINDING.json").read_text())
+                envelope = json.loads((self.root / "DELIVERY_ENVELOPE.json").read_text())
+                cohort = binding["cohort"]
+                mutate(cohort, binding, envelope)
+                envelope["events"][0]["metadata"]["phase9_internal_cohort"] = cohort
+                write_json(self.root / "DELIVERY_BINDING.json", binding)
+                write_json(self.root / "DELIVERY_ENVELOPE.json", envelope)
+                self.anchor = reseal(self.root)
+                with self.assertRaises(lineage.NewLineageStop):
+                    self.verify()
+
+    def test_extra_artifact_is_denied_by_exact_allowlist(self):
+        write_json(self.root / "UNBOUND_EXTRA.json", {"offline": True})
+        self.anchor = reseal(self.root)
+        with self.assertRaisesRegex(lineage.NewLineageStop, "ARTIFACT_ALLOWLIST_MISMATCH"):
+            self.verify()
+
     def test_campaign_digest_keeps_original_http_and_semantic_domains_separate(self):
         evidence = self.verify()["campaign_digest_evidence"]
         self.assertNotEqual(evidence["raw_transport_sha256"], evidence["semantic_model_sha256"])
@@ -393,7 +407,7 @@ class NewLineagePackageTests(unittest.TestCase):
         self.assertFalse(evidence["body_exported"])
 
 
-class OfflineSimulationTests(unittest.TestCase):
+class OfflineFixtureEvidenceTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -401,87 +415,232 @@ class OfflineSimulationTests(unittest.TestCase):
         self.root.mkdir()
         self.anchor = package_fixture(self.root)
         self.verified = lineage.verify_package(self.root)
-        self.journal = Path(self.temp.name) / "evidence" / "journal.json"
-
-    def transport(self, **kwargs):
-        return FakeTransport(
-            self.journal,
-            self.verified["delivery_binding"]["delivery_payload_sha256"],
-            **kwargs,
+        self.before = snapshot()
+        self.after = snapshot(
+            touchpoints=1,
+            source_events=1,
+            receipts=1,
+            audits=3,
+            audit_types=list(lineage.AUDIT_TYPES),
+        )
+        self.receipt = receipt(
+            self.verified["delivery_binding"]["delivery_payload_sha256"]
         )
 
-    def simulate(self, transport):
-        return lineage.run_offline_simulation(
+    @property
+    def evidence_directory(self):
+        return (
+            self.root.parent
+            / lineage.OFFLINE_EVIDENCE_DIRECTORY
+            / OPERATION
+        )
+
+    @property
+    def journal(self):
+        return self.evidence_directory / "journal.json"
+
+    def begin(self, **kwargs):
+        return lineage.begin_offline_fixture(
             self.root,
             expected_manifest_sha256=self.anchor,
             expected_head=HEAD,
-            journal_path=self.journal,
-            transport=transport,
+            before=kwargs.pop("before", self.before),
+            **kwargs,
         )
 
-    def test_durable_pre_post_intent_one_fake_post_and_exact_readback_pass(self):
-        transport = self.transport()
-        result = self.simulate(transport)
-        self.assertEqual(result["status"], "OFFLINE_SIMULATION_PASS")
-        self.assertEqual(transport.calls, 1)
-        self.assertEqual(transport.rollback_calls, 0)
+    def complete(self, **kwargs):
+        value = kwargs.pop("semantic_receipt", self.receipt)
+        raw = kwargs.pop(
+            "raw_response",
+            json.dumps(value, ensure_ascii=False, sort_keys=False).encode("utf-8") + b"\n",
+        )
+        return lineage.complete_offline_fixture(
+            self.root,
+            expected_manifest_sha256=self.anchor,
+            expected_head=HEAD,
+            before=kwargs.pop("before", self.before),
+            after=kwargs.pop("after", self.after),
+            status_code=kwargs.pop("status_code", 200),
+            raw_response=raw,
+            semantic_receipt=value,
+            receipt_verification=kwargs.pop(
+                "receipt_verification", receipt_verification(value)
+            ),
+            verification_keys=kwargs.pop(
+                "verification_keys", {value.get("key_id", "missing"): SIGNING_KEY}
+            ),
+            **kwargs,
+        )
+
+    def test_durable_pre_post_intent_and_exact_fixture_evidence_pass(self):
+        intent = self.begin()
+        self.assertEqual(intent["status"], "OFFLINE_FIXTURE_PRE_POST_INTENT")
+        claim = json.loads((self.evidence_directory / "claim.json").read_text())
+        self.assertEqual(claim["state"], "OFFLINE_FIXTURE_PRE_POST_INTENT")
+        result = self.complete()
+        self.assertEqual(result["status"], "OFFLINE_FIXTURE_EVIDENCE_PASS")
+        self.assertEqual(result["module_post_attempts"], 0)
+        self.assertEqual(result["observed_fixture_attempts"], 1)
+        self.assertNotIn("production_writes", result)
+        self.assertEqual(
+            result["production_interaction"], "NOT_PERFORMED_BY_THIS_MODULE"
+        )
         self.assertFalse(result["response_digests"]["raw_body_persisted"])
         self.assertNotEqual(
             result["response_digests"]["raw_http_response_sha256"],
             result["response_digests"]["semantic_receipt_sha256"],
         )
         journal = json.loads(self.journal.read_text())
-        self.assertEqual(journal["state"], "OFFLINE_SIMULATION_PASS")
-        self.assertEqual(journal["post_attempts"], 1)
+        self.assertEqual(journal["state"], "OFFLINE_FIXTURE_EVIDENCE_PASS")
+        self.assertEqual(journal["module_post_attempts"], 0)
+        self.assertFalse(journal["automatic_retry"])
+        self.assertFalse(journal["automatic_rollback_after_post"])
+        with self.assertRaisesRegex(lineage.NewLineageStop, "ALREADY_STARTED"):
+            self.complete()
 
-    def test_post_timeout_is_ambiguous_hold_never_retry_or_rollback(self):
-        transport = self.transport(fail=True)
-        with self.assertRaisesRegex(lineage.NewLineageStop, "POST_OUTCOME_AMBIGUOUS_HOLD"):
-            self.simulate(transport)
-        self.assertEqual(transport.calls, 1)
-        self.assertEqual(transport.rollback_calls, 0)
+    def test_invalid_observation_is_explicit_hold_with_original_cause(self):
+        self.begin()
+        with self.assertRaisesRegex(
+            lineage.OfflineOwnerReviewHold,
+            "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW:RAW_HTTP_SEMANTIC_RECEIPT_MISMATCH",
+        ) as caught:
+            self.complete(raw_response=b"{}\n")
+        self.assertEqual(caught.exception.original_cause, "RAW_HTTP_SEMANTIC_RECEIPT_MISMATCH")
         journal = json.loads(self.journal.read_text())
-        self.assertEqual(journal["state"], "POST_OUTCOME_AMBIGUOUS_HOLD")
+        self.assertEqual(journal["state"], "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW")
         self.assertTrue(journal["owner_review_required"])
         with self.assertRaisesRegex(lineage.NewLineageStop, "ALREADY_STARTED"):
-            self.simulate(transport)
-        self.assertEqual(transport.calls, 1)
+            self.begin()
 
-    def test_real_transport_shape_is_denied_before_post(self):
-        transport = self.transport()
-        transport.kind = "SSH"
-        with self.assertRaisesRegex(lineage.NewLineageStop, "REAL_TRANSPORT_DENIED"):
-            self.simulate(transport)
-        self.assertEqual(transport.calls, 0)
-        self.assertFalse(self.journal.exists())
+    def test_no_transport_injection_point_and_spoof_has_no_effect(self):
+        class SpoofedTransport:
+            kind = "IN_PROCESS_FAKE"
+
+            def __init__(self):
+                self.side_effects = 0
+
+            def post(self, value):
+                self.side_effects += 1
+
+        spoof = SpoofedTransport()
+        with self.assertRaises(TypeError):
+            self.begin(transport=spoof)
+        self.assertEqual(spoof.side_effects, 0)
+        self.assertFalse(self.evidence_directory.exists())
+        self.assertFalse(hasattr(lineage, "run_offline_simulation"))
+
+    def test_atomic_operation_claim_has_one_winner_under_race(self):
+        barrier = threading.Barrier(2)
+        outcomes = []
+
+        def contender():
+            barrier.wait()
+            try:
+                self.begin()
+                outcomes.append("won")
+            except lineage.NewLineageStop as error:
+                outcomes.append(str(error))
+
+        threads = [threading.Thread(target=contender) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertCountEqual(outcomes, ["won", "OFFLINE_OPERATION_ALREADY_STARTED"])
+        self.assertTrue((self.evidence_directory / "claim.json").is_file())
+
+    def test_journal_path_is_derived_and_alternate_path_is_ignored(self):
+        alternate = Path(self.temp.name) / "caller-selected-journal.json"
+        alternate.write_text('{"state":"spoofed"}\n', encoding="utf-8")
+        result = self.begin()
+        self.assertEqual(result["evidence_directory"], str(self.evidence_directory))
+        self.assertEqual(json.loads(alternate.read_text())["state"], "spoofed")
+        self.assertTrue(self.journal.is_file())
+
+    def test_final_journal_failure_still_returns_explicit_hold(self):
+        self.begin()
+        with mock.patch.object(
+            lineage,
+            "_write_journal",
+            side_effect=lineage.NewLineageStop("JOURNAL_DURABILITY_FAILURE"),
+        ):
+            with self.assertRaisesRegex(
+                lineage.OfflineOwnerReviewHold,
+                "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW:FINAL_JOURNAL_DURABILITY_FAILURE",
+            ) as caught:
+                self.complete()
+        self.assertIn("JOURNAL_DURABILITY_FAILURE", caught.exception.journal_cause)
+
+    def test_tampered_or_missing_signature_fails_even_with_true_verification(self):
+        for mode in ("tampered", "missing"):
+            with self.subTest(mode=mode):
+                value = dict(self.receipt)
+                if mode == "tampered":
+                    value["signature"] = value["signature"][:-1] + (
+                        "0" if value["signature"][-1] != "0" else "1"
+                    )
+                else:
+                    value.pop("signature")
+                with self.assertRaisesRegex(
+                    lineage.NewLineageStop,
+                    "RECEIPT_SIGNATURE_INVALID|DELIVERY_RECEIPT_SCHEMA_INVALID",
+                ):
+                    lineage.verify_readback(
+                        self.before,
+                        self.after,
+                        value,
+                        receipt_verification(self.receipt),
+                        {"local-key": SIGNING_KEY},
+                        self.verified,
+                    )
 
     def test_readback_index_audit_and_capacity_mismatches_hold(self):
         bad_snapshots = (
             snapshot(touchpoints=1, source_events=0, receipts=1, audits=3,
-                     audit_types=list(lineage.AUDIT_TYPES), receipt_valid=True),
+                     audit_types=list(lineage.AUDIT_TYPES)),
             snapshot(touchpoints=1, source_events=1, receipts=0, audits=3,
-                     audit_types=list(lineage.AUDIT_TYPES), receipt_valid=True),
+                     audit_types=list(lineage.AUDIT_TYPES)),
             snapshot(touchpoints=1, source_events=1, receipts=1, audits=2,
-                     audit_types=list(lineage.AUDIT_TYPES), receipt_valid=True),
+                     audit_types=list(lineage.AUDIT_TYPES)),
             snapshot(touchpoints=1, source_events=1, receipts=1, audits=3,
-                     audit_types=list(reversed(lineage.AUDIT_TYPES)), receipt_valid=True),
+                     audit_types=list(reversed(lineage.AUDIT_TYPES))),
+            snapshot(touchpoints=1, source_events=1, receipts=1, audits=3,
+                     audit_types=list(lineage.AUDIT_TYPES), limited=True),
         )
-        for index, after in enumerate(bad_snapshots):
-            with self.subTest(index=index):
-                self.journal = Path(self.temp.name) / f"bad-{index}.json"
-                transport = self.transport(after=after)
+        for after in bad_snapshots:
+            with self.subTest(after=after):
                 with self.assertRaises(lineage.NewLineageStop):
-                    self.simulate(transport)
-                self.assertEqual(transport.calls, 1)
-                self.assertEqual(json.loads(self.journal.read_text())["state"],
-                                 "POST_OUTCOME_AMBIGUOUS_HOLD")
-        self.journal = Path(self.temp.name) / "capacity.json"
-        transport = self.transport()
-        transport.snapshots[0]["campaign_audit_count"] = 1999
-        with self.assertRaisesRegex(lineage.NewLineageStop, "CAPACITY_INSUFFICIENT"):
-            self.simulate(transport)
-        self.assertEqual(transport.calls, 0)
-        self.assertFalse(self.journal.exists())
+                    lineage.verify_readback(
+                        self.before,
+                        after,
+                        self.receipt,
+                        receipt_verification(self.receipt),
+                        {"local-key": SIGNING_KEY},
+                        self.verified,
+                    )
+
+    def test_capacity_boundaries_1998_1999_and_2000_are_exact(self):
+        self.before["campaign_audit_count"] = 1998
+        intent = self.begin()
+        self.assertEqual(intent["status"], "OFFLINE_FIXTURE_PRE_POST_INTENT")
+        after = dict(self.after)
+        after["campaign_audit_count"] = 2000
+        self.assertEqual(self.complete(after=after)["status"], "OFFLINE_FIXTURE_EVIDENCE_PASS")
+
+        for count in (1999, 2000):
+            with self.subTest(count=count), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / "package"
+                root.mkdir()
+                anchor = package_fixture(root)
+                denied = snapshot(audits=count)
+                with self.assertRaisesRegex(lineage.NewLineageStop, "CAPACITY_INSUFFICIENT"):
+                    lineage.begin_offline_fixture(
+                        root,
+                        expected_manifest_sha256=anchor,
+                        expected_head=HEAD,
+                        before=denied,
+                    )
+                self.assertFalse((root.parent / lineage.OFFLINE_EVIDENCE_DIRECTORY).exists())
 
 
 if __name__ == "__main__":

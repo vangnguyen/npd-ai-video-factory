@@ -1,19 +1,21 @@
 """Offline-only contract for a new Phase-9 one-delivery lineage.
 
 This is not recovered R4 code and it cannot create an R5 package, contact a
-host, claim an operation, stage an image, or perform a production POST.  It
-validates a source-review package and exercises the contract only through an
-explicitly injected in-process fake transport.
+host, claim a production operation, stage an image, or perform a POST.  It
+validates a source-review package and evaluates caller-supplied local fixture
+evidence.  There is deliberately no transport or callback injection point.
 """
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 import re
 from typing import Mapping
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from gate2_digest_contract import Gate2DigestContractError, verify_evidence
 
@@ -23,13 +25,18 @@ OPERATION_PREFIX = "AH-P9-ONE-DELIVERY-NL1-"
 MANIFEST_SCHEMA = "npd.agent-hub.phase9.one-delivery-new-lineage-package.v1"
 READBACK_SCHEMA = "npd.agent-hub.phase9.one-delivery-readback-snapshot.v1"
 JOURNAL_SCHEMA = "npd.agent-hub.phase9.one-delivery-offline-journal.v1"
-FAKE_TRANSPORT_KIND = "IN_PROCESS_FAKE"
+OFFLINE_EVIDENCE_DIRECTORY = ".agent-hub-offline-evidence"
 HISTORICAL_R4_OPERATION = (
     "AH-P9-ONE-DELIVERY-6369ae1d-4b41-4d47-8463-24deacfec75c"
 )
 HASH = re.compile(r"^[0-9a-f]{64}$")
 HEAD = re.compile(r"^[0-9a-f]{40}$")
 PRODUCER = re.compile(r"^[a-z][a-z0-9_.-]{1,79}$")
+CAMPAIGN_ID = re.compile(r"^CMP-[A-Z0-9]{2,12}-[A-Z0-9]{2,20}-\d{6}-\d{2}$")
+DELIVERY_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{2,119}$")
+SUBJECT_REF = re.compile(r"^lead:[A-Za-z0-9_-]{1,100}$")
+RECEIPT_ID = re.compile(r"^adr_[0-9a-f]{24}$")
+SIGNATURE = re.compile(r"^hmac-sha256:[0-9a-f]{64}$")
 AUDIT_TYPES = ["source_touchpoints_ingested", "signed_delivery_received"]
 INTERNAL_AUDIT_CAP = 2000
 INTERNAL_AUDIT_BUDGET = 2
@@ -46,7 +53,19 @@ REQUIRED_ARTIFACTS = {
 
 
 class NewLineageStop(ValueError):
-    """The package or simulated execution failed closed."""
+    """The package or local fixture evidence failed closed."""
+
+
+class OfflineOwnerReviewHold(NewLineageStop):
+    """A post-observation fixture result is ambiguous and cannot auto-recover."""
+
+    def __init__(self, original_cause: str, journal_cause: str | None = None) -> None:
+        self.original_cause = original_cause
+        self.journal_cause = journal_cause
+        message = f"POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW:{original_cause}"
+        if journal_cause is not None:
+            message += f":{journal_cause}"
+        super().__init__(message)
 
 
 def require(condition: bool, reason: str) -> None:
@@ -160,6 +179,30 @@ def _exact_fields(value: object, fields: set[str], reason: str) -> Mapping[str, 
     return value
 
 
+def _string(value: object, *, minimum: int, maximum: int, reason: str) -> str:
+    require(isinstance(value, str) and minimum <= len(value) <= maximum, reason)
+    return value
+
+
+def _aware_timestamp(value: object, reason: str) -> str:
+    raw = _string(value, minimum=1, maximum=80, reason=reason)
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        raise NewLineageStop(reason) from None
+    require(parsed.tzinfo is not None and parsed.utcoffset() is not None, reason)
+    return raw
+
+
+def _pseudonymous(value: object, *, minimum: int, maximum: int, reason: str) -> str:
+    raw = _string(value, minimum=minimum, maximum=maximum, reason=reason)
+    require(
+        "@" not in raw and re.fullmatch(r"\+?\d[\d\s().-]{7,}", raw) is None,
+        reason,
+    )
+    return raw
+
+
 def _verify_delivery(binding: Mapping[str, object], envelope: Mapping[str, object]) -> None:
     _exact_fields(
         binding,
@@ -189,10 +232,34 @@ def _verify_delivery(binding: Mapping[str, object], envelope: Mapping[str, objec
         "DELIVERY_ENVELOPE_SCHEMA_INVALID",
     )
     cohort = binding.get("cohort")
-    require(isinstance(cohort, Mapping), "COHORT_BINDING_INVALID")
+    _exact_fields(
+        cohort,
+        {
+            "classification",
+            "canonical_campaign_id",
+            "subject_ref",
+            "owner_id",
+            "owner_approval_sha256",
+            "non_customer_proof_sha256",
+            "scope",
+            "customer_contact",
+            "commercial_attribution",
+            "automation_enabled",
+            "reporting_exclusions",
+        },
+        "COHORT_BINDING_INVALID",
+    )
     exclusions = cohort.get("reporting_exclusions")
     require(
         cohort.get("classification") == "phase9_internal_non_customer"
+        and isinstance(cohort.get("canonical_campaign_id"), str)
+        and bool(CAMPAIGN_ID.fullmatch(cohort["canonical_campaign_id"]))
+        and isinstance(cohort.get("subject_ref"), str)
+        and bool(SUBJECT_REF.fullmatch(cohort["subject_ref"]))
+        and isinstance(cohort.get("owner_id"), str)
+        and 1 <= len(cohort["owner_id"]) <= 200
+        and cohort.get("scope")
+        == "phase9_one_internal_task_report_audit_one_nba_review"
         and cohort.get("customer_contact") is False
         and cohort.get("commercial_attribution") is False
         and cohort.get("automation_enabled") is False
@@ -238,6 +305,38 @@ def _verify_delivery(binding: Mapping[str, object], envelope: Mapping[str, objec
         },
         "DELIVERY_EVENT_SCHEMA_INVALID",
     )
+    delivery_id = _pseudonymous(
+        binding.get("delivery_id"), minimum=3, maximum=120,
+        reason="DELIVERY_BINDING_SCHEMA_INVALID",
+    )
+    require(bool(DELIVERY_ID.fullmatch(delivery_id)), "DELIVERY_BINDING_SCHEMA_INVALID")
+    source_event_id = _pseudonymous(
+        binding.get("source_event_id"), minimum=2, maximum=200,
+        reason="DELIVERY_BINDING_SCHEMA_INVALID",
+    )
+    occurred_at = _aware_timestamp(
+        binding.get("occurred_at"), "DELIVERY_BINDING_SCHEMA_INVALID"
+    )
+    _aware_timestamp(envelope.get("sent_at"), "DELIVERY_ENVELOPE_SCHEMA_INVALID")
+    producer = _string(
+        envelope.get("producer"), minimum=2, maximum=80,
+        reason="DELIVERY_ENVELOPE_SCHEMA_INVALID",
+    )
+    require(bool(PRODUCER.fullmatch(producer)), "DELIVERY_ENVELOPE_SCHEMA_INVALID")
+    _pseudonymous(
+        event.get("source_event_id"), minimum=2, maximum=200,
+        reason="DELIVERY_EVENT_SCHEMA_INVALID",
+    )
+    _aware_timestamp(event.get("occurred_at"), "DELIVERY_EVENT_SCHEMA_INVALID")
+    _string(event.get("channel"), minimum=2, maximum=80, reason="DELIVERY_EVENT_SCHEMA_INVALID")
+    lead_id = _pseudonymous(
+        event.get("lead_id"), minimum=1, maximum=100,
+        reason="DELIVERY_EVENT_SCHEMA_INVALID",
+    )
+    require(
+        bool(re.fullmatch(r"[A-Za-z0-9_-]{1,100}", lead_id)),
+        "DELIVERY_EVENT_SCHEMA_INVALID",
+    )
     require(
         envelope.get("attempt_number") == 1
         and type(envelope.get("attempt_number")) is int
@@ -246,19 +345,18 @@ def _verify_delivery(binding: Mapping[str, object], envelope: Mapping[str, objec
         "ONE_ATTEMPT_NO_RETRY_REQUIRED",
     )
     require(
-        envelope.get("delivery_id") == binding.get("delivery_id")
-        and bool(PRODUCER.fullmatch(str(envelope.get("producer", ""))))
+        envelope.get("delivery_id") == delivery_id
         and envelope.get("metadata") == {}
         and bool(HASH.fullmatch(str(binding.get("source_record_sha256", ""))))
         and bool(HASH.fullmatch(str(binding.get("source_audit_sha256", ""))))
         and bool(HASH.fullmatch(str(binding.get("delivery_payload_sha256", ""))))
         and envelope.get("source_system") == "espocrm"
         and event.get("source_system") == "espocrm"
-        and event.get("source_event_id") == binding.get("source_event_id")
-        and event.get("occurred_at") == binding.get("occurred_at")
+        and event.get("source_event_id") == source_event_id
+        and event.get("occurred_at") == occurred_at
         and event.get("event_type") == "lead_created"
         and event.get("canonical_campaign_id") == cohort.get("canonical_campaign_id")
-        and f"lead:{event.get('lead_id')}" == cohort.get("subject_ref")
+        and f"lead:{lead_id}" == cohort.get("subject_ref")
         and event.get("opportunity_id") is None,
         "DELIVERY_BINDING_MISMATCH",
     )
@@ -486,6 +584,7 @@ def verify_package(
         )
         listed[name] = artifact
     require(REQUIRED_ARTIFACTS <= set(listed), "REQUIRED_ARTIFACT_MISSING")
+    require(set(listed) == REQUIRED_ARTIFACTS, "ARTIFACT_ALLOWLIST_MISMATCH")
     actual = {
         path.relative_to(package).as_posix()
         for path in package.rglob("*")
@@ -588,7 +687,8 @@ def _verify_snapshot(value: object, bindings: Mapping[str, object]) -> Mapping[s
             "campaign_audit_count",
             "latest_campaign_audit_types",
             "dead_letter_match_count",
-            "receipt_valid",
+            "counts_are_exact",
+            "query_limit_applied",
             "internal_audit_cap",
             "runtime_mode",
             "scheduler_enabled",
@@ -601,6 +701,8 @@ def _verify_snapshot(value: object, bindings: Mapping[str, object]) -> Mapping[s
         and snapshot.get("campaign_id") == bindings.get("campaign_id")
         and snapshot.get("delivery_id") == bindings.get("delivery_id")
         and snapshot.get("source_event_id") == bindings.get("source_event_id")
+        and snapshot.get("counts_are_exact") is True
+        and snapshot.get("query_limit_applied") is False
         and snapshot.get("internal_audit_cap") == INTERNAL_AUDIT_CAP
         and snapshot.get("runtime_mode") == "phase9_delivery"
         and snapshot.get("scheduler_enabled") is False,
@@ -615,14 +717,101 @@ def _verify_snapshot(value: object, bindings: Mapping[str, object]) -> Mapping[s
     ):
         require(type(snapshot.get(name)) is int and snapshot[name] >= 0, "READBACK_COUNT_INVALID")
     require(isinstance(snapshot.get("latest_campaign_audit_types"), list), "READBACK_AUDIT_INVALID")
-    require(type(snapshot.get("receipt_valid")) is bool, "READBACK_RECEIPT_VALIDITY_INVALID")
     return snapshot
+
+
+def _verify_receipt(
+    receipt: object,
+    receipt_verification: object,
+    verification_keys: object,
+    verified: Mapping[str, object],
+) -> Mapping[str, object]:
+    value = _exact_fields(
+        receipt,
+        {
+            "receipt_id", "delivery_id", "producer", "source_system",
+            "attempt_number", "max_attempts", "outcome", "payload_digest",
+            "snapshot_id", "received", "resolved", "inserted", "duplicates",
+            "unknown", "conflicts", "retry_allowed", "next_retry_at",
+            "dead_lettered", "error_code", "received_at", "key_id", "signature",
+            "shadow_mode", "external_writes_enabled",
+        },
+        "DELIVERY_RECEIPT_SCHEMA_INVALID",
+    )
+    bindings = verified["bindings"]
+    envelope = verified["delivery_envelope"]
+    receipt_id = value.get("receipt_id")
+    key_id = value.get("key_id")
+    signature = value.get("signature")
+    require(
+        isinstance(receipt_id, str) and bool(RECEIPT_ID.fullmatch(receipt_id)),
+        "DELIVERY_RECEIPT_SCHEMA_INVALID",
+    )
+    require(
+        isinstance(key_id, str) and 3 <= len(key_id) <= 80
+        and isinstance(signature, str) and bool(SIGNATURE.fullmatch(signature)),
+        "DELIVERY_RECEIPT_SCHEMA_INVALID",
+    )
+    _aware_timestamp(value.get("received_at"), "DELIVERY_RECEIPT_SCHEMA_INVALID")
+    snapshot_id = value.get("snapshot_id")
+    require(snapshot_id is None or isinstance(snapshot_id, str), "DELIVERY_RECEIPT_SCHEMA_INVALID")
+    for field in (
+        "attempt_number", "max_attempts", "received", "resolved", "inserted",
+        "duplicates", "unknown", "conflicts",
+    ):
+        require(type(value.get(field)) is int and value[field] >= 0, "DELIVERY_RECEIPT_SCHEMA_INVALID")
+    require(
+        value.get("delivery_id") == bindings["delivery_id"]
+        and value.get("producer") == envelope["producer"]
+        and value.get("source_system") == envelope["source_system"]
+        and value.get("attempt_number") == 1
+        and value.get("max_attempts") == 1
+        and value.get("outcome") == "accepted"
+        and value.get("payload_digest")
+        == verified["delivery_binding"]["delivery_payload_sha256"]
+        and value.get("received") == 1
+        and value.get("resolved") == 1
+        and value.get("inserted") == 1
+        and value.get("duplicates") == 0
+        and value.get("unknown") == 0
+        and value.get("conflicts") == 0
+        and value.get("retry_allowed") is False
+        and value.get("next_retry_at") is None
+        and value.get("dead_lettered") is False
+        and value.get("error_code") is None
+        and value.get("shadow_mode") is True
+        and value.get("external_writes_enabled") is False,
+        "DELIVERY_RECEIPT_INVALID",
+    )
+    verification = _exact_fields(
+        receipt_verification,
+        {"receipt_id", "valid", "key_id", "detail"},
+        "RECEIPT_VERIFICATION_SCHEMA_INVALID",
+    )
+    require(
+        verification.get("receipt_id") == receipt_id
+        and verification.get("key_id") == key_id
+        and verification.get("valid") is True
+        and verification.get("detail") == "Signature is valid.",
+        "RECEIPT_VERIFICATION_INVALID",
+    )
+    require(isinstance(verification_keys, Mapping), "RECEIPT_KEYRING_INVALID")
+    key = verification_keys.get(key_id)
+    require(isinstance(key, str) and len(key) >= 32, "RECEIPT_KEY_UNKNOWN")
+    unsigned = {name: item for name, item in value.items() if name != "signature"}
+    expected = "hmac-sha256:" + hmac.new(
+        key.encode("utf-8"), canonical_bytes(unsigned), hashlib.sha256
+    ).hexdigest()
+    require(hmac.compare_digest(signature, expected), "RECEIPT_SIGNATURE_INVALID")
+    return value
 
 
 def verify_readback(
     before: object,
     after: object,
-    receipt: Mapping[str, object],
+    receipt: object,
+    receipt_verification: object,
+    verification_keys: object,
     verified: Mapping[str, object],
 ) -> dict[str, object]:
     bindings = verified["bindings"]
@@ -646,42 +835,23 @@ def verify_readback(
         )
     require(
         later["campaign_audit_count"] <= INTERNAL_AUDIT_CAP
-        and later["latest_campaign_audit_types"] == AUDIT_TYPES
-        and later["receipt_valid"] is True,
-        "READBACK_AUDIT_OR_RECEIPT_INVALID",
+        and later["latest_campaign_audit_types"] == AUDIT_TYPES,
+        "READBACK_AUDIT_INVALID",
     )
-    require(
-        receipt.get("delivery_id") == bindings["delivery_id"]
-        and receipt.get("attempt_number") == 1
-        and receipt.get("max_attempts") == 1
-        and receipt.get("outcome") == "accepted"
-        and receipt.get("payload_digest")
-        == verified["delivery_binding"]["delivery_payload_sha256"]
-        and receipt.get("received") == 1
-        and receipt.get("resolved") == 1
-        and receipt.get("inserted") == 1
-        and receipt.get("duplicates") == 0
-        and receipt.get("unknown") == 0
-        and receipt.get("conflicts") == 0
-        and receipt.get("retry_allowed") is False
-        and receipt.get("next_retry_at") is None
-        and receipt.get("dead_lettered") is False
-        and receipt.get("shadow_mode") is True
-        and receipt.get("external_writes_enabled") is False,
-        "DELIVERY_RECEIPT_INVALID",
+    checked_receipt = _verify_receipt(
+        receipt, receipt_verification, verification_keys, verified
     )
     return {
         "status": "PASS",
-        "receipt_sha256": canonical_digest(receipt),
+        "receipt_sha256": canonical_digest(checked_receipt),
         "before_sha256": canonical_digest(earlier),
         "after_sha256": canonical_digest(later),
     }
 
 
 def _write_journal(path: Path, payload: Mapping[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
     require(not path.is_symlink(), "JOURNAL_SYMLINK_DENIED")
-    temp = path.with_name(path.name + ".tmp")
+    temp = path.with_name(path.name + f".{uuid4().hex}.tmp")
     raw = canonical_bytes(payload) + b"\n"
     try:
         with temp.open("xb") as handle:
@@ -702,7 +872,7 @@ def _write_journal(path: Path, payload: Mapping[str, object]) -> None:
 
 
 def _journal_payload(
-    verified: Mapping[str, object], state: str, *, post_attempts: int, **extra
+    verified: Mapping[str, object], state: str, *, observed_fixture_attempts: int, **extra
 ) -> dict[str, object]:
     return {
         "schema": JOURNAL_SCHEMA,
@@ -710,7 +880,8 @@ def _journal_payload(
         "operation_id": verified["bindings"]["operation_id"],
         "package_manifest_sha256": verified["manifest_sha256"],
         "state": state,
-        "post_attempts": post_attempts,
+        "module_post_attempts": 0,
+        "observed_fixture_attempts": observed_fixture_attempts,
         "automatic_retry": False,
         "automatic_rollback_after_post": False,
         "production_authority": "NOT_GRANTED",
@@ -718,15 +889,13 @@ def _journal_payload(
     }
 
 
-def _verify_fake_response(value: object, verified: Mapping[str, object]) -> tuple[dict, dict]:
-    response = _exact_fields(
-        value,
-        {"status_code", "raw_response", "semantic_receipt"},
-        "FAKE_TRANSPORT_RESPONSE_INVALID",
-    )
-    require(response.get("status_code") == 200, "POST_RESPONSE_NOT_ACCEPTED")
-    raw = response.get("raw_response")
-    receipt = response.get("semantic_receipt")
+def _verify_fixture_response(
+    status_code: object,
+    raw: object,
+    receipt: object,
+    verified: Mapping[str, object],
+) -> tuple[dict, dict]:
+    require(type(status_code) is int and status_code == 200, "POST_RESPONSE_NOT_ACCEPTED")
     require(type(raw) is bytes and len(raw) > 0, "ORIGINAL_HTTP_BYTES_REQUIRED")
     require(isinstance(receipt, Mapping), "SEMANTIC_RECEIPT_REQUIRED")
     parsed = loads_strict(raw)
@@ -741,89 +910,219 @@ def _verify_fake_response(value: object, verified: Mapping[str, object]) -> tupl
     return dict(receipt), digest
 
 
-def run_offline_simulation(
+def _evidence_paths(verified: Mapping[str, object], *, create: bool) -> tuple[Path, Path, Path]:
+    package = verified["package"]
+    require(isinstance(package, Path), "PACKAGE_DIRECTORY_INVALID")
+    parent = package.parent.resolve(strict=True)
+    root = parent / OFFLINE_EVIDENCE_DIRECTORY
+    if create:
+        try:
+            root.mkdir(mode=0o700, exist_ok=True)
+        except OSError:
+            raise NewLineageStop("OFFLINE_EVIDENCE_STORE_UNAVAILABLE") from None
+    require(root.exists() and root.is_dir() and not root.is_symlink(), "OFFLINE_EVIDENCE_STORE_INVALID")
+    require(root.resolve(strict=True).is_relative_to(parent), "OFFLINE_EVIDENCE_PATH_ESCAPE")
+    operation = root / verified["bindings"]["operation_id"]
+    if create:
+        try:
+            operation.mkdir(mode=0o700, exist_ok=True)
+        except OSError:
+            raise NewLineageStop("OFFLINE_EVIDENCE_STORE_UNAVAILABLE") from None
+    require(
+        operation.exists() and operation.is_dir() and not operation.is_symlink(),
+        "OFFLINE_OPERATION_STORE_INVALID",
+    )
+    require(operation.resolve(strict=True).is_relative_to(root.resolve(strict=True)), "OFFLINE_EVIDENCE_PATH_ESCAPE")
+    return operation, operation / "claim.json", operation / "journal.json"
+
+
+def _write_exclusive(path: Path, payload: Mapping[str, object]) -> None:
+    require(not path.is_symlink(), "OFFLINE_CLAIM_SYMLINK_DENIED")
+    try:
+        with path.open("xb") as handle:
+            handle.write(canonical_bytes(payload) + b"\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        if hasattr(os, "O_DIRECTORY"):
+            descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+    except FileExistsError:
+        raise NewLineageStop("OFFLINE_OPERATION_ALREADY_STARTED") from None
+    except OSError:
+        raise NewLineageStop("OFFLINE_CLAIM_DURABILITY_FAILURE") from None
+
+
+def begin_offline_fixture(
     directory: Path | str,
     *,
     expected_manifest_sha256: str,
     expected_head: str,
-    journal_path: Path | str,
-    transport,
+    before: object,
 ) -> dict[str, object]:
-    """Exercise one delivery through an in-process fake, with no retry path."""
+    """Atomically claim one local fixture evaluation; performs no POST."""
     verified = verify_package(
         directory,
         expected_manifest_sha256=expected_manifest_sha256,
         expected_head=expected_head,
     )
-    journal = Path(journal_path)
-    require(not journal.exists(), "OFFLINE_OPERATION_ALREADY_STARTED")
-    require(getattr(transport, "kind", None) == FAKE_TRANSPORT_KIND, "REAL_TRANSPORT_DENIED")
-    before = _verify_snapshot(transport.readback(), verified["bindings"])
+    checked_before = _verify_snapshot(before, verified["bindings"])
     require(
-        before["subject_touchpoint_count"] == 0
-        and before["source_event_match_count"] == 0
-        and before["delivery_receipt_match_count"] == 0
-        and before["dead_letter_match_count"] == 0
-        and before["receipt_valid"] is False,
+        checked_before["subject_touchpoint_count"] == 0
+        and checked_before["source_event_match_count"] == 0
+        and checked_before["delivery_receipt_match_count"] == 0
+        and checked_before["dead_letter_match_count"] == 0,
         "DELIVERY_ALREADY_PRESENT_OR_AMBIGUOUS",
     )
     require(
-        before["campaign_audit_count"] <= INTERNAL_AUDIT_CAP - INTERNAL_AUDIT_BUDGET,
+        checked_before["campaign_audit_count"] <= INTERNAL_AUDIT_CAP - INTERNAL_AUDIT_BUDGET,
         "INTERNAL_AUDIT_CAPACITY_INSUFFICIENT",
     )
+    operation, claim, journal = _evidence_paths(verified, create=True)
+    claim_payload = _journal_payload(
+        verified,
+        "OFFLINE_FIXTURE_PRE_POST_INTENT",
+        observed_fixture_attempts=0,
+        fixture_only=True,
+        package_path_sha256=canonical_digest(str(verified["package"])),
+        before_sha256=canonical_digest(checked_before),
+    )
+    _write_exclusive(claim, claim_payload)
     _write_journal(
         journal,
-        _journal_payload(verified, "PRE_POST_INTENT_DURABLE", post_attempts=0),
+        claim_payload,
+    )
+    return {
+        "status": "OFFLINE_FIXTURE_PRE_POST_INTENT",
+        "operation_id": verified["bindings"]["operation_id"],
+        "package_manifest_sha256": verified["manifest_sha256"],
+        "before_sha256": canonical_digest(checked_before),
+        "evidence_directory": str(operation),
+        "fixture_only": True,
+        "production_interaction": "NOT_PERFORMED_BY_THIS_MODULE",
+    }
+
+
+def _hold_after_observation(
+    verified: Mapping[str, object], journal: Path, original_cause: str
+) -> None:
+    try:
+        _write_journal(
+            journal,
+            _journal_payload(
+                verified,
+                "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW",
+                observed_fixture_attempts=1,
+                original_cause=original_cause,
+                owner_review_required=True,
+            ),
+        )
+    except Exception as journal_error:
+        journal_cause = (
+            str(journal_error) if isinstance(journal_error, NewLineageStop)
+            else type(journal_error).__name__
+        )
+        raise OfflineOwnerReviewHold(original_cause, journal_cause) from None
+    raise OfflineOwnerReviewHold(original_cause) from None
+
+
+def complete_offline_fixture(
+    directory: Path | str,
+    *,
+    expected_manifest_sha256: str,
+    expected_head: str,
+    before: object,
+    after: object,
+    status_code: object,
+    raw_response: object,
+    semantic_receipt: object,
+    receipt_verification: object,
+    verification_keys: object,
+) -> dict[str, object]:
+    """Evaluate one already-observed local fixture result; performs no POST."""
+    verified = verify_package(
+        directory,
+        expected_manifest_sha256=expected_manifest_sha256,
+        expected_head=expected_head,
+    )
+    _, claim_path, journal = _evidence_paths(verified, create=False)
+    observation_claim = claim_path.with_name("observation-claim.json")
+    _write_exclusive(
+        observation_claim,
+        _journal_payload(
+            verified,
+            "OFFLINE_FIXTURE_OBSERVATION_CLAIMED",
+            observed_fixture_attempts=1,
+            fixture_only=True,
+        ),
     )
     try:
-        response = transport.post(verified["delivery_envelope"])
-    except Exception as error:
-        _write_journal(
-            journal,
-            _journal_payload(
-                verified,
-                "POST_OUTCOME_AMBIGUOUS_HOLD",
-                post_attempts=1,
-                failure_class=type(error).__name__,
-                owner_review_required=True,
-            ),
+        claim = _exact_fields(
+            load_json(claim_path),
+            {
+                "schema", "lineage", "operation_id", "package_manifest_sha256",
+                "state", "module_post_attempts", "observed_fixture_attempts",
+                "automatic_retry", "automatic_rollback_after_post",
+                "production_authority", "fixture_only", "package_path_sha256",
+                "before_sha256",
+            },
+            "OFFLINE_CLAIM_SCHEMA_INVALID",
         )
-        raise NewLineageStop("POST_OUTCOME_AMBIGUOUS_HOLD") from None
-    try:
-        receipt, response_digests = _verify_fake_response(response, verified)
-        after = transport.readback()
-        readback = verify_readback(before, after, receipt, verified)
-    except Exception as error:
-        _write_journal(
-            journal,
-            _journal_payload(
-                verified,
-                "POST_OUTCOME_AMBIGUOUS_HOLD",
-                post_attempts=1,
-                failure_class=type(error).__name__,
-                owner_review_required=True,
-            ),
+        intent = _exact_fields(
+            load_json(journal), set(claim), "OFFLINE_INTENT_JOURNAL_SCHEMA_INVALID"
         )
-        if isinstance(error, NewLineageStop):
-            raise
-        raise NewLineageStop("POST_OUTCOME_AMBIGUOUS_HOLD") from None
+        require(intent == claim, "OFFLINE_INTENT_JOURNAL_MISMATCH")
+        require(
+            claim.get("state") == "OFFLINE_FIXTURE_PRE_POST_INTENT"
+            and claim.get("operation_id") == verified["bindings"]["operation_id"]
+            and claim.get("package_manifest_sha256") == verified["manifest_sha256"]
+            and claim.get("package_path_sha256") == canonical_digest(str(verified["package"]))
+            and claim.get("before_sha256") == canonical_digest(_verify_snapshot(before, verified["bindings"]))
+            and claim.get("module_post_attempts") == 0
+            and claim.get("observed_fixture_attempts") == 0
+            and claim.get("fixture_only") is True,
+            "OFFLINE_CLAIM_BINDING_INVALID",
+        )
+        receipt, response_digests = _verify_fixture_response(
+            status_code, raw_response, semantic_receipt, verified
+        )
+        readback = verify_readback(
+            before,
+            after,
+            receipt,
+            receipt_verification,
+            verification_keys,
+            verified,
+        )
+    except Exception as error:
+        cause = str(error) if isinstance(error, NewLineageStop) else type(error).__name__
+        _hold_after_observation(verified, journal, cause)
     result = {
-        "status": "OFFLINE_SIMULATION_PASS",
+        "status": "OFFLINE_FIXTURE_EVIDENCE_PASS",
         "operation_id": verified["bindings"]["operation_id"],
-        "post_attempts": 1,
+        "module_post_attempts": 0,
+        "observed_fixture_attempts": 1,
         "automatic_retry": False,
         "automatic_rollback_after_post": False,
         "response_digests": response_digests,
         "readback": readback,
-        "production_writes": 0,
+        "fixture_only": True,
+        "production_interaction": "NOT_PERFORMED_BY_THIS_MODULE",
     }
-    _write_journal(
-        journal,
-        _journal_payload(
-            verified,
-            "OFFLINE_SIMULATION_PASS",
-            post_attempts=1,
-            result_sha256=canonical_digest(result),
-        ),
-    )
+    try:
+        _write_journal(
+            journal,
+            _journal_payload(
+                verified,
+                "OFFLINE_FIXTURE_EVIDENCE_PASS",
+                observed_fixture_attempts=1,
+                result_sha256=canonical_digest(result),
+                fixture_only=True,
+            ),
+        )
+    except Exception as error:
+        cause = str(error) if isinstance(error, NewLineageStop) else type(error).__name__
+        _hold_after_observation(verified, journal, f"FINAL_JOURNAL_DURABILITY_FAILURE:{cause}")
     return result
