@@ -6,11 +6,14 @@ only local fixture evidence next to the supplied review package.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import hashlib
 import hmac
 from pathlib import Path
 
 import one_delivery_new_lineage as lineage
+import one_delivery_new_lineage_builder as builder
+import one_delivery_new_lineage_executor_runtime as executor_runtime
 
 
 REHEARSAL_KEY_ID = "local-new-lineage-rehearsal-v1"
@@ -184,5 +187,164 @@ def rehearse_offline_package(
         "observed_fixture_attempts": 1,
         "automatic_retry": False,
         "automatic_rollback_after_post": False,
+        "production_interaction": "NOT_PERFORMED_BY_THIS_MODULE",
+    }
+
+
+def rehearse_offline_runtime_path(
+    sandbox_parent: Path | str,
+    *,
+    base_package: Path | str,
+    runtime_review_package: Path | str,
+    expected_base_manifest_sha256: str,
+    expected_runtime_manifest_sha256: str,
+    expected_head: str,
+    runtime_binding: object,
+    candidate_archive: bytes,
+    rollback_archive: bytes,
+    signing_key: str,
+    observed_at: str,
+    starting_audit_count: int = 0,
+    fault_mode: str = "NONE",
+) -> dict[str, object]:
+    """Exercise the sealed four-component path without running its command."""
+    lineage.require(
+        fault_mode in executor_runtime.FAULT_MODES,
+        "OFFLINE_FAULT_MODE_INVALID",
+    )
+    lineage.require(
+        type(starting_audit_count) is int
+        and 0
+        <= starting_audit_count
+        <= lineage.INTERNAL_AUDIT_CAP - lineage.INTERNAL_AUDIT_BUDGET,
+        "INTERNAL_AUDIT_CAPACITY_INSUFFICIENT",
+    )
+    checked_observed = lineage._aware_timestamp(
+        observed_at, "REHEARSAL_TIMESTAMP_INVALID"
+    )
+    observed = datetime.fromisoformat(checked_observed.replace("Z", "+00:00"))
+    lineage.require(
+        observed.utcoffset() == timedelta(0), "REHEARSAL_TIMESTAMP_NOT_UTC"
+    )
+    verified_review = builder.verify_runtime_review_package(
+        runtime_review_package,
+        expected_manifest_sha256=expected_runtime_manifest_sha256,
+        base_package=base_package,
+        expected_base_manifest_sha256=expected_base_manifest_sha256,
+        expected_head=expected_head,
+    )
+    expected_binding = builder.runtime_binding_from_verified(verified_review)
+    checked_binding = executor_runtime.verify_runtime_binding(runtime_binding)
+    lineage.require(
+        lineage.canonical_digest(expected_binding)
+        == lineage.canonical_digest(checked_binding),
+        "REHEARSAL_RUNTIME_BINDING_MISMATCH",
+    )
+    base_verified = verified_review["base"]
+    before = _snapshot(
+        base_verified,
+        touchpoints=0,
+        source_events=0,
+        receipts=0,
+        audits=starting_audit_count,
+        audit_types=[],
+    )
+    after = _snapshot(
+        base_verified,
+        touchpoints=1,
+        source_events=1,
+        receipts=1,
+        audits=starting_audit_count + lineage.INTERNAL_AUDIT_BUDGET,
+        audit_types=list(lineage.AUDIT_TYPES),
+    )
+    post_observed = observed + timedelta(seconds=5)
+    receipt = _signed_receipt(
+        base_verified,
+        signing_key=signing_key,
+        observed_at=post_observed.isoformat().replace("+00:00", "Z"),
+    )
+    raw_response = lineage.canonical_bytes(receipt) + b"\n"
+    scenario = {
+        "schema": executor_runtime.SCENARIO_SCHEMA,
+        "lineage": lineage.LINEAGE,
+        "operation_id": checked_binding["operation_id"],
+        "mode": "OFFLINE_SANDBOX_ONLY",
+        "fault_mode": fault_mode,
+        "scope_start_utc": (observed - timedelta(seconds=5)).isoformat().replace(
+            "+00:00", "Z"
+        ),
+        "preflight_at_utc": observed.isoformat().replace("+00:00", "Z"),
+        "claimed_at_utc": (observed + timedelta(seconds=1)).isoformat().replace(
+            "+00:00", "Z"
+        ),
+        "staged_at_utc": (observed + timedelta(seconds=2)).isoformat().replace(
+            "+00:00", "Z"
+        ),
+        "pre_post_intent_at_utc": (
+            observed + timedelta(seconds=4)
+        ).isoformat().replace("+00:00", "Z"),
+        "post_observed_at_utc": post_observed.isoformat().replace("+00:00", "Z"),
+        "completed_at_utc": (observed + timedelta(seconds=6)).isoformat().replace(
+            "+00:00", "Z"
+        ),
+        "scope_end_utc": (observed + timedelta(seconds=10)).isoformat().replace(
+            "+00:00", "Z"
+        ),
+        "current_utc": (observed + timedelta(seconds=6)).isoformat().replace(
+            "+00:00", "Z"
+        ),
+        "before": before,
+        "after": after,
+        "status_code": 200,
+        "raw_response": raw_response,
+        "semantic_receipt": receipt,
+        "receipt_verification": {
+            "receipt_id": receipt["receipt_id"],
+            "valid": True,
+            "key_id": receipt["key_id"],
+            "detail": "Signature is valid.",
+        },
+        "verification_keys": {REHEARSAL_KEY_ID: signing_key},
+    }
+    result = executor_runtime.run_offline_state_machine(
+        sandbox_parent,
+        base_package=base_package,
+        runtime_binding=checked_binding,
+        readonly_request=verified_review["request"],
+        scenario=scenario,
+        candidate_archive=candidate_archive,
+        rollback_archive=rollback_archive,
+    )
+    terminal_verification = executor_runtime.verify_offline_runtime_terminal(
+        sandbox_parent,
+        runtime_binding=checked_binding,
+    )
+    lineage.require(
+        result["terminal_state"]
+        == executor_runtime.expected_terminal_state(fault_mode),
+        "OFFLINE_MODEL_TERMINAL_MISMATCH",
+    )
+    lineage.require(
+        terminal_verification["terminal_state"] == result["terminal_state"],
+        "OFFLINE_TERMINAL_VERIFICATION_MISMATCH",
+    )
+    return {
+        "status": (
+            "OFFLINE_RUNTIME_PATH_REHEARSAL_PASS"
+            if result["terminal_state"] == "PASS"
+            else "OFFLINE_RUNTIME_PATH_REHEARSAL_TERMINAL"
+        ),
+        "operation_id": checked_binding["operation_id"],
+        "base_package_manifest_sha256": expected_base_manifest_sha256,
+        "runtime_review_manifest_sha256": expected_runtime_manifest_sha256,
+        "terminal": result,
+        "terminal_verification": terminal_verification,
+        "fault_mode": fault_mode,
+        "generated_command_executed": False,
+        "simulated_post_attempts": result["simulated_post_attempts"],
+        "real_post_attempts": 0,
+        "automatic_retry": False,
+        "automatic_rollback_after_post": False,
+        "fixture_only": True,
         "production_interaction": "NOT_PERFORMED_BY_THIS_MODULE",
     }

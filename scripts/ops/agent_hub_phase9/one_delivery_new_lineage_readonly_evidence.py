@@ -36,7 +36,9 @@ REMOTE_ARGV_SHAPE = [
     "-B",
     "-",
     "readonly-evidence",
-    "<redacted canonical request>",
+    "<request sha256>",
+    "<collector sha256>",
+    "<base64url canonical request>",
 ]
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 INTENT_FIELDS = (
@@ -374,6 +376,11 @@ def _verify_request(value: object) -> Mapping[str, object]:
         "READONLY_REQUEST_BOUNDARY_INVALID",
     )
     return request
+
+
+def verify_request_contract(value: object) -> dict[str, object]:
+    """Public pure verifier for source-bound runtime-review packages."""
+    return dict(_verify_request(value))
 
 
 def _verify_capture(
