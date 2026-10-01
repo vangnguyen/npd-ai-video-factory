@@ -2,7 +2,7 @@
 
 Date: 2026-10-01
 Lineage: `AH_P9_ONE_DELIVERY_NEW_LINEAGE_V1`
-Disposition: `TWO_HIGH_FINDINGS_FIXED_REVIEW_PENDING_LIVE_EVIDENCE_NOT_COLLECTED`
+Disposition: `RUNTIME_PATH_TWO_HIGH_REMEDIATED_REVIEW_PENDING_LIVE_EVIDENCE_NOT_COLLECTED`
 Production execution authority: `NOT_GRANTED`
 
 ## Current status
@@ -136,12 +136,24 @@ after source review, package review and exact-head CI.
 Independent review confirmed both High findings closed at
 `e2339d4debb6e6736beb8b94a23cf01931055a96`. The follow-on transport,
 collector, offline state-machine, recovery boundary and production-review
-builder milestone is implemented and locally verified at
-`2faa60c456ed666e423fafc300201fefd2bdace8`. The generated collector and strict
-argv were sealed but not executed; real entry points still refuse execution.
+builder milestone was initially implemented at `2faa60c`, whose independent
+review found two additional High issues: Windows junction/reparse sandbox
+escapes and unobserved/fabricated target safety facts. Both are remediated in
+exact tested source commit `09beb25e1d35a24a87c1671cca00b6218652c890`.
 
-Independently review exact source commit `2faa60c`. If accepted, publish it for
-exact-head CI. Do not request or spend the bounded 600-second evidence-only read
+The executor now fails closed on symlink, junction or reparse components and
+uses exclusive owned-directory creation plus identity revalidation. Real
+Windows junction tests cover root, operation and recovery paths with no outside
+writes. The collector now requires and binds observed whitelisted Docker
+inspect labels/environment for Compose identity, runtime mode, scheduler and
+external-write state. Unsafe or missing metadata fails closed, and mock-inspect
+tests exercise both the source helper and parser extracted from the rendered
+collector. The generated collector and strict argv remain sealed and unexecuted;
+real entry points still refuse execution.
+
+Independently review exact source commit `09beb25`. If both High findings are
+confirmed closed, publish that exact commit for exact-head CI. Do not request or
+spend the bounded 600-second evidence-only read
 scope until current candidate/rollback OCI and custody bytes plus a trusted
 human-approval verification path exist. The later production transport driver,
 capture wrapper and claim/stage/load/delivery/recovery executors require their

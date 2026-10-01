@@ -206,12 +206,34 @@ performs a real POST. Real transport and executor entry points remain explicitly
 fail-closed. Source receipt:
 `docs/evidence/AH_P9_NEW_LINEAGE_RUNTIME_PATH_TEST_RECEIPT_20261001.json`.
 
+Subsequent independent review found two High issues in `2faa60c`: Windows
+junction/reparse escape acceptance in the local executor, and collector safety
+facts copied from the profile or hardcoded instead of observed from the target.
+They are remediated in exact local source commit
+`09beb25e1d35a24a87c1671cca00b6218652c890`. The executor now rejects every
+symlink/junction/reparse component, creates owned directories exclusively,
+tracks directory identity through writes and revalidates terminal/recovery
+artifacts. Real Windows junction tests cover root, operation and recovery paths
+and verify zero writes outside the sandbox. The rendered collector now extracts
+only whitelisted Compose/runtime/scheduler/external-write facts from actual
+inspect metadata, fails closed on missing or unsafe values and binds the
+observed facts and source descriptors into the evidence and target signature.
+The generated parser itself is exercised with mock inspect inputs.
+
+Local validation on `09beb25` is 56 focused PASS, Phase-9 ops 256 PASS plus one
+existing unrelated Windows-specific skip, Agent Hub 510/510 PASS, evaluator
+20/20 PASS, compile PASS and bounded changed-file secret-pattern scan PASS.
+The current receipt is
+`docs/evidence/AH_P9_NEW_LINEAGE_RUNTIME_PATH_HIGH_FIX_TEST_RECEIPT_20261001.json`;
+the prior receipt remains historical. These fixes still require independent
+exact-source re-review and published exact-head CI.
+
 This completes the bounded source milestone, not production qualification. The
 production transport/capture driver, trusted human-scope verifier, fresh real
 candidate and rollback OCI/custody bytes, protected/target and DB0 receipts,
 and reviewed production claim/stage/load/delivery/recovery executors do not yet
 exist under this lineage. Exact-head CI also remains unavailable until the
-source is published. Independent exact-source review of `2faa60c` is the next
+source is published. Independent exact-source review of `09beb25` is the next
 gate. Only after those missing bytes, bindings, review and CI pass may a fresh
 operation/window and separate Owner execution gate be proposed.
 

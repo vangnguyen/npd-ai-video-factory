@@ -834,3 +834,47 @@ NEXT_SAFE_ACTION:
   passes, publish it for exact-head CI. Do not collect short-lived JIT evidence
   until the trusted scope and real artifact bytes exist; do not create R5 or an
   execution window/approval from this source milestone.
+
+## New-lineage runtime-path High remediation - 2026-10-01
+
+- Independent review of `2faa60c456ed666e423fafc300201fefd2bdace8`
+  found two High issues, so its source-review gate did not pass: the offline
+  executor accepted Windows junction/reparse escapes under its sandbox, and the
+  rendered collector reported profile/hardcoded safety facts instead of facts
+  observed from the inspected target.
+- Exact tested remediation source commit
+  `09beb25e1d35a24a87c1671cca00b6218652c890` rejects symlinks, junctions and
+  reparse points across every existing sandbox path component, creates the
+  sandbox root/operation/state/recovery directories exclusively, pins directory
+  identity during writes, and revalidates all terminal and recovery artifacts.
+  Windows tests create real temporary junctions for root, operation and recovery
+  paths and prove fail-closed behavior with no outside writes; this coverage is
+  not hidden behind a platform skip.
+- The collector now reads only whitelisted safety fields from actual Docker
+  inspect `Config.Labels` and `Config.Env`, requires the observed project and
+  service to match the profile, requires actual `phase9_creation`, scheduler
+  disabled and explicit external-writes disabled, and binds those observed
+  values plus their sources into the evidence and target signature. Missing
+  config/metadata, unsafe mode, enabled scheduler/external writes, wrong Compose
+  identity and duplicate safety variables fail closed. Both the module helper
+  and the pure parser extracted from the rendered collector are tested against
+  mock inspect inputs; unrelated environment values are not emitted.
+- Exact-source local results: 56 focused PASS; Phase-9 ops 256 PASS / 1 existing
+  Windows-specific skip unrelated to the new junction tests; Agent Hub 510/510
+  PASS with one existing Starlette deprecation warning; evaluator 20/20 PASS;
+  source compile and bounded changed-file high-confidence secret-pattern scan
+  PASS. New receipt:
+  `docs/evidence/AH_P9_NEW_LINEAGE_RUNTIME_PATH_HIGH_FIX_TEST_RECEIPT_20261001.json`.
+  The earlier `2faa60c` receipt remains historical and is superseded for the
+  current review gate.
+- No collector, generated argv, SSH, network, production access, provider call,
+  claim, stage, image load, deploy, delivery or Video Factory action ran.
+  Production and Video Factory writes and actual cost remain zero. R5 remains
+  `HOLD / NOT_CREATED / NOT_CLAIMED / NOT_EXECUTED`; Phase 10 remains `NO-GO`.
+- The two new High findings are remediated locally but require independent
+  review of the exact fix commit before they may be marked closed. Exact-head CI
+  remains unavailable because the source is unpublished.
+- NEXT_SAFE_ACTION: independently review exact source commit `09beb25`. If and
+  only if both High findings are confirmed closed, publish that exact commit for
+  exact-head CI. Keep JIT evidence collection, R5 creation and any execution
+  window/approval on HOLD until all separate prerequisites and gates exist.
