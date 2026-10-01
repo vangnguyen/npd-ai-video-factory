@@ -1186,3 +1186,143 @@ def complete_offline_fixture(
         if hold_binding is not None and journal is not None:
             _hold_after_observation(hold_binding, journal, cause)
         raise OfflineOwnerReviewHold(cause, "HOLD_JOURNAL_UNAVAILABLE") from None
+
+
+def verify_offline_terminal_journal(
+    directory: Path | str,
+    *,
+    expected_manifest_sha256: str,
+    expected_head: str,
+) -> dict[str, object]:
+    """Verify a terminal local rehearsal journal without performing recovery."""
+    verified = verify_package(
+        directory,
+        expected_manifest_sha256=expected_manifest_sha256,
+        expected_head=expected_head,
+    )
+    claim_path, journal_path, _ = _locate_started_operation(
+        directory, expected_manifest_sha256
+    )
+    _, expected_claim_path, expected_journal_path = _evidence_paths(
+        verified, create=False
+    )
+    require(
+        claim_path == expected_claim_path and journal_path == expected_journal_path,
+        "OFFLINE_TERMINAL_PATH_BINDING_INVALID",
+    )
+    require(
+        not claim_path.is_symlink() and not journal_path.is_symlink(),
+        "OFFLINE_TERMINAL_SYMLINK_DENIED",
+    )
+    claim = _exact_fields(
+        load_json(claim_path),
+        _OFFLINE_CLAIM_FIELDS,
+        "OFFLINE_CLAIM_SCHEMA_INVALID",
+    )
+    require(
+        claim.get("state") == "OFFLINE_FIXTURE_PRE_POST_INTENT"
+        and claim.get("operation_id") == verified["bindings"]["operation_id"]
+        and claim.get("package_manifest_sha256") == expected_manifest_sha256
+        and claim.get("package_path_sha256")
+        == canonical_digest(str(verified["package"]))
+        and bool(HASH.fullmatch(str(claim.get("before_sha256", ""))))
+        and claim.get("module_post_attempts") == 0
+        and claim.get("observed_fixture_attempts") == 0
+        and claim.get("automatic_retry") is False
+        and claim.get("automatic_rollback_after_post") is False
+        and claim.get("production_authority") == "NOT_GRANTED"
+        and claim.get("fixture_only") is True,
+        "OFFLINE_TERMINAL_CLAIM_INVALID",
+    )
+
+    journal = load_json(journal_path)
+    require(isinstance(journal, Mapping), "OFFLINE_TERMINAL_JOURNAL_INVALID")
+    state = journal.get("state")
+    common_fields = {
+        "schema", "lineage", "operation_id", "package_manifest_sha256",
+        "state", "module_post_attempts", "observed_fixture_attempts",
+        "automatic_retry", "automatic_rollback_after_post",
+        "production_authority",
+    }
+    if state == "OFFLINE_FIXTURE_EVIDENCE_PASS":
+        _exact_fields(
+            journal,
+            common_fields | {"result_sha256", "fixture_only"},
+            "OFFLINE_TERMINAL_PASS_SCHEMA_INVALID",
+        )
+        require(
+            journal.get("fixture_only") is True
+            and bool(HASH.fullmatch(str(journal.get("result_sha256", "")))),
+            "OFFLINE_TERMINAL_PASS_INVALID",
+        )
+    elif state == "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW":
+        _exact_fields(
+            journal,
+            common_fields | {"original_cause", "owner_review_required"},
+            "OFFLINE_TERMINAL_HOLD_SCHEMA_INVALID",
+        )
+        require(
+            isinstance(journal.get("original_cause"), str)
+            and bool(journal["original_cause"])
+            and journal.get("owner_review_required") is True,
+            "OFFLINE_TERMINAL_HOLD_INVALID",
+        )
+    else:
+        raise NewLineageStop("OFFLINE_TERMINAL_STATE_INVALID")
+    require(
+        journal.get("schema") == JOURNAL_SCHEMA
+        and journal.get("lineage") == LINEAGE
+        and journal.get("operation_id") == verified["bindings"]["operation_id"]
+        and journal.get("package_manifest_sha256") == expected_manifest_sha256
+        and journal.get("module_post_attempts") == 0
+        and journal.get("observed_fixture_attempts") == 1
+        and journal.get("automatic_retry") is False
+        and journal.get("automatic_rollback_after_post") is False
+        and journal.get("production_authority") == "NOT_GRANTED",
+        "OFFLINE_TERMINAL_BINDING_INVALID",
+    )
+
+    observation_path = claim_path.with_name("observation-claim.json")
+    observation_status = "MISSING_FAILED_CLOSED"
+    if observation_path.exists():
+        require(
+            not observation_path.is_symlink(),
+            "OFFLINE_TERMINAL_SYMLINK_DENIED",
+        )
+        observation = _exact_fields(
+            load_json(observation_path),
+            common_fields | {"fixture_only"},
+            "OFFLINE_OBSERVATION_CLAIM_SCHEMA_INVALID",
+        )
+        require(
+            observation.get("state") == "OFFLINE_FIXTURE_OBSERVATION_CLAIMED"
+            and observation.get("operation_id") == verified["bindings"]["operation_id"]
+            and observation.get("package_manifest_sha256") == expected_manifest_sha256
+            and observation.get("module_post_attempts") == 0
+            and observation.get("observed_fixture_attempts") == 1
+            and observation.get("automatic_retry") is False
+            and observation.get("automatic_rollback_after_post") is False
+            and observation.get("production_authority") == "NOT_GRANTED"
+            and observation.get("fixture_only") is True,
+            "OFFLINE_OBSERVATION_CLAIM_INVALID",
+        )
+        observation_status = "PRESENT_VALID"
+    require(
+        observation_status == "PRESENT_VALID"
+        or state == "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW",
+        "OFFLINE_OBSERVATION_CLAIM_REQUIRED_FOR_PASS",
+    )
+    return {
+        "status": "OFFLINE_TERMINAL_JOURNAL_VERIFIED",
+        "terminal_state": state,
+        "operation_id": verified["bindings"]["operation_id"],
+        "package_manifest_sha256": expected_manifest_sha256,
+        "claim_sha256": sha256_file(claim_path),
+        "observation_claim_status": observation_status,
+        "terminal_journal_sha256": sha256_file(journal_path),
+        "module_post_attempts": 0,
+        "observed_fixture_attempts": 1,
+        "automatic_retry": False,
+        "automatic_rollback_after_post": False,
+        "production_authority": "NOT_GRANTED",
+    }
