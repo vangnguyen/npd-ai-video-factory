@@ -1028,6 +1028,60 @@ def _hold_after_observation(
     raise OfflineOwnerReviewHold(original_cause) from None
 
 
+_OFFLINE_CLAIM_FIELDS = {
+    "schema", "lineage", "operation_id", "package_manifest_sha256",
+    "state", "module_post_attempts", "observed_fixture_attempts",
+    "automatic_retry", "automatic_rollback_after_post",
+    "production_authority", "fixture_only", "package_path_sha256",
+    "before_sha256",
+}
+
+
+def _locate_started_operation(
+    directory: Path | str, expected_manifest_sha256: str
+) -> tuple[Path, Path, dict[str, object]]:
+    """Locate immutable begin evidence without trusting mutable package bytes."""
+    require(bool(HASH.fullmatch(expected_manifest_sha256)), "MANIFEST_ANCHOR_INVALID")
+    package = Path(directory).resolve(strict=False)
+    try:
+        parent = package.parent.resolve(strict=True)
+    except OSError:
+        raise NewLineageStop("OFFLINE_EVIDENCE_STORE_UNAVAILABLE") from None
+    root = parent / OFFLINE_EVIDENCE_DIRECTORY
+    require(root.exists() and root.is_dir() and not root.is_symlink(), "OFFLINE_EVIDENCE_STORE_INVALID")
+    require(root.resolve(strict=True).is_relative_to(parent), "OFFLINE_EVIDENCE_PATH_ESCAPE")
+    matches: list[tuple[Path, Mapping[str, object]]] = []
+    try:
+        candidates = list(root.iterdir())
+    except OSError:
+        raise NewLineageStop("OFFLINE_EVIDENCE_STORE_UNAVAILABLE") from None
+    for operation in candidates:
+        if operation.is_symlink() or not operation.is_dir():
+            continue
+        try:
+            operation_id = parse_operation_id(operation.name)
+            claim = _exact_fields(
+                load_json(operation / "claim.json"),
+                _OFFLINE_CLAIM_FIELDS,
+                "OFFLINE_CLAIM_SCHEMA_INVALID",
+            )
+        except NewLineageStop:
+            continue
+        if (
+            claim.get("operation_id") == operation_id
+            and claim.get("package_manifest_sha256") == expected_manifest_sha256
+            and claim.get("package_path_sha256") == canonical_digest(str(package))
+        ):
+            matches.append((operation, claim))
+    require(len(matches) == 1, "OFFLINE_STARTED_OPERATION_NOT_UNIQUE")
+    operation, claim = matches[0]
+    hold_binding = {
+        "bindings": {"operation_id": claim["operation_id"]},
+        "manifest_sha256": claim["package_manifest_sha256"],
+    }
+    return operation / "claim.json", operation / "journal.json", hold_binding
+
+
 def complete_offline_fixture(
     directory: Path | str,
     *,
@@ -1042,32 +1096,38 @@ def complete_offline_fixture(
     verification_keys: object,
 ) -> dict[str, object]:
     """Evaluate one already-observed local fixture result; performs no POST."""
-    verified = verify_package(
-        directory,
-        expected_manifest_sha256=expected_manifest_sha256,
-        expected_head=expected_head,
-    )
-    _, claim_path, journal = _evidence_paths(verified, create=False)
-    observation_claim = claim_path.with_name("observation-claim.json")
-    _write_exclusive(
-        observation_claim,
-        _journal_payload(
-            verified,
-            "OFFLINE_FIXTURE_OBSERVATION_CLAIMED",
-            observed_fixture_attempts=1,
-            fixture_only=True,
-        ),
-    )
+    hold_binding: Mapping[str, object] | None = None
+    journal: Path | None = None
     try:
+        claim_path, journal, hold_binding = _locate_started_operation(
+            directory, expected_manifest_sha256
+        )
+        observation_claim = claim_path.with_name("observation-claim.json")
+        _write_exclusive(
+            observation_claim,
+            _journal_payload(
+                hold_binding,
+                "OFFLINE_FIXTURE_OBSERVATION_CLAIMED",
+                observed_fixture_attempts=1,
+                fixture_only=True,
+            ),
+        )
+        verified = verify_package(
+            directory,
+            expected_manifest_sha256=expected_manifest_sha256,
+            expected_head=expected_head,
+        )
+        _, verified_claim_path, verified_journal = _evidence_paths(
+            verified, create=False
+        )
+        require(
+            verified_claim_path == claim_path and verified_journal == journal,
+            "OFFLINE_CLAIM_BINDING_INVALID",
+        )
+        hold_binding = verified
         claim = _exact_fields(
             load_json(claim_path),
-            {
-                "schema", "lineage", "operation_id", "package_manifest_sha256",
-                "state", "module_post_attempts", "observed_fixture_attempts",
-                "automatic_retry", "automatic_rollback_after_post",
-                "production_authority", "fixture_only", "package_path_sha256",
-                "before_sha256",
-            },
+            _OFFLINE_CLAIM_FIELDS,
             "OFFLINE_CLAIM_SCHEMA_INVALID",
         )
         intent = _exact_fields(
@@ -1096,22 +1156,18 @@ def complete_offline_fixture(
             verification_keys,
             verified,
         )
-    except Exception as error:
-        cause = str(error) if isinstance(error, NewLineageStop) else type(error).__name__
-        _hold_after_observation(verified, journal, cause)
-    result = {
-        "status": "OFFLINE_FIXTURE_EVIDENCE_PASS",
-        "operation_id": verified["bindings"]["operation_id"],
-        "module_post_attempts": 0,
-        "observed_fixture_attempts": 1,
-        "automatic_retry": False,
-        "automatic_rollback_after_post": False,
-        "response_digests": response_digests,
-        "readback": readback,
-        "fixture_only": True,
-        "production_interaction": "NOT_PERFORMED_BY_THIS_MODULE",
-    }
-    try:
+        result = {
+            "status": "OFFLINE_FIXTURE_EVIDENCE_PASS",
+            "operation_id": verified["bindings"]["operation_id"],
+            "module_post_attempts": 0,
+            "observed_fixture_attempts": 1,
+            "automatic_retry": False,
+            "automatic_rollback_after_post": False,
+            "response_digests": response_digests,
+            "readback": readback,
+            "fixture_only": True,
+            "production_interaction": "NOT_PERFORMED_BY_THIS_MODULE",
+        }
         _write_journal(
             journal,
             _journal_payload(
@@ -1122,7 +1178,11 @@ def complete_offline_fixture(
                 fixture_only=True,
             ),
         )
+        return result
+    except OfflineOwnerReviewHold:
+        raise
     except Exception as error:
         cause = str(error) if isinstance(error, NewLineageStop) else type(error).__name__
-        _hold_after_observation(verified, journal, f"FINAL_JOURNAL_DURABILITY_FAILURE:{cause}")
-    return result
+        if hold_binding is not None and journal is not None:
+            _hold_after_observation(hold_binding, journal, cause)
+        raise OfflineOwnerReviewHold(cause, "HOLD_JOURNAL_UNAVAILABLE") from None

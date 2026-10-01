@@ -495,7 +495,10 @@ class OfflineFixtureEvidenceTests(unittest.TestCase):
         self.assertEqual(journal["module_post_attempts"], 0)
         self.assertFalse(journal["automatic_retry"])
         self.assertFalse(journal["automatic_rollback_after_post"])
-        with self.assertRaisesRegex(lineage.NewLineageStop, "ALREADY_STARTED"):
+        with self.assertRaisesRegex(
+            lineage.OfflineOwnerReviewHold,
+            "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW:OFFLINE_OPERATION_ALREADY_STARTED",
+        ):
             self.complete()
 
     def test_invalid_observation_is_explicit_hold_with_original_cause(self):
@@ -566,10 +569,84 @@ class OfflineFixtureEvidenceTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 lineage.OfflineOwnerReviewHold,
-                "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW:FINAL_JOURNAL_DURABILITY_FAILURE",
+                "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW:JOURNAL_DURABILITY_FAILURE",
             ) as caught:
                 self.complete()
         self.assertIn("JOURNAL_DURABILITY_FAILURE", caught.exception.journal_cause)
+
+    def test_observation_claim_write_failure_is_durable_explicit_hold(self):
+        self.begin()
+        original = lineage._write_exclusive
+
+        def fail_observation(path, payload):
+            if path.name == "observation-claim.json":
+                raise lineage.NewLineageStop("OFFLINE_CLAIM_DURABILITY_FAILURE")
+            return original(path, payload)
+
+        with mock.patch.object(lineage, "_write_exclusive", side_effect=fail_observation):
+            with self.assertRaisesRegex(
+                lineage.OfflineOwnerReviewHold,
+                "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW:OFFLINE_CLAIM_DURABILITY_FAILURE",
+            ) as caught:
+                self.complete()
+        self.assertEqual(caught.exception.original_cause, "OFFLINE_CLAIM_DURABILITY_FAILURE")
+        journal = json.loads(self.journal.read_text())
+        self.assertEqual(journal["state"], "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW")
+        self.assertEqual(journal["original_cause"], "OFFLINE_CLAIM_DURABILITY_FAILURE")
+
+    def test_crash_after_observation_claim_reentry_becomes_explicit_hold(self):
+        self.begin()
+        observation = self.evidence_directory / "observation-claim.json"
+        lineage._write_exclusive(
+            observation,
+            {
+                "state": "SYNTHETIC_CRASH_AFTER_OBSERVATION_CLAIM",
+                "fixture_only": True,
+            },
+        )
+        with self.assertRaisesRegex(
+            lineage.OfflineOwnerReviewHold,
+            "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW:OFFLINE_OPERATION_ALREADY_STARTED",
+        ) as caught:
+            self.complete()
+        self.assertEqual(caught.exception.original_cause, "OFFLINE_OPERATION_ALREADY_STARTED")
+        self.assertEqual(
+            json.loads(self.journal.read_text())["state"],
+            "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW",
+        )
+
+    def test_package_reverify_failure_after_begin_is_explicit_hold(self):
+        self.begin()
+        with (self.root / "RECOVERY_CONTRACT.json").open("ab") as handle:
+            handle.write(b" ")
+        with self.assertRaisesRegex(
+            lineage.OfflineOwnerReviewHold,
+            "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW:ARTIFACT_HASH_OR_LENGTH_MISMATCH",
+        ) as caught:
+            self.complete()
+        self.assertEqual(
+            caught.exception.original_cause, "ARTIFACT_HASH_OR_LENGTH_MISMATCH"
+        )
+        journal = json.loads(self.journal.read_text())
+        self.assertEqual(journal["state"], "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW")
+
+    def test_store_reresolve_failure_after_observation_is_explicit_hold(self):
+        self.begin()
+        with mock.patch.object(
+            lineage,
+            "_evidence_paths",
+            side_effect=lineage.NewLineageStop("OFFLINE_EVIDENCE_STORE_UNAVAILABLE"),
+        ):
+            with self.assertRaisesRegex(
+                lineage.OfflineOwnerReviewHold,
+                "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW:OFFLINE_EVIDENCE_STORE_UNAVAILABLE",
+            ) as caught:
+                self.complete()
+        self.assertEqual(
+            caught.exception.original_cause, "OFFLINE_EVIDENCE_STORE_UNAVAILABLE"
+        )
+        journal = json.loads(self.journal.read_text())
+        self.assertEqual(journal["state"], "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW")
 
     def test_tampered_or_missing_signature_fails_even_with_true_verification(self):
         for mode in ("tampered", "missing"):
