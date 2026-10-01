@@ -1,0 +1,69 @@
+{
+  "schema": "npd.agent-hub.local-test-receipt.v1",
+  "generated_at_utc": "2026-10-01T07:12:53.2297347Z",
+  "scope": "AGENT_HUB_OFFLINE_SOURCE_ONLY",
+  "tested_source_commit": "00353dca493001bda07091350ab91b35fe5b03e8",
+  "source_baseline": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
+  "branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
+  "runtime": {
+    "interpreter": "C:\\Users\\PC\\Documents\\Codex\\2026-09-28\\tie-2\\work\\.venv-agent-hub\\Scripts\\python.exe",
+    "python": "3.12.14",
+    "pytest": "8.4.2",
+    "python_on_path": false,
+    "environment_note": "Used the pre-existing Agent Hub virtual environment by absolute path. No package install, WSL, OS configuration, credential, ACL, or security change was performed."
+  },
+  "commands": [
+    {
+      "name": "phase9_ops",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest scripts/ops/agent_hub_phase9/tests -q",
+      "exit_code": 0,
+      "output_summary_utf8": "217 passed, 1 skipped in 26.72s\n",
+      "output_summary_sha256": "5b0b3bc25ec505af26094315f023cd9386cbc95fada37632d23b71004c069b00"
+    },
+    {
+      "name": "agent_hub_regression",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest services/agent_hub/tests -q",
+      "exit_code": 0,
+      "output_summary_utf8": "510 passed, 1 warning in 6.01s\n",
+      "output_summary_sha256": "b59087c4f2174319565284c2982550346d91f29cfccabb51d8a20172551a4646",
+      "warning": "Existing StarletteDeprecationWarning from fastapi.testclient; no new failure."
+    },
+    {
+      "name": "business_evaluator",
+      "working_directory": "services/agent_hub",
+      "command": "<interpreter> -m npd_agent_hub.evals --minimum-pass-rate 1.0",
+      "exit_code": 0,
+      "output_summary_utf8": "{\"passed\":20,\"total\":20,\"pass_rate\":1.0}\n",
+      "output_summary_sha256": "593f1e23f5d1d489d529da17ee7abea20ef3ca71667f410bf687aed4c9c677fb"
+    }
+  ],
+  "focused_coverage_in_phase9_ops": {
+    "new_lineage_and_current_store_tests": 18,
+    "transport_or_callback_injection_absent": true,
+    "atomic_claim_race_tested": true,
+    "alternate_journal_path_tested": true,
+    "post_observation_hold_and_final_journal_failure_tested": true,
+    "strict_cohort_timestamp_and_receipt_schema_tested": true,
+    "receipt_hmac_tamper_tested": true,
+    "exact_capacity_boundaries_tested": [1998, 1999, 2000],
+    "truncated_readback_rejected": true
+  },
+  "supplemental_secret_pattern_scan": {
+    "scope": "six files changed from a417b7c through tested_source_commit",
+    "result": "PASS_NO_HIGH_CONFIDENCE_PATTERNS",
+    "authoritative_third_party_scan": false
+  },
+  "network_or_external_effects": {
+    "network": "NOT_USED",
+    "ssh": "NOT_USED",
+    "production_access": "NOT_USED",
+    "production_writes": 0,
+    "provider_calls": 0,
+    "video_factory_actions": 0,
+    "actual_cost": 0
+  },
+  "ci": "NOT_RUN_UNPUBLISHED_LOCAL_SOURCE",
+  "authority": "TEST_EVIDENCE_ONLY_NOT_PRODUCTION_APPROVAL"
+}

@@ -708,22 +708,40 @@ NEXT_SAFE_ACTION:
 - The offline verifier requires exact inventory/hash/path/JSON bindings,
   rejects R4/RCA identities and missing preflight/recovery/image bindings,
   preserves raw-HTTP versus semantic digest domains, enforces one attempt with
-  no retry, writes a durable pre-POST intent, and sends uncertain post-POST
-  outcomes to `HOLD_OWNER_REVIEW` without automatic rollback. Its readback
-  contract is bound to the existing delivery fence, atomic store, signed
-  receipt, source-event/touchpoint indexes, two Campaign audit records and
-  capacity guard.
+  no retry, creates an operation-bound atomic local fixture claim/pre-POST
+  intent, and sends every uncertain post-observation result to
+  `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW` without automatic rollback. This
+  local journal is offline evidence, not a production-durability claim. There
+  is no injected transport/callback and the module performs no POST.
+- Cohort/binding/envelope/timestamp/receipt checks now reproduce the relevant
+  strict field, type, pattern and timezone invariants of the current models.
+  Receipt acceptance requires both a bound
+  canonical verification result and an independently recomputed HMAC; a true
+  boolean alone cannot pass. Readback counts must be exact and uncapped, with
+  tested 1,998/1,999/2,000 audit-cap boundaries. The current-store integration
+  no longer derives counts from the 1,000-row list view.
+- Package privacy flags are structural assertions only, not independent proof
+  of secret absence. A separate bounded changed-file high-confidence pattern
+  scan found no matches; it is not represented as a third-party secret scan.
 - Video Factory was not accessed. Historical DB0 counter evidence is recorded
   as `OUT_OF_SCOPE_NOT_COLLECTED`, so production qualification remains blocked
   pending reviewed resolution; no dependency is silently removed.
-- Local verification on the changed source: focused new-lineage 10/10 PASS;
-  current-store integration 1/1 PASS; Phase-9 ops 211 PASS / 1 Windows skip;
-  Agent Hub 510/510 PASS; evaluator 20/20 PASS. New exact-head CI is required
-  after review/publication; historical exact-head CI is not substituted.
+- Exact tested source commit:
+  `00353dca493001bda07091350ab91b35fe5b03e8`. Local verification on that
+  commit: Phase-9 ops 217 PASS / 1 Windows skip (including 18 focused
+  new-lineage/current-store tests); Agent Hub 510/510 PASS with one existing
+  Starlette deprecation warning; evaluator 20/20 PASS. The pre-existing Agent
+  Hub Python 3.12.14 virtual environment was invoked by absolute path because
+  Python is not on PATH; no install, WSL or host/security configuration change
+  was made. Test receipt:
+  `docs/evidence/AH_P9_NEW_LINEAGE_HARDENING_TEST_RECEIPT_20261001.json`.
+  New exact-head CI is required after review/publication; historical exact-head
+  CI is not substituted.
 - Production access/writes, claim, stage, image load, deployment, delivery,
   provider/customer action, Video Factory action and actual cost: all zero.
 - OWNER DECISION REQUIRED before expanding the replacement: either adopt the
-  new lineage and its `POST_OUTCOME_AMBIGUOUS_HOLD`/no-auto-rollback semantics
+  new lineage and its `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW`/
+  no-auto-rollback semantics
   for continued source-only implementation, or require the exact non-secret R4
   archive/builder. Adoption is not production execution approval.
 - NEXT_SAFE_ACTION: review this offline contract and obtain that single design

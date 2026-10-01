@@ -37,22 +37,37 @@ evidence, a new window and a separate exact Owner execution gate.
   evidence and readback contract;
 - preservation of raw HTTP-byte and semantic-model digest domains;
 - exactly one event, attempt `1/1`, no retry and no failure fallback;
-- a durable local pre-POST intent journal for offline simulation;
-- fail-closed `POST_OUTCOME_AMBIGUOUS_HOLD` after any uncertain POST outcome,
-  with no automatic retry or automatic rollback;
+- an operation-bound, atomic exclusive claim plus local fixture journal in a
+  derived evidence directory; these are offline evidence semantics, not a
+  claim of production durability;
+- an atomic one-observation claim, so the evaluator has no retry path;
+- fail-closed `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW` after any invalid or
+  uncertain post-observation fixture result, preserving the original cause
+  even when final journal persistence also fails, with no automatic retry or
+  automatic rollback;
 - exact readback deltas for the touchpoint, source-event match, receipt,
   two retained Campaign audit events, no dead letter, signed receipt validity
-  and the existing 2,000-record internal audit capacity.
+  and the existing 2,000-record internal audit capacity. Snapshot evidence must
+  explicitly be exact and uncapped; boundary tests cover 1,998/1,999/2,000.
 
 The module contains no SSH, SCP, Docker, Redis, HTTP client, subprocess or
-provider implementation. Its simulation entry accepts only an explicitly
-marked in-process fake transport. It cannot claim, stage, load an image,
-deploy, contact production or create an R5 operation.
+provider implementation. It has no transport or callback entry point and never
+performs a POST. It only evaluates caller-supplied local fixture response,
+receipt, canonical receipt-verification and exact store snapshots. Receipt
+fields are schema-bound and its HMAC is independently recomputed with a local
+verification key; a true boolean alone is insufficient. It cannot claim,
+stage, load an image, deploy, contact production or create an R5 operation.
+
+The package's `body_exported`/related privacy flags are validated as structural
+contract fields only. They are not treated as independent proof that source
+bytes are secret-free; the changed-file pattern scan is reported separately.
 
 The integration test binds its readback contract to the existing
 `phase9_delivery` fence, `Phase9InternalDeliveryBinding`, atomic internal store,
 receipt verification and Campaign audit lane. This reuses current product
-contracts rather than inventing another write path.
+contracts rather than inventing another write path. It reads exact in-memory
+cardinalities directly for this local test and does not infer a count from the
+store's 1,000-row list view.
 
 ## Explicit evidence gap
 
@@ -104,9 +119,9 @@ Choose exactly one:
 
 - **Adopt new lineage:** accept `AH_P9_ONE_DELIVERY_NEW_LINEAGE_V1` as the
   replacement design, including one attempt only and
-  `POST_OUTCOME_AMBIGUOUS_HOLD` with no automatic rollback, and authorize
-  continued source-only implementation of the missing production-review
-  components. This is not execution approval.
+  `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW` with no automatic rollback, and
+  authorize continued source-only implementation of the missing
+  production-review components. This is not execution approval.
 - **Require historical recovery:** do not adopt the replacement; provide an
   accessible non-secret R4 archive or sealed deterministic builder matching
   the recorded manifest/runner/helper digests. Historical approval still
