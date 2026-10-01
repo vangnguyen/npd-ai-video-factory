@@ -1168,6 +1168,7 @@ def complete_offline_fixture(
             "fixture_only": True,
             "production_interaction": "NOT_PERFORMED_BY_THIS_MODULE",
         }
+        _write_exclusive(journal.with_name("result.json"), result)
         _write_journal(
             journal,
             _journal_payload(
@@ -1254,6 +1255,34 @@ def verify_offline_terminal_journal(
             journal.get("fixture_only") is True
             and bool(HASH.fullmatch(str(journal.get("result_sha256", "")))),
             "OFFLINE_TERMINAL_PASS_INVALID",
+        )
+        result_path = journal_path.with_name("result.json")
+        require(
+            result_path.is_file() and not result_path.is_symlink(),
+            "OFFLINE_TERMINAL_RESULT_REQUIRED",
+        )
+        result = _exact_fields(
+            load_json(result_path),
+            {
+                "status", "operation_id", "module_post_attempts",
+                "observed_fixture_attempts", "automatic_retry",
+                "automatic_rollback_after_post", "response_digests",
+                "readback", "fixture_only", "production_interaction",
+            },
+            "OFFLINE_TERMINAL_RESULT_SCHEMA_INVALID",
+        )
+        require(
+            result.get("status") == "OFFLINE_FIXTURE_EVIDENCE_PASS"
+            and result.get("operation_id") == verified["bindings"]["operation_id"]
+            and result.get("module_post_attempts") == 0
+            and result.get("observed_fixture_attempts") == 1
+            and result.get("automatic_retry") is False
+            and result.get("automatic_rollback_after_post") is False
+            and result.get("fixture_only") is True
+            and result.get("production_interaction")
+            == "NOT_PERFORMED_BY_THIS_MODULE"
+            and canonical_digest(result) == journal.get("result_sha256"),
+            "OFFLINE_TERMINAL_RESULT_BINDING_INVALID",
         )
     elif state == "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW":
         _exact_fields(

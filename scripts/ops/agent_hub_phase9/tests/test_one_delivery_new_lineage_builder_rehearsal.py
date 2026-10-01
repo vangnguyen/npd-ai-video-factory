@@ -203,6 +203,34 @@ class NewLineageBuilderRehearsalTests(unittest.TestCase):
                 expected_head=HEAD,
             )
 
+    def test_terminal_verifier_rejects_result_tamper(self):
+        package, built = self.build()
+        rehearsal.rehearse_offline_package(
+            package,
+            expected_manifest_sha256=built["package_manifest_sha256"],
+            expected_head=HEAD,
+            signing_key=SIGNING_KEY,
+            observed_at="2026-10-01T07:48:36Z",
+        )
+        result_path = (
+            package.parent
+            / lineage.OFFLINE_EVIDENCE_DIRECTORY
+            / OPERATION
+            / "result.json"
+        )
+        value = json.loads(result_path.read_text(encoding="utf-8"))
+        value["automatic_retry"] = True
+        write_json(result_path, value)
+        with self.assertRaisesRegex(
+            lineage.NewLineageStop,
+            "OFFLINE_TERMINAL_RESULT_BINDING_INVALID",
+        ):
+            lineage.verify_offline_terminal_journal(
+                package,
+                expected_manifest_sha256=built["package_manifest_sha256"],
+                expected_head=HEAD,
+            )
+
     def test_builder_and_rehearsal_have_no_transport_or_process_surface(self):
         for module in (builder, rehearsal):
             source = Path(module.__file__).read_text(encoding="utf-8")
