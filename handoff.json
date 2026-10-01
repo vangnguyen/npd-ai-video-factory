@@ -1,13 +1,13 @@
 {
   "schema": "npd.repository-handoff.v1",
-  "updated_at_utc": "2026-10-01T08:25:22.2758435Z",
+  "updated_at_utc": "2026-10-01T08:57:50.4991936Z",
   "repository": {
     "name": "vangnguyen/npd-ai-video-factory",
     "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
     "branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
     "current_worktree_head": null,
     "current_worktree_head_note": "The handoff is committed after the tested source, so it does not claim an impossible self-hash. Resolve the documentation commit from Git; tested source is recorded separately.",
-    "current_agent_hub_tested_source_head": "54f050903e2b92acb570407be7849a28f2168739",
+    "current_agent_hub_tested_source_head": "e2339d4debb6e6736beb8b94a23cf01931055a96",
     "canonical_agent_hub_source_baseline": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
     "current_product_source_head": "915ba10845e25de60aacb474b4b2a4c7f623fddc",
     "source_baseline_sha": "43a1cca354d12893ee33b6e43cd9117794f78e04",
@@ -524,9 +524,9 @@
   },
   "latest_milestone": {
     "task": "AH-P9-ONE-DELIVERY-NEW-LINEAGE-OFFLINE-CONTRACT",
-    "verdict": "SOURCE_ONLY_READONLY_EVIDENCE_CONTRACT_PASS_PRODUCTION_HOLD",
+    "verdict": "SOURCE_ONLY_TWO_HIGH_FIXED_REVIEW_PENDING_PRODUCTION_HOLD",
     "source_baseline": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
-    "tested_source_commit": "54f050903e2b92acb570407be7849a28f2168739",
+    "tested_source_commit": "e2339d4debb6e6736beb8b94a23cf01931055a96",
     "working_branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
     "remote_recheck": {
       "fix_agent_hub_head": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
@@ -559,7 +559,13 @@
       "readback_counts": "EXACT_UNCAPPED_REQUIRED",
       "package_privacy_flags": "STRUCTURAL_ASSERTIONS_NOT_INDEPENDENT_SECRET_ABSENCE_PROOF",
       "video_factory_db0_counter_evidence": "OUT_OF_SCOPE_NOT_COLLECTED",
-      "production_qualification": "BLOCKED_EXTERNAL_READONLY_EVIDENCE_REQUIRED",
+      "production_qualification": "BLOCKED_TRUSTED_HUMAN_SCOPE_SOURCE_AND_EXTERNAL_READONLY_EVIDENCE_REQUIRED",
+      "local_artifact_resolution": {
+        "new_lineage_bytes_in_current_worktree": "ABSENT",
+        "canonical_nonsecret_historical_pointers_checked": "NOT_PRESENT_AT_EXACT_RECORDED_PATHS",
+        "other_local_locations": "UNRESOLVED_NOT_SEARCHED",
+        "secret_identity_files": "NOT_READ"
+      },
       "proposal": "docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_PROPOSAL_20261001.md"
     },
     "owner_design_adoption": {
@@ -574,10 +580,14 @@
       "atomic_non_overwriting_local_publish": "PASS",
       "closed_offline_rehearsal": "PASS_NO_TRANSPORT_CALLBACK_NETWORK_SUBPROCESS",
       "terminal_pass_hold_verifier": "PASS_RESULT_FILE_DIGEST_BOUND_TAMPER_CHECKED",
-      "readonly_evidence_request_scope_capture_verifier": "PASS_NO_TRANSPORT_PROCESS_NETWORK_SURFACE",
+      "readonly_evidence_request_scope_capture_verifier": "PASS_V2_STRUCTURAL_FIXTURE_NO_TRANSPORT_PROCESS_NETWORK_SURFACE",
       "readonly_evidence_freshness_seconds": 600,
-      "readonly_evidence_pass_status": "READONLY_EVIDENCE_VERIFIED_EXECUTION_NOT_AUTHORIZED",
-      "db0_scope": "EXACT_FOUR_AGGREGATES_SERVER_EVAL_RO_EVIDENCE_ONLY",
+      "readonly_evidence_clock_skew_seconds": 0,
+      "readonly_evidence_timeline": "SCOPE_START_LE_STARTED_LE_OBSERVED_LE_COMPLETED_LE_SCOPE_END_AND_COMPLETED_LE_NOW",
+      "readonly_evidence_pass_status": "READONLY_EVIDENCE_STRUCTURAL_FIXTURE_VERIFIED_EXECUTION_NOT_AUTHORIZED",
+      "scope_authority": "NOT_GRANTED_STRUCTURAL_FIXTURE_ONLY_EXTERNAL_TRUSTED_HUMAN_APPROVAL_VERIFIER_REQUIRED",
+      "authorization_intent_binding": "EXACT_REQUEST_WITHOUT_SCOPE_DIGEST_AVOIDS_CIRCULAR_HASH_BINDS_TRANSPORT_PROFILE_COLLECTOR_BYTES_PINNED_TARGET_IMAGES_AND_POLICY",
+      "db0_scope": "STRUCTURAL_FIXTURE_EXACT_FOUR_AGGREGATES_SERVER_EVAL_RO_NOT_OWNER_AUTHORITY",
       "module_post_attempts": 0,
       "observed_fixture_attempts": 1,
       "automatic_retry": false,
@@ -586,9 +596,16 @@
       "r5_created": false,
       "production_capable": false
     },
+    "review_remediation": {
+      "reviewed_source_commit": "54f050903e2b92acb570407be7849a28f2168739",
+      "material_findings": "2_HIGH_REPRODUCED",
+      "finding_scope_binding": "FIXED_IN_E2339D4_PENDING_INDEPENDENT_REVIEW",
+      "finding_capture_timeline": "FIXED_IN_E2339D4_PENDING_INDEPENDENT_REVIEW",
+      "roadmap_four_component_scope": "HELD_UNTIL_BOTH_HIGH_CONFIRMED_CLOSED"
+    },
     "tests": {
-      "new_lineage_builder_rehearsal_readonly_evidence_and_current_store_focused": "40/40 PASS",
-      "phase9_ops": "239 PASS / 1 WINDOWS SKIP",
+      "new_lineage_builder_rehearsal_readonly_evidence_and_current_store_focused": "45/45 PASS",
+      "phase9_ops": "244 PASS / 1 WINDOWS SKIP",
       "agent_hub_regression": "510/510 PASS",
       "business_evaluator": "20/20 PASS",
       "redis_receipt_timestamp_tie_regression": "5/5 PASS",
@@ -604,7 +621,7 @@
     "actual_cost": 0,
     "remaining_phase9_outcomes": 4,
     "phase10": "NO_GO",
-    "next_safe_action": "REVIEW_READONLY_EVIDENCE_CONTRACT; IMPLEMENT_OFFLINE_TRANSPORT_PROFILE_RENDERED_COLLECTOR_AND_PURE_CLAIM_STAGE_RECOVERY_STATE_MACHINE; REQUEST_SHORT_EVIDENCE_ONLY_READ_SCOPE_AFTER_CANDIDATE_ROLLBACK_CUSTODY_IDENTITIES_EXIST; KEEP_EXECUTION_GATE_SEPARATE"
+    "next_safe_action": "INDEPENDENTLY_REVIEW_E2339D4_AND_CONFIRM_BOTH_HIGH_CLOSED; THEN_RESUME_SINGLE_AGREED_FOUR_COMPONENT_SOURCE_SCOPE; REQUEST_SHORT_EVIDENCE_ONLY_READ_SCOPE_ONLY_AFTER_CANDIDATE_ROLLBACK_CUSTODY_AND_TRUSTED_HUMAN_APPROVAL_SOURCE_EXIST; KEEP_EXECUTION_GATE_SEPARATE"
   },
   "evidence_pointers": [
     "docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_PROPOSAL_20261001.md",

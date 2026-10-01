@@ -98,22 +98,36 @@ executor or evidence-bound production recovery executor.
 
 ## Read-only evidence contract milestone
 
-`one_delivery_new_lineage_readonly_evidence.py` now defines the exact intake
-contract for the next fresh JIT observation without implementing any transport.
-It binds a new operation, candidate HEAD, transport profile, collector source,
-protected-service anchor, exact candidate/rollback OCI plus custody identities,
-and a separate Owner evidence-only DB0 scope receipt. It then verifies raw
-capture bytes, exit/UUID/timestamps, exact 600-second freshness, protected 18,
+`one_delivery_new_lineage_readonly_evidence.py` now defines the v2 exact intake
+contract for a future fresh JIT observation without implementing any transport.
+It binds a new operation, candidate HEAD, exact transport-profile hash,
+collector-bytes hash, pinned-target hash, protected-service anchor and exact
+candidate/rollback OCI plus custody identities into one authorization-intent
+digest. A structural scope fixture must bind that entire intent plus repeated
+transport/collector/target hashes. The final request adds the scope digest,
+avoiding a circular request/scope hash without leaving request fields unbound.
+The capture and raw evidence bind those identities again. Same-operation
+transport, collector, target or payload substitution fails closed.
+
+The current scope receipt is deliberately
+`STRUCTURAL_FIXTURE_ONLY`. A synthetic dictionary cannot claim or verify human
+Owner approval and the module cannot generate real approval. Production
+collection remains blocked until a separate trusted verifier supplies a
+genuine human-approval source; no such source is inferred from these tests.
+The module then verifies raw capture bytes, exit/UUID/timestamps, protected 18,
 the healthy `phase9_creation` target, claim/stage/delivery absence, OCI/custody
 verification, and only the four server-enforced DB0 `EVAL_RO` aggregates.
 
 Any raw key/value/credential/job-payload export, `EVAL` fallback, nonzero
-queue/processing/in-flight counter, protected/candidate/rollback drift, stale
-capture or write/claim/stage/load/delivery flag fails closed. Its only PASS is
-`READONLY_EVIDENCE_VERIFIED_EXECUTION_NOT_AUTHORIZED`; execution authority
-remains `NOT_GRANTED`. The module contains no SSH, subprocess, socket, HTTP,
-Redis or other live-access surface. The dependency and minimum-scope inventory
-is recorded in
+queue/processing/in-flight counter, protected/candidate/rollback drift,
+non-UTC or misordered timestamps, any capture outside the scope window, a
+future completion, a whole-capture age over 600 seconds, or any
+write/claim/stage/load/delivery flag fails closed. Zero clock skew is allowed.
+Its offline fixture PASS is
+`READONLY_EVIDENCE_STRUCTURAL_FIXTURE_VERIFIED_EXECUTION_NOT_AUTHORIZED`;
+evidence-only and execution authority both remain `NOT_GRANTED`. The module
+contains no SSH, subprocess, socket, HTTP, Redis or other live-access surface.
+The dependency and minimum-scope inventory is recorded in
 `docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_READONLY_EVIDENCE_PLAN_20261001.md`.
 
 ## Explicit evidence gap
@@ -166,15 +180,18 @@ The minimum design choice is satisfied: new lineage was selected. Historical
 R4 approval remains expired and non-reusable; the new decision cannot create
 R5 or authorize execution.
 
-The next source milestone is a new-lineage transport-profile verifier,
-deterministic strict-argv renderer, rendered read-only collector and pure
-claim/stage/recovery state machine. Their source and synthetic failure tests do
-not require volatile production values. Promotion remains HOLD until a bounded
-evidence-only scope can bind fresh protected services, current
-candidate/rollback artifacts, custody and the four retained Video Factory DB0
-safety aggregates. Only after those source bytes, bindings and exact-head CI
-are reviewed may a fresh execution package/window and separate Owner execution
-gate be requested.
+The next source milestone remains one agreed four-component scope: (1) the
+transport-profile verifier, deterministic strict-argv renderer and rendered
+read-only collector; (2) the claim/stage state machine; (3) the recovery
+boundary; and (4) the production-review builder. It is on hold until
+independent review confirms both High findings in the prior read-only contract
+are closed by source commit
+`e2339d4debb6e6736beb8b94a23cf01931055a96`. Promotion remains HOLD until a
+bounded scope from a separately verified human-approval source can bind fresh
+protected services, current candidate/rollback artifacts, custody and the four
+retained Video Factory DB0 safety aggregates. Only after those source bytes,
+bindings and exact-head CI are reviewed may a fresh execution package/window
+and separate Owner execution gate be requested.
 
 Phase 9 remains open with four acceptance outcomes remaining, Phase 10 remains
 `NO-GO`, and production writes, provider calls, customer actions and Video

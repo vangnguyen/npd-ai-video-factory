@@ -674,8 +674,10 @@ NEXT_SAFE_ACTION:
   Network, pinned SSH, authenticated remote read and bounded-stability probes
   were not run. Verdict: `EXECUTION_ENVIRONMENT_GATE_0=FAIL_MISSING_SSH_MATERIAL`.
 - R5 was not created, package integrity is not applicable, and Owner approval
-  was not requested. The historical R4 package is absent on this host and is
-  not a substitute for a fresh R5.
+  was not requested. The historical R4 package was absent from the exact
+  canonical evidence paths checked in that Gate-0 workspace; this is not a
+  claim about every location on the host and is not a substitute for a fresh
+  R5.
 - Downstream readiness is preserved: SLA
   `READY_FOR_AUTHENTIC_DELIVERY_RECEIPT`, UAT `READY_FOR_REAL_SLA_RESULT`,
   acceptance dossier `READY_FOR_FINAL_EVIDENCE`, failure contracts `READY`.
@@ -741,17 +743,32 @@ NEXT_SAFE_ACTION:
   callback, network or subprocess surface; it records one synthetic observed
   attempt, zero module POSTs, no retry and no automatic rollback. Ambiguity
   terminates at `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW`.
-- The second adopted source milestone adds a pure fresh-read-only evidence
-  request/scope/capture verifier. It requires protected 18, exact candidate and
-  rollback OCI/custody bindings, a 600-second raw capture, and exactly four
-  server-enforced DB0 `EVAL_RO` aggregate counters under a separate bounded
-  evidence-only Owner scope. It has no transport/process/network surface and
-  cannot claim, stage, load, deliver or grant execution. Exact dependency,
-  legacy collector and minimum-scope inventory:
+- Review of the first read-only contract found two High issues: the scope did
+  not bind the exact request/transport/collector/pinned target, and the capture
+  timeline could begin before the scope or complete in the future. Both were
+  reproduced locally before remediation; the previously reported 40 focused
+  passes did not cover these cases.
+- The remediated v2 contract binds a complete non-circular authorization
+  intent plus repeated transport-profile/collector-bytes/pinned-target hashes
+  through the
+  scope, request, capture and raw evidence. A scope cannot be reused for a
+  same-operation substitution. Synthetic scope dictionaries are explicitly
+  `STRUCTURAL_FIXTURE_ONLY`; they cannot certify human Owner approval or mint
+  access authority. A genuine future read requires a separately trusted human-
+  approval verifier, which this module intentionally does not implement.
+- The entire timeline must satisfy
+  `scope_start <= started <= observed <= completed <= scope_end` and
+  `completed <= now`; all timestamps must be UTC, the whole capture must be at
+  most 600 seconds old, and future skew is zero.
+  It still requires protected 18, exact candidate and rollback OCI/custody
+  bindings, and exactly four server-enforced DB0 `EVAL_RO` aggregate counters.
+  It has no transport/process/network surface and cannot claim, stage, load,
+  deliver or grant execution. Exact dependency, legacy collector and minimum-
+  scope inventory:
   `docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_READONLY_EVIDENCE_PLAN_20261001.md`.
-- Exact tested source commit:
-  `54f050903e2b92acb570407be7849a28f2168739`. Local verification on that
-  commit: Phase-9 ops 239 PASS / 1 Windows skip; 40 focused new-lineage,
+- Exact tested remediation source commit:
+  `e2339d4debb6e6736beb8b94a23cf01931055a96`. Local verification on that
+  commit: Phase-9 ops 244 PASS / 1 Windows skip; 45 focused new-lineage,
   builder/rehearsal and current-store tests PASS; Agent Hub 510/510 PASS with
   one existing
   Starlette deprecation warning; evaluator 20/20 PASS. The pre-existing Agent
@@ -765,11 +782,12 @@ NEXT_SAFE_ACTION:
   provider/customer action, Video Factory action and actual cost: all zero.
 - DESIGN CHOICE: `ADOPT_NEW_LINEAGE_SOURCE_ONLY` is satisfied. Production
   authority remains `NOT_GRANTED`.
-- NEXT_SAFE_ACTION: review this evidence contract, then implement the offline
-  transport-profile verifier, rendered collector and pure claim/stage/recovery
-  state machine. Request one short evidence-only read scope only after exact
-  candidate/rollback OCI and custody identities exist; do not spend the
-  600-second JIT window early. Keep HOLD on missing evidence. After
-  source/package/exact-head CI review, request a new, separate bounded Owner
-  execution gate. Phase 9 still has four acceptance outcomes remaining; Phase
-  10 remains `NO-GO`.
+- NEXT_SAFE_ACTION: independently review remediation commit `e2339d4`; keep the
+  agreed transport/collector, state-machine, recovery and production-review
+  builder scope on hold until both High findings are confirmed closed. Request
+  one short evidence-only read scope only after exact candidate/rollback OCI,
+  custody identities and a trusted human-approval verification path exist; do
+  not spend the 600-second JIT window early. Keep HOLD on missing evidence.
+  After source/package/exact-head CI review, request a new, separate bounded
+  Owner execution gate. Phase 9 still has four acceptance outcomes remaining;
+  Phase 10 remains `NO-GO`.
