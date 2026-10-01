@@ -2,7 +2,7 @@
 
 Date: 2026-10-01
 Source baseline: `a417b7caea23f4e886ba3b4100e18d8adec1c679`
-Disposition: `OFFLINE_CONTRACT_IMPLEMENTED_REVIEW_REQUIRED`
+Disposition: `ADOPTED_FOR_SOURCE_ONLY_IMPLEMENTATION`
 Production authority: `NOT_GRANTED`
 R5: `NOT_CREATED`
 
@@ -22,9 +22,12 @@ remain terminal and non-reusable.
 
 This proposal uses lineage `AH_P9_ONE_DELIVERY_NEW_LINEAGE_V1` and operation
 family `AH-P9-ONE-DELIVERY-NL1-<canonical UUIDv4>`. It is deliberately a new
-contract. Adoption requires an Owner decision after review; any later
-production operation also requires a complete fresh package, fresh JIT
-evidence, a new window and a separate exact Owner execution gate.
+contract. The Owner adopted this replacement for continued source-only
+implementation by replying `Xác nhận đồng ý` at 2026-10-01T07:48:36Z to the
+explicit proposal. That decision is not production execution approval. Any
+later production operation still requires a complete fresh production-capable
+package, fresh JIT evidence, a new window and a separate exact Owner execution
+gate.
 
 ## Offline milestone implemented
 
@@ -71,6 +74,28 @@ contracts rather than inventing another write path. It reads exact in-memory
 cardinalities directly for this local test and does not infer a count from the
 store's 1,000-row list view.
 
+## Adopted source-only builder and rehearsal milestone
+
+The adopted source milestone adds:
+
+- `one_delivery_new_lineage_builder.py`, which writes an exact-allowlist,
+  deterministic review package into a unique local staging directory,
+  self-verifies every artifact/hash/binding, atomically publishes only to a
+  non-existing destination, and refuses historical identities or overwrite;
+- `one_delivery_new_lineage_rehearsal.py`, a closed in-process rehearsal with
+  no injected transport/callback, network, subprocess or production action;
+- terminal PASS/HOLD journal verification bound to the operation, manifest,
+  claim and observation claim; PASS also requires a schema/invariant/digest-
+  bound `result.json`, including tamper detection; and
+- an end-to-end local path from built package through exact pre-observation
+  checks, one synthetic signed receipt/readback observation and terminal
+  evidence. A raw/semantic ambiguity fixture reaches Owner HOLD with zero
+  module POSTs, no retry and no automatic rollback.
+
+These artifacts remain offline review tools. They do not implement or claim a
+sealed concrete SSH transport, remote JIT collector, production claim/stage
+executor or evidence-bound production recovery executor.
+
 ## Explicit evidence gap
 
 The historical package used Video Factory DB0 counters as a safety input. This
@@ -93,8 +118,8 @@ The offline milestone is complete when its focused tests, complete Phase-9 ops
 suite, Agent Hub regression and evaluator pass locally. Promotion beyond this
 milestone requires all of the following, in order:
 
-1. Owner selects this new-lineage replacement instead of supplying the exact
-   non-secret R4 archive/builder.
+1. **Satisfied for source-only work:** Owner selected this new-lineage
+   replacement instead of requiring the exact non-secret R4 archive/builder.
 2. A reviewed production transport, remote preflight/JIT collector, claim and
    staging contract, recovery program, terminal verifier and deterministic
    package builder are implemented under the new lineage. None may import an
@@ -115,20 +140,20 @@ milestone requires all of the following, in order:
 No old R4 consent, record, window, token, operation or rehearsal receipt may be
 copied into the new lineage as authority.
 
-## Minimum Owner decision
+## Decision status and next genuine gate
 
-Choose exactly one:
+The minimum design choice is satisfied: new lineage was selected. Historical
+R4 approval remains expired and non-reusable; the new decision cannot create
+R5 or authorize execution.
 
-- **Adopt new lineage:** accept `AH_P9_ONE_DELIVERY_NEW_LINEAGE_V1` as the
-  replacement design, including one attempt only and
-  `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW` with no automatic rollback, and
-  authorize continued source-only implementation of the missing
-  production-review components. This is not execution approval.
-- **Require historical recovery:** do not adopt the replacement; provide an
-  accessible non-secret R4 archive or sealed deterministic builder matching
-  the recorded manifest/runner/helper digests. Historical approval still
-  remains expired and non-reusable.
+The next source milestone requires concrete production-review bindings for the
+transport, remote JIT collector, claim/stage executor and recovery executor.
+Promotion remains HOLD until the independently authorized read-only evidence
+can bind protected services, current candidate/rollback artifacts, custody and
+the retained Video Factory DB0 safety counters. Only after those source bytes,
+bindings and exact-head CI are reviewed may a fresh execution package/window
+and separate Owner execution gate be requested.
 
-Until that choice and later gates, Phase 9 remains open with four acceptance
-outcomes remaining, Phase 10 remains `NO-GO`, and production writes, provider
-calls, customer actions and Video Factory actions remain zero.
+Phase 9 remains open with four acceptance outcomes remaining, Phase 10 remains
+`NO-GO`, and production writes, provider calls, customer actions and Video
+Factory actions remain zero.

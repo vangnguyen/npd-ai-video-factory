@@ -1,0 +1,100 @@
+{
+  "schema": "npd.agent-hub.local-test-receipt.v1",
+  "generated_at_utc": "2026-10-01T08:08:35.5557767Z",
+  "scope": "AGENT_HUB_NEW_LINEAGE_SOURCE_ONLY_BUILDER_REHEARSAL",
+  "tested_source_commit": "f281694441d7d7ee82e5414dbedecbe63f4ca46b",
+  "source_baseline": "24de2357c532ab9bac708edcc3cf2f24a8b8e0e0",
+  "branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
+  "owner_design_adoption": {
+    "received_at_utc": "2026-10-01T07:48:36Z",
+    "evidence_source": "Direct user reply in the current conversation to the explicit new-lineage source-only proposal",
+    "response": "Xác nhận đồng ý",
+    "scope": "ADOPT_NEW_LINEAGE_REPLACEMENT_FOR_CONTINUED_SOURCE_ONLY_IMPLEMENTATION",
+    "production_execution_approval": "NOT_GRANTED"
+  },
+  "runtime": {
+    "interpreter": "C:\\Users\\PC\\Documents\\Codex\\2026-09-28\\tie-2\\work\\.venv-agent-hub\\Scripts\\python.exe",
+    "python": "3.12.14",
+    "pytest": "8.4.2",
+    "environment_note": "Used the pre-existing Agent Hub virtual environment by absolute path. No package install, network, WSL, credential, ACL, security, production, provider, or Video Factory action was performed."
+  },
+  "milestone": {
+    "builder": "DETERMINISTIC_EXACT_ALLOWLIST_ATOMIC_LOCAL_PUBLISH_SELF_VERIFIED",
+    "offline_preflight": "PACKAGE_AND_EXACT_BEFORE_SNAPSHOT_CAPACITY_VERIFIED",
+    "rehearsal": "CLOSED_IN_PROCESS_NO_TRANSPORT_CALLBACK_NETWORK_OR_SUBPROCESS",
+    "one_delivery": "ONE_OBSERVED_FIXTURE_ATTEMPT_MODULE_POST_ATTEMPTS_ZERO",
+    "ambiguity": "POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW",
+    "automatic_retry": false,
+    "automatic_rollback_after_post": false,
+    "terminal_verifier": "PASS_RESULT_FILE_DIGEST_BOUND_AND_HOLD_JOURNALS_TAMPER_CHECKED",
+    "historical_equivalence": false,
+    "r5_created": false,
+    "production_capable": false,
+    "execution_approval": "NOT_GRANTED"
+  },
+  "commands": [
+    {
+      "name": "focused_new_lineage_across_ops_and_store_integration",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage.py scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage_builder_rehearsal.py services/agent_hub/tests/test_phase9_one_delivery_new_lineage_integration.py -q",
+      "exit_code": 0,
+      "output_summary_utf8": "30 passed, 1 warning in 3.88s\n",
+      "output_summary_sha256": "10f2b32a4027a01443612d95e7ad6e355011e8678ca582b2a0a3d46a49b585bd"
+    },
+    {
+      "name": "phase9_ops",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest scripts/ops/agent_hub_phase9/tests -q",
+      "exit_code": 0,
+      "output_summary_utf8": "229 passed, 1 skipped in 29.63s\n",
+      "output_summary_sha256": "8619eb3a80faf2988f1519ba1eccc77d024799631fabdad0afe1645c64ee8a5e"
+    },
+    {
+      "name": "agent_hub_regression",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest services/agent_hub/tests -q",
+      "exit_code": 0,
+      "output_summary_utf8": "510 passed, 1 warning in 6.44s\n",
+      "output_summary_sha256": "fc5f49dbff1497bd77590baaba5395ac9a740bed40bbfe3e078170fb1b911fb5",
+      "warning": "Existing StarletteDeprecationWarning from fastapi.testclient; no failure."
+    },
+    {
+      "name": "business_evaluator",
+      "working_directory": "services/agent_hub",
+      "command": "<interpreter> -m npd_agent_hub.evals --minimum-pass-rate 1.0",
+      "exit_code": 0,
+      "output_summary_utf8": "{\"passed\":20,\"total\":20,\"pass_rate\":1.0}\n",
+      "output_summary_sha256": "593f1e23f5d1d489d529da17ee7abea20ef3ca71667f410bf687aed4c9c677fb"
+    },
+    {
+      "name": "redis_receipt_recovery_tie_regression",
+      "working_directory": "repository root",
+      "command": "Run test_redis_recovers_signed_receipts_dead_letters_and_namespace five consecutive times",
+      "exit_code": 0,
+      "output_summary": "5/5 PASS after replacing timestamp-tie positional assertion with exact recovered membership and count"
+    }
+  ],
+  "network_or_external_effects": {
+    "network": "NOT_USED",
+    "ssh": "NOT_USED",
+    "production_access": "NOT_USED",
+    "production_writes": 0,
+    "provider_calls": 0,
+    "video_factory_actions": 0,
+    "actual_cost": 0
+  },
+  "remaining_production_review_components": [
+    "SEALED_CONCRETE_TRANSPORT",
+    "REMOTE_JIT_PREFLIGHT_COLLECTOR",
+    "PRODUCTION_CLAIM_AND_STAGE_EXECUTOR",
+    "EVIDENCE_BOUND_RECOVERY_EXECUTOR"
+  ],
+  "supplemental_secret_pattern_scan": {
+    "scope": "five source/test files changed from 24de235 through tested_source_commit",
+    "result": "PASS_NO_HIGH_CONFIDENCE_PATTERNS",
+    "authoritative_third_party_scan": false
+  },
+  "production_qualification": "HOLD_EXTERNAL_READONLY_EVIDENCE_AND_SEPARATE_EXECUTION_GATE_REQUIRED",
+  "ci": "NOT_RUN_UNPUBLISHED_LOCAL_SOURCE",
+  "authority": "SOURCE_ONLY_DESIGN_ADOPTION_NOT_PRODUCTION_APPROVAL"
+}

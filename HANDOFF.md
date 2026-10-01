@@ -730,26 +730,36 @@ NEXT_SAFE_ACTION:
 - Video Factory was not accessed. Historical DB0 counter evidence is recorded
   as `OUT_OF_SCOPE_NOT_COLLECTED`, so production qualification remains blocked
   pending reviewed resolution; no dependency is silently removed.
+- Owner design adoption is now recorded from the direct 2026-10-01T07:48:36Z
+  reply `Xác nhận đồng ý` to the explicit new-lineage proposal. It authorizes
+  continued source-only implementation; it is not R5 creation, production
+  execution approval, a window or permission to access Video Factory.
+- The first adopted source milestone adds a deterministic exact-allowlist
+  package builder, a closed in-process end-to-end rehearsal and a terminal
+  PASS/HOLD verifier. The builder refuses overwrite, partial publication,
+  extra artifacts and historical identities. The rehearsal has no transport,
+  callback, network or subprocess surface; it records one synthetic observed
+  attempt, zero module POSTs, no retry and no automatic rollback. Ambiguity
+  terminates at `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW`.
 - Exact tested source commit:
-  `553d340c5ab270d344b602aad919abc3612ad125`. Local verification on that
-  commit: Phase-9 ops 221 PASS / 1 Windows skip (including 22 focused
-  new-lineage/current-store tests); Agent Hub 510/510 PASS with one existing
+  `f281694441d7d7ee82e5414dbedecbe63f4ca46b`. Local verification on that
+  commit: Phase-9 ops 229 PASS / 1 Windows skip; 30 focused new-lineage,
+  builder/rehearsal and current-store tests PASS; Agent Hub 510/510 PASS with
+  one existing
   Starlette deprecation warning; evaluator 20/20 PASS. The pre-existing Agent
   Hub Python 3.12.14 virtual environment was invoked by absolute path because
   Python is not on PATH; no install, WSL or host/security configuration change
   was made. Test receipt:
-  `docs/evidence/AH_P9_NEW_LINEAGE_HARDENING_TEST_RECEIPT_20261001.json`.
+  `docs/evidence/AH_P9_NEW_LINEAGE_BUILDER_REHEARSAL_TEST_RECEIPT_20261001.json`.
   New exact-head CI is required after review/publication; historical exact-head
   CI is not substituted.
 - Production access/writes, claim, stage, image load, deployment, delivery,
   provider/customer action, Video Factory action and actual cost: all zero.
-- OWNER DECISION REQUIRED before expanding the replacement: either adopt the
-  new lineage and its `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW`/
-  no-auto-rollback semantics
-  for continued source-only implementation, or require the exact non-secret R4
-  archive/builder. Adoption is not production execution approval.
-- NEXT_SAFE_ACTION: review this offline contract and obtain that single design
-  choice. If adopted, implement and test the missing new-lineage production
-  transport/JIT/claim/stage/recovery/terminal-verifier/builder components, then
-  reseal and request a fresh bounded Owner execution gate. Phase 9 still has
-  four acceptance outcomes remaining; Phase 10 remains `NO-GO`.
+- DESIGN CHOICE: `ADOPT_NEW_LINEAGE_SOURCE_ONLY` is satisfied. Production
+  authority remains `NOT_GRANTED`.
+- NEXT_SAFE_ACTION: prepare the remaining concrete transport/JIT/claim/stage/
+  recovery source only when it can bind the required protected-service,
+  candidate/rollback, custody and retained DB0 counter evidence. Keep HOLD on
+  missing evidence. After source/package/exact-head CI review, request a new,
+  separate bounded Owner execution gate. Phase 9 still has four acceptance
+  outcomes remaining; Phase 10 remains `NO-GO`.
