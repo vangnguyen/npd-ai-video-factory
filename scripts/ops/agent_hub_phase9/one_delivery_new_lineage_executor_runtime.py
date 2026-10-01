@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import hashlib
 import os
 from pathlib import Path
+import stat
 from typing import Mapping
 
 import one_delivery_new_lineage as lineage
@@ -275,12 +276,181 @@ def verify_scenario(value: object, operation_id: str) -> Mapping[str, object]:
     return scenario
 
 
+def _absolute_path(value: Path | str, reason: str) -> Path:
+    try:
+        return Path(os.path.abspath(os.fspath(value)))
+    except (TypeError, ValueError, OSError):
+        raise lineage.NewLineageStop(reason) from None
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    return os.path.normcase(os.path.normpath(str(left))) == os.path.normcase(
+        os.path.normpath(str(right))
+    )
+
+
+def _within(path: Path, parent: Path) -> bool:
+    try:
+        return os.path.commonpath(
+            [
+                os.path.normcase(os.path.normpath(str(path))),
+                os.path.normcase(os.path.normpath(str(parent))),
+            ]
+        ) == os.path.normcase(os.path.normpath(str(parent)))
+    except ValueError:
+        return False
+
+
+def _lexists(path: Path) -> bool:
+    return os.path.lexists(path)
+
+
+def _safe_lstat(path: Path, reason: str) -> os.stat_result:
+    try:
+        value = path.lstat()
+        junction = path.is_junction() if hasattr(path, "is_junction") else False
+    except OSError:
+        raise lineage.NewLineageStop(reason) from None
+    attributes = getattr(value, "st_file_attributes", 0)
+    reparse = bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+    lineage.require(
+        not stat.S_ISLNK(value.st_mode) and not junction and not reparse,
+        "OFFLINE_RUNTIME_REPARSE_DENIED",
+    )
+    return value
+
+
+def _validate_existing_path(
+    value: Path | str,
+    *,
+    reason: str,
+    directory: bool,
+    parent: Path | None = None,
+    expected_identity: tuple[int, int] | None = None,
+) -> tuple[Path, tuple[int, int]]:
+    path = _absolute_path(value, reason)
+    if parent is not None:
+        checked_parent = _absolute_path(parent, reason)
+        lineage.require(
+            _within(path, checked_parent) and not _same_path(path, checked_parent),
+            "OFFLINE_RUNTIME_PATH_ESCAPE",
+        )
+    parts = path.parts
+    lineage.require(bool(parts), reason)
+    current = Path(parts[0])
+    final_stat: os.stat_result | None = None
+    for index in range(len(parts)):
+        if index:
+            current = current / parts[index]
+        current_stat = _safe_lstat(current, reason)
+        if index < len(parts) - 1:
+            lineage.require(stat.S_ISDIR(current_stat.st_mode), reason)
+        final_stat = current_stat
+    lineage.require(final_stat is not None, reason)
+    lineage.require(
+        stat.S_ISDIR(final_stat.st_mode)
+        if directory
+        else stat.S_ISREG(final_stat.st_mode),
+        reason,
+    )
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError:
+        raise lineage.NewLineageStop(reason) from None
+    lineage.require(_same_path(path, resolved), "OFFLINE_RUNTIME_PATH_ESCAPE")
+    identity = (
+        int(final_stat.st_dev),
+        int(final_stat.st_ino),
+    )
+    lineage.require(
+        expected_identity is None or identity == expected_identity,
+        "OFFLINE_RUNTIME_DIRECTORY_REPLACED",
+    )
+    return path, identity
+
+
+def _create_directory_exclusive(
+    path: Path,
+    *,
+    parent: Path,
+    parent_identity: tuple[int, int],
+    exists_reason: str,
+) -> tuple[int, int]:
+    checked_parent, _ = _validate_existing_path(
+        parent,
+        reason="OFFLINE_RUNTIME_PARENT_INVALID",
+        directory=True,
+        expected_identity=parent_identity,
+    )
+    target = _absolute_path(path, "OFFLINE_RUNTIME_DIRECTORY_CREATE_FAILED")
+    lineage.require(
+        target.parent == checked_parent and _within(target, checked_parent),
+        "OFFLINE_RUNTIME_PATH_ESCAPE",
+    )
+    try:
+        target.mkdir(mode=0o700)
+    except FileExistsError:
+        if _lexists(target):
+            _safe_lstat(target, exists_reason)
+        raise lineage.NewLineageStop(exists_reason) from None
+    except OSError:
+        raise lineage.NewLineageStop("OFFLINE_RUNTIME_DIRECTORY_CREATE_FAILED") from None
+    _, identity = _validate_existing_path(
+        target,
+        reason="OFFLINE_RUNTIME_DIRECTORY_CREATE_FAILED",
+        directory=True,
+        parent=checked_parent,
+    )
+    return identity
+
+
+def _validate_write_parent(
+    path: Path,
+    *,
+    operation: Path,
+    operation_identity: tuple[int, int],
+) -> Path:
+    checked_operation, _ = _validate_existing_path(
+        operation,
+        reason="OFFLINE_RUNTIME_OPERATION_INVALID",
+        directory=True,
+        expected_identity=operation_identity,
+    )
+    target = _absolute_path(path, "OFFLINE_RUNTIME_PATH_INVALID")
+    lineage.require(
+        _within(target, checked_operation) and not _same_path(target, checked_operation),
+        "OFFLINE_RUNTIME_PATH_ESCAPE",
+    )
+    _validate_existing_path(
+        target.parent,
+        reason="OFFLINE_RUNTIME_PARENT_INVALID",
+        directory=True,
+        parent=checked_operation if target.parent != checked_operation else None,
+        expected_identity=(
+            operation_identity if target.parent == checked_operation else None
+        ),
+    )
+    return target
+
+
 def _sync_directory(path: Path) -> None:
+    checked, identity = _validate_existing_path(
+        path,
+        reason="OFFLINE_RUNTIME_DIRECTORY_SYNC_FAILED",
+        directory=True,
+    )
     if not hasattr(os, "O_DIRECTORY"):
         return
     try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(checked, flags)
         try:
+            opened = os.fstat(descriptor)
+            lineage.require(
+                stat.S_ISDIR(opened.st_mode)
+                and (int(opened.st_dev), int(opened.st_ino)) == identity,
+                "OFFLINE_RUNTIME_DIRECTORY_REPLACED",
+            )
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
@@ -288,44 +458,121 @@ def _sync_directory(path: Path) -> None:
         raise lineage.NewLineageStop("OFFLINE_RUNTIME_DIRECTORY_SYNC_FAILED") from None
 
 
-def _write_exclusive(path: Path, value: Mapping[str, object]) -> None:
-    lineage.require(not path.exists() and not path.is_symlink(), "OFFLINE_RUNTIME_CLAIM_EXISTS")
+def _write_exclusive(
+    path: Path,
+    value: Mapping[str, object],
+    *,
+    operation: Path,
+    operation_identity: tuple[int, int],
+    collision_reason: str,
+) -> None:
+    target = _validate_write_parent(
+        path, operation=operation, operation_identity=operation_identity
+    )
+    lineage.require(not _lexists(target), collision_reason)
     try:
-        with path.open("xb") as handle:
+        with target.open("xb") as handle:
             handle.write(lineage.canonical_bytes(value) + b"\n")
             handle.flush()
             os.fsync(handle.fileno())
-        _sync_directory(path.parent)
+        _validate_existing_path(
+            target,
+            reason="OFFLINE_RUNTIME_ARTIFACT_INVALID",
+            directory=False,
+            parent=operation,
+        )
+        _validate_existing_path(
+            operation,
+            reason="OFFLINE_RUNTIME_OPERATION_INVALID",
+            directory=True,
+            expected_identity=operation_identity,
+        )
+        _sync_directory(target.parent)
     except FileExistsError:
-        raise lineage.NewLineageStop("OFFLINE_RUNTIME_CLAIM_EXISTS") from None
+        raise lineage.NewLineageStop(collision_reason) from None
     except OSError:
         raise lineage.NewLineageStop("OFFLINE_RUNTIME_DURABILITY_FAILURE") from None
 
 
-def _replace_json(path: Path, value: Mapping[str, object]) -> None:
-    temporary = path.with_name(path.name + ".next")
-    lineage.require(not temporary.exists(), "OFFLINE_RUNTIME_TEMP_COLLISION")
+def _replace_json(
+    path: Path,
+    value: Mapping[str, object],
+    *,
+    operation: Path,
+    operation_identity: tuple[int, int],
+) -> None:
+    target = _validate_write_parent(
+        path, operation=operation, operation_identity=operation_identity
+    )
+    _validate_existing_path(
+        target,
+        reason="OFFLINE_RUNTIME_STATE_INVALID",
+        directory=False,
+        parent=operation,
+    )
+    temporary = target.with_name(target.name + ".next")
+    lineage.require(not _lexists(temporary), "OFFLINE_RUNTIME_TEMP_COLLISION")
     try:
         with temporary.open("xb") as handle:
             handle.write(lineage.canonical_bytes(value) + b"\n")
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        _sync_directory(path.parent)
+        _validate_existing_path(
+            temporary,
+            reason="OFFLINE_RUNTIME_TEMP_INVALID",
+            directory=False,
+            parent=operation,
+        )
+        _validate_existing_path(
+            operation,
+            reason="OFFLINE_RUNTIME_OPERATION_INVALID",
+            directory=True,
+            expected_identity=operation_identity,
+        )
+        os.replace(temporary, target)
+        _validate_existing_path(
+            target,
+            reason="OFFLINE_RUNTIME_STATE_INVALID",
+            directory=False,
+            parent=operation,
+        )
+        _sync_directory(target.parent)
     except OSError:
-        if temporary.exists():
+        if _lexists(temporary):
             temporary.unlink()
         raise lineage.NewLineageStop("OFFLINE_RUNTIME_DURABILITY_FAILURE") from None
 
 
-def _write_bytes_exclusive(path: Path, raw: bytes) -> None:
+def _write_bytes_exclusive(
+    path: Path,
+    raw: bytes,
+    *,
+    operation: Path,
+    operation_identity: tuple[int, int],
+) -> None:
     lineage.require(type(raw) is bytes and len(raw) > 0, "OFFLINE_ARCHIVE_BYTES_INVALID")
+    target = _validate_write_parent(
+        path, operation=operation, operation_identity=operation_identity
+    )
+    lineage.require(not _lexists(target), "OFFLINE_STAGE_COLLISION")
     try:
-        with path.open("xb") as handle:
+        with target.open("xb") as handle:
             handle.write(raw)
             handle.flush()
             os.fsync(handle.fileno())
-        _sync_directory(path.parent)
+        _validate_existing_path(
+            target,
+            reason="OFFLINE_STAGE_READBACK_MISMATCH",
+            directory=False,
+            parent=operation,
+        )
+        _validate_existing_path(
+            operation,
+            reason="OFFLINE_RUNTIME_OPERATION_INVALID",
+            directory=True,
+            expected_identity=operation_identity,
+        )
+        _sync_directory(target.parent)
     except FileExistsError:
         raise lineage.NewLineageStop("OFFLINE_STAGE_COLLISION") from None
     except OSError:
@@ -375,6 +622,7 @@ def _state(
 
 def _transition(
     path: Path,
+    operation_identity: tuple[int, int],
     binding: Mapping[str, object],
     state: str,
     sequence: int,
@@ -394,9 +642,25 @@ def _transition(
         **extra,
     )
     states = path.parent / "states"
-    lineage.require(states.is_dir() and not states.is_symlink(), "OFFLINE_STATE_HISTORY_INVALID")
-    _write_exclusive(states / f"{sequence:03d}-{state}.json", value)
-    _replace_json(path, value)
+    _validate_existing_path(
+        states,
+        reason="OFFLINE_STATE_HISTORY_INVALID",
+        directory=True,
+        parent=path.parent,
+    )
+    _write_exclusive(
+        states / f"{sequence:03d}-{state}.json",
+        value,
+        operation=path.parent,
+        operation_identity=operation_identity,
+        collision_reason="OFFLINE_STATE_HISTORY_COLLISION",
+    )
+    _replace_json(
+        path,
+        value,
+        operation=path.parent,
+        operation_identity=operation_identity,
+    )
     return value
 
 
@@ -480,6 +744,7 @@ def _verify_state_semantics(
 
 def _terminal_result(
     operation: Path,
+    operation_identity: tuple[int, int],
     binding: Mapping[str, object],
     state: Mapping[str, object],
     terminal: str,
@@ -518,7 +783,13 @@ def _terminal_result(
         "fixture_only": True,
         "production_interaction": "NOT_PERFORMED",
     }
-    _write_exclusive(operation / "result.json", result)
+    _write_exclusive(
+        operation / "result.json",
+        result,
+        operation=operation,
+        operation_identity=operation_identity,
+        collision_reason="OFFLINE_RUNTIME_RESULT_EXISTS",
+    )
     return result
 
 
@@ -529,33 +800,52 @@ def verify_offline_runtime_terminal(
 ) -> dict[str, object]:
     """Independently verify the immutable state chain and source-bound result."""
     binding = verify_runtime_binding(runtime_binding)
-    parent = Path(sandbox_parent).resolve(strict=True)
-    operation = (
-        parent / OFFLINE_RUNTIME_DIRECTORY / str(binding["operation_id"])
+    parent, _ = _validate_existing_path(
+        sandbox_parent,
+        reason="OFFLINE_SANDBOX_PARENT_INVALID",
+        directory=True,
     )
-    lineage.require(
-        operation.is_dir() and not operation.is_symlink(),
-        "OFFLINE_TERMINAL_DIRECTORY_INVALID",
+    root, _ = _validate_existing_path(
+        parent / OFFLINE_RUNTIME_DIRECTORY,
+        reason="OFFLINE_SANDBOX_ROOT_INVALID",
+        directory=True,
+        parent=parent,
+    )
+    operation, _ = _validate_existing_path(
+        root / str(binding["operation_id"]),
+        reason="OFFLINE_TERMINAL_DIRECTORY_INVALID",
+        directory=True,
+        parent=root,
     )
     claim_path = operation / "claim.json"
     state_path = operation / "state.json"
     result_path = operation / "result.json"
     states = operation / "states"
     for path in (claim_path, state_path, result_path):
-        lineage.require(
-            path.is_file() and not path.is_symlink(),
-            "OFFLINE_TERMINAL_ARTIFACT_MISSING",
+        _validate_existing_path(
+            path,
+            reason="OFFLINE_TERMINAL_ARTIFACT_MISSING",
+            directory=False,
+            parent=operation,
         )
-    lineage.require(
-        states.is_dir() and not states.is_symlink(),
-        "OFFLINE_STATE_HISTORY_INVALID",
+    _validate_existing_path(
+        states,
+        reason="OFFLINE_STATE_HISTORY_INVALID",
+        directory=True,
+        parent=operation,
     )
     history_paths = sorted(states.iterdir(), key=lambda item: item.name)
     lineage.require(
-        3 <= len(history_paths) <= 6
-        and all(path.is_file() and not path.is_symlink() for path in history_paths),
+        3 <= len(history_paths) <= 6,
         "OFFLINE_STATE_HISTORY_INVALID",
     )
+    for history_path in history_paths:
+        _validate_existing_path(
+            history_path,
+            reason="OFFLINE_STATE_HISTORY_INVALID",
+            directory=False,
+            parent=operation,
+        )
     history: list[Mapping[str, object]] = []
     previous: Mapping[str, object] | None = None
     previous_time: datetime | None = None
@@ -660,30 +950,54 @@ def verify_offline_runtime_terminal(
         in {"PASS", "ABORTED_PRE_STAGE", "RECOVERED_PRE_POST", "HOLD_OWNER_REVIEW"},
         "OFFLINE_TERMINAL_STATE_INVALID",
     )
-    rollback_path = operation / "recovery" / "rollback.archive"
-    recovered_candidate_path = operation / "recovery" / "candidate.stage.recovered"
+    recovery_directory = operation / "recovery"
+    rollback_path = recovery_directory / "rollback.archive"
+    recovered_candidate_path = recovery_directory / "candidate.stage.recovered"
     stage_path = operation / "candidate.archive"
     if expected_terminal == "RECOVERED_PRE_POST":
+        _validate_existing_path(
+            recovery_directory,
+            reason="OFFLINE_RECOVERY_DIRECTORY_INVALID",
+            directory=True,
+            parent=operation,
+        )
         lineage.require(
-            rollback_path.is_file()
-            and not rollback_path.is_symlink()
-            and lineage.sha256_file(rollback_path)
+            {item.name for item in recovery_directory.iterdir()}
+            == {"rollback.archive", "candidate.stage.recovered"},
+            "OFFLINE_RECOVERY_DIRECTORY_INVALID",
+        )
+        _validate_existing_path(
+            rollback_path,
+            reason="OFFLINE_RECOVERY_TERMINAL_INVALID",
+            directory=False,
+            parent=operation,
+        )
+        _validate_existing_path(
+            recovered_candidate_path,
+            reason="OFFLINE_RECOVERY_TERMINAL_INVALID",
+            directory=False,
+            parent=operation,
+        )
+        lineage.require(
+            lineage.sha256_file(rollback_path)
             == binding["rollback_archive_sha256"]
-            and recovered_candidate_path.is_file()
-            and not recovered_candidate_path.is_symlink()
             and lineage.sha256_file(recovered_candidate_path)
             == binding["candidate_archive_sha256"]
-            and not stage_path.exists()
+            and not _lexists(stage_path)
             and result.get("recovery")
             == "AUTOMATIC_LOCAL_SANDBOX_PRE_POST_ONLY"
             and result.get("original_cause") == "FAULT_AFTER_STAGE",
             "OFFLINE_RECOVERY_TERMINAL_INVALID",
         )
     elif expected_terminal == "HOLD_OWNER_REVIEW":
+        _validate_existing_path(
+            stage_path,
+            reason="OFFLINE_HOLD_RECOVERY_BOUNDARY_INVALID",
+            directory=False,
+            parent=operation,
+        )
         lineage.require(
-            not rollback_path.exists()
-            and stage_path.is_file()
-            and not stage_path.is_symlink()
+            not _lexists(recovery_directory)
             and lineage.sha256_file(stage_path)
             == binding["candidate_archive_sha256"]
             and result.get("recovery")
@@ -701,20 +1015,24 @@ def verify_offline_runtime_terminal(
             "OFFLINE_HOLD_RECOVERY_BOUNDARY_INVALID",
         )
     elif expected_terminal == "PASS":
+        _validate_existing_path(
+            stage_path,
+            reason="OFFLINE_PASS_TERMINAL_INVALID",
+            directory=False,
+            parent=operation,
+        )
         lineage.require(
-            stage_path.is_file()
-            and not stage_path.is_symlink()
-            and lineage.sha256_file(stage_path)
+            lineage.sha256_file(stage_path)
             == binding["candidate_archive_sha256"]
-            and not rollback_path.exists()
+            and not _lexists(recovery_directory)
             and result.get("recovery") == "NOT_REQUIRED"
             and result.get("original_cause") is None,
             "OFFLINE_PASS_TERMINAL_INVALID",
         )
     else:
         lineage.require(
-            not stage_path.exists()
-            and not rollback_path.exists()
+            not _lexists(stage_path)
+            and not _lexists(recovery_directory)
             and result.get("recovery") == "NOT_REQUIRED_NO_CANDIDATE_MUTATION"
             and result.get("original_cause") == "FAULT_AFTER_CLAIM",
             "OFFLINE_ABORT_TERMINAL_INVALID",
@@ -773,18 +1091,46 @@ def run_offline_state_machine(
         "OFFLINE_ROLLBACK_ARCHIVE_MISMATCH",
     )
 
-    parent = Path(sandbox_parent).resolve(strict=True)
-    lineage.require(parent.is_dir() and not parent.is_symlink(), "OFFLINE_SANDBOX_PARENT_INVALID")
+    parent, parent_identity = _validate_existing_path(
+        sandbox_parent,
+        reason="OFFLINE_SANDBOX_PARENT_INVALID",
+        directory=True,
+    )
     root = parent / OFFLINE_RUNTIME_DIRECTORY
-    root.mkdir(mode=0o700, exist_ok=True)
-    lineage.require(root.is_dir() and not root.is_symlink(), "OFFLINE_SANDBOX_ROOT_INVALID")
     operation = root / str(binding["operation_id"])
-    operation.mkdir(mode=0o700, exist_ok=True)
+    try:
+        root.mkdir(mode=0o700)
+    except FileExistsError:
+        if _lexists(root):
+            _safe_lstat(root, "OFFLINE_SANDBOX_ROOT_EXISTS")
+        if _lexists(operation):
+            _safe_lstat(operation, "OFFLINE_RUNTIME_OPERATION_EXISTS")
+        raise lineage.NewLineageStop("OFFLINE_SANDBOX_ROOT_EXISTS") from None
+    except OSError:
+        raise lineage.NewLineageStop("OFFLINE_SANDBOX_ROOT_CREATE_FAILED") from None
+    else:
+        root, root_identity = _validate_existing_path(
+            root,
+            reason="OFFLINE_SANDBOX_ROOT_INVALID",
+            directory=True,
+            parent=parent,
+        )
+    _validate_existing_path(
+        parent,
+        reason="OFFLINE_SANDBOX_PARENT_INVALID",
+        directory=True,
+        expected_identity=parent_identity,
+    )
+    operation_identity = _create_directory_exclusive(
+        operation,
+        parent=root,
+        parent_identity=root_identity,
+        exists_reason="OFFLINE_RUNTIME_OPERATION_EXISTS",
+    )
     state_path = operation / "state.json"
     claim_path = operation / "claim.json"
     stage_path = operation / "candidate.archive"
     recovery_directory = operation / "recovery"
-    recovery_directory.mkdir(mode=0o700, exist_ok=True)
 
     preflight = _state(
         binding,
@@ -793,8 +1139,8 @@ def run_offline_state_machine(
         str(checked_scenario["preflight_at_utc"]),
         None,
         simulated_post_attempts=0,
-        claim_absent=not claim_path.exists(),
-        stage_absent=not stage_path.exists(),
+        claim_absent=not _lexists(claim_path),
+        stage_absent=not _lexists(stage_path),
     )
     lineage.require(
         preflight["claim_absent"] is True and preflight["stage_absent"] is True,
@@ -817,16 +1163,46 @@ def run_offline_state_machine(
             }
         ),
     )
-    _write_exclusive(claim_path, claim)
+    _write_exclusive(
+        claim_path,
+        claim,
+        operation=operation,
+        operation_identity=operation_identity,
+        collision_reason="OFFLINE_RUNTIME_CLAIM_EXISTS",
+    )
     states = operation / "states"
-    states.mkdir(mode=0o700)
+    _create_directory_exclusive(
+        states,
+        parent=operation,
+        parent_identity=operation_identity,
+        exists_reason="OFFLINE_STATE_HISTORY_COLLISION",
+    )
     _sync_directory(operation)
-    _write_exclusive(states / "000-PREFLIGHT.json", preflight)
-    _write_exclusive(states / "001-CLAIMED.json", claim)
-    _replace_json(state_path, claim)
+    _write_exclusive(
+        states / "000-PREFLIGHT.json",
+        preflight,
+        operation=operation,
+        operation_identity=operation_identity,
+        collision_reason="OFFLINE_STATE_HISTORY_COLLISION",
+    )
+    _write_exclusive(
+        states / "001-CLAIMED.json",
+        claim,
+        operation=operation,
+        operation_identity=operation_identity,
+        collision_reason="OFFLINE_STATE_HISTORY_COLLISION",
+    )
+    _write_exclusive(
+        state_path,
+        claim,
+        operation=operation,
+        operation_identity=operation_identity,
+        collision_reason="OFFLINE_RUNTIME_STATE_EXISTS",
+    )
     if checked_scenario["fault_mode"] == "AFTER_CLAIM":
         terminal_state = _transition(
             state_path,
+            operation_identity,
             binding,
             "ABORTED_PRE_STAGE",
             2,
@@ -838,6 +1214,7 @@ def run_offline_state_machine(
         )
         return _terminal_result(
             operation,
+            operation_identity,
             binding,
             terminal_state,
             "ABORTED_PRE_STAGE",
@@ -845,7 +1222,18 @@ def run_offline_state_machine(
             original_cause="FAULT_AFTER_CLAIM",
         )
 
-    _write_bytes_exclusive(stage_path, candidate)
+    _write_bytes_exclusive(
+        stage_path,
+        candidate,
+        operation=operation,
+        operation_identity=operation_identity,
+    )
+    _validate_existing_path(
+        stage_path,
+        reason="OFFLINE_STAGE_READBACK_MISMATCH",
+        directory=False,
+        parent=operation,
+    )
     lineage.require(
         hashlib.sha256(stage_path.read_bytes()).hexdigest()
         == request["candidate_identity"]["archive_sha256"],
@@ -853,6 +1241,7 @@ def run_offline_state_machine(
     )
     staged = _transition(
         state_path,
+        operation_identity,
         binding,
         "STAGED",
         2,
@@ -863,19 +1252,53 @@ def run_offline_state_machine(
         candidate_mutation=True,
     )
     if checked_scenario["fault_mode"] == "AFTER_STAGE":
+        recovery_identity = _create_directory_exclusive(
+            recovery_directory,
+            parent=operation,
+            parent_identity=operation_identity,
+            exists_reason="OFFLINE_RECOVERY_PATH_COLLISION",
+        )
         rollback_path = recovery_directory / "rollback.archive"
-        _write_bytes_exclusive(rollback_path, rollback)
+        _write_bytes_exclusive(
+            rollback_path,
+            rollback,
+            operation=operation,
+            operation_identity=operation_identity,
+        )
         recovered_candidate = recovery_directory / "candidate.stage.recovered"
+        _validate_existing_path(
+            recovery_directory,
+            reason="OFFLINE_RECOVERY_DIRECTORY_INVALID",
+            directory=True,
+            parent=operation,
+            expected_identity=recovery_identity,
+        )
+        _validate_existing_path(
+            stage_path,
+            reason="OFFLINE_STAGE_READBACK_MISMATCH",
+            directory=False,
+            parent=operation,
+        )
+        lineage.require(
+            not _lexists(recovered_candidate), "OFFLINE_RECOVERY_PATH_COLLISION"
+        )
         os.replace(stage_path, recovered_candidate)
+        _validate_existing_path(
+            recovered_candidate,
+            reason="OFFLINE_PRE_POST_RECOVERY_VERIFY_FAILED",
+            directory=False,
+            parent=operation,
+        )
         _sync_directory(operation)
         lineage.require(
-            not stage_path.exists()
+            not _lexists(stage_path)
             and hashlib.sha256(rollback_path.read_bytes()).hexdigest()
             == request["rollback_identity"]["archive_sha256"],
             "OFFLINE_PRE_POST_RECOVERY_VERIFY_FAILED",
         )
         terminal_state = _transition(
             state_path,
+            operation_identity,
             binding,
             "RECOVERED_PRE_POST",
             3,
@@ -888,6 +1311,7 @@ def run_offline_state_machine(
         )
         return _terminal_result(
             operation,
+            operation_identity,
             binding,
             terminal_state,
             "RECOVERED_PRE_POST",
@@ -897,6 +1321,7 @@ def run_offline_state_machine(
 
     intent = _transition(
         state_path,
+        operation_identity,
         binding,
         "PRE_POST_INTENT",
         3,
@@ -909,6 +1334,7 @@ def run_offline_state_machine(
     if checked_scenario["fault_mode"] == "AFTER_PRE_POST_INTENT":
         hold = _transition(
             state_path,
+            operation_identity,
             binding,
             "HOLD_OWNER_REVIEW",
             4,
@@ -921,6 +1347,7 @@ def run_offline_state_machine(
         )
         return _terminal_result(
             operation,
+            operation_identity,
             binding,
             hold,
             "HOLD_OWNER_REVIEW",
@@ -930,6 +1357,7 @@ def run_offline_state_machine(
 
     observed = _transition(
         state_path,
+        operation_identity,
         binding,
         "POST_OBSERVED",
         4,
@@ -944,6 +1372,7 @@ def run_offline_state_machine(
     if checked_scenario["fault_mode"] == "POST_OUTCOME_AMBIGUOUS":
         hold = _transition(
             state_path,
+            operation_identity,
             binding,
             "HOLD_OWNER_REVIEW",
             5,
@@ -956,6 +1385,7 @@ def run_offline_state_machine(
         )
         return _terminal_result(
             operation,
+            operation_identity,
             binding,
             hold,
             "HOLD_OWNER_REVIEW",
@@ -984,6 +1414,7 @@ def run_offline_state_machine(
         cause = str(error) if isinstance(error, lineage.NewLineageStop) else type(error).__name__
         hold = _transition(
             state_path,
+            operation_identity,
             binding,
             "HOLD_OWNER_REVIEW",
             5,
@@ -996,6 +1427,7 @@ def run_offline_state_machine(
         )
         return _terminal_result(
             operation,
+            operation_identity,
             binding,
             hold,
             "HOLD_OWNER_REVIEW",
@@ -1005,6 +1437,7 @@ def run_offline_state_machine(
 
     passed = _transition(
         state_path,
+        operation_identity,
         binding,
         "PASS",
         5,
@@ -1016,6 +1449,7 @@ def run_offline_state_machine(
     )
     return _terminal_result(
         operation,
+        operation_identity,
         binding,
         passed,
         "PASS",

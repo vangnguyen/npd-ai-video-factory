@@ -25,6 +25,9 @@ USER = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 CONTAINER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 PATH_TOKEN_IDENTITY = "<IDENTITY_PATH_FROM_TRUSTED_GATE>"
 PATH_TOKEN_KNOWN_HOSTS = "<KNOWN_HOSTS_PATH_FROM_TRUSTED_GATE>"
+RUNTIME_MODE_ENV = "AGENT_RUNTIME_MODE"
+SCHEDULER_ENABLED_ENV = "AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED"
+EXTERNAL_WRITES_LABEL = "npd.agent-hub.external-writes-enabled"
 
 
 DB0_LUA = """local cursor='0'
@@ -86,6 +89,67 @@ def _target_descriptor(profile: Mapping[str, object]) -> dict[str, object]:
         "host_key_fingerprint_sha256": profile[
             "host_key_fingerprint_sha256"
         ],
+    }
+
+
+def observe_target_safety(
+    target: object, profile: object
+) -> dict[str, object]:
+    """Extract only whitelisted non-secret safety metadata from inspect data."""
+    checked_profile = verify_transport_profile(profile)
+    lineage.require(isinstance(target, Mapping), "TARGET_INSPECT_SCHEMA_INVALID")
+    config = target.get("Config")
+    lineage.require(isinstance(config, Mapping), "TARGET_CONFIG_MISSING")
+    labels = config.get("Labels")
+    environment = config.get("Env")
+    lineage.require(
+        isinstance(labels, Mapping) and isinstance(environment, list),
+        "TARGET_CONFIG_MISSING",
+    )
+    selected: dict[str, str] = {}
+    for item in environment:
+        if not isinstance(item, str) or "=" not in item:
+            continue
+        name, raw = item.split("=", 1)
+        if name in {RUNTIME_MODE_ENV, SCHEDULER_ENABLED_ENV}:
+            lineage.require(name not in selected, "TARGET_CONFIG_DUPLICATE")
+            selected[name] = raw.strip()
+    project = labels.get("com.docker.compose.project")
+    service = labels.get("com.docker.compose.service")
+    runtime_mode = selected.get(RUNTIME_MODE_ENV)
+    scheduler_raw = selected.get(SCHEDULER_ENABLED_ENV)
+    external_raw = labels.get(EXTERNAL_WRITES_LABEL)
+    lineage.require(
+        isinstance(project, str)
+        and isinstance(service, str)
+        and isinstance(runtime_mode, str)
+        and isinstance(scheduler_raw, str)
+        and isinstance(external_raw, str),
+        "TARGET_SAFETY_METADATA_MISSING",
+    )
+    scheduler_value = scheduler_raw.lower()
+    external_value = external_raw.strip().lower()
+    lineage.require(
+        project == checked_profile["compose_project"]
+        and service == checked_profile["compose_service"]
+        and runtime_mode == "phase9_creation"
+        and scheduler_value == "false"
+        and external_value == "false",
+        "TARGET_SAFETY_METADATA_UNSAFE",
+    )
+    return {
+        "compose_project": project,
+        "compose_service": service,
+        "runtime_mode": runtime_mode,
+        "scheduler_enabled": scheduler_value == "true",
+        "external_writes_enabled": external_value == "true",
+        "metadata_source": {
+            "compose_project": "docker_label:com.docker.compose.project",
+            "compose_service": "docker_label:com.docker.compose.service",
+            "runtime_mode": f"docker_env:{RUNTIME_MODE_ENV}",
+            "scheduler_enabled": f"docker_env:{SCHEDULER_ENABLED_ENV}",
+            "external_writes_enabled": f"docker_label:{EXTERNAL_WRITES_LABEL}",
+        },
     }
 
 
@@ -249,16 +313,33 @@ def archive(identity,path):
 def custody(identity,path):
  actual,_=file_hash(path)
  if actual!=identity["custody_manifest_sha256"]:raise RuntimeError("CUSTODY_BINDING_MISMATCH")
+def target_safety(target):
+ config=target.get("Config")
+ if not isinstance(config,dict) or not isinstance(config.get("Labels"),dict) or not isinstance(config.get("Env"),list):raise RuntimeError("TARGET_CONFIG_MISSING")
+ labels=config["Labels"];selected={{}}
+ for item in config["Env"]:
+  if not isinstance(item,str) or "=" not in item:continue
+  name,raw=item.split("=",1)
+  if name in ("AGENT_RUNTIME_MODE","AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED"):
+   if name in selected:raise RuntimeError("TARGET_CONFIG_DUPLICATE")
+   selected[name]=raw.strip()
+ project=labels.get("com.docker.compose.project");service=labels.get("com.docker.compose.service")
+ runtime=selected.get("AGENT_RUNTIME_MODE");scheduler=selected.get("AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED")
+ external=labels.get("npd.agent-hub.external-writes-enabled")
+ if not all(isinstance(value,str) for value in (project,service,runtime,scheduler,external)):raise RuntimeError("TARGET_SAFETY_METADATA_MISSING")
+ if project!=PROFILE["compose_project"] or service!=PROFILE["compose_service"] or runtime!="phase9_creation" or scheduler.lower()!="false" or external.strip().lower()!="false":raise RuntimeError("TARGET_SAFETY_METADATA_UNSAFE")
+ return {{"compose_project":project,"compose_service":service,"runtime_mode":runtime,"scheduler_enabled":scheduler.lower()=="true","external_writes_enabled":external.strip().lower()=="true","metadata_source":{{"compose_project":"docker_label:com.docker.compose.project","compose_service":"docker_label:com.docker.compose.service","runtime_mode":"docker_env:AGENT_RUNTIME_MODE","scheduler_enabled":"docker_env:AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED","external_writes_enabled":"docker_label:npd.agent-hub.external-writes-enabled"}}}}
 if len(sys.argv)!=5 or sys.argv[1]!="readonly-evidence" or len(sys.argv[2])!=64 or len(sys.argv[3])!=64:raise RuntimeError("ARGV_BINDING_INVALID")
 payload=sys.argv[4];payload+=\"=\"*((4-len(payload)%4)%4)
 REQUEST=json.loads(base64.urlsafe_b64decode(payload.encode()).decode())
 if hashlib.sha256(canon(REQUEST)).hexdigest()!=sys.argv[2] or REQUEST.get("collector_bytes_sha256")!=sys.argv[3] or REQUEST.get("transport_profile_sha256")!=digest(PROFILE) or REQUEST.get("pinned_target_sha256")!=PROFILE["pinned_target_sha256"]:raise RuntimeError("REQUEST_BINDING_INVALID")
 target=json.loads(run(["docker","inspect","--type","container",PROFILE["target_container_name"]]))[0]
+safety=target_safety(target)
 all_rows=json.loads(run(["docker","inspect"]+PROFILE["protected_container_names"]))
 protected=[]
 for row in all_rows:
  labels=(row.get("Config") or {{}}).get("Labels") or {{}}
- if labels.get("com.docker.compose.project")==PROFILE["compose_project"] and labels.get("com.docker.compose.service")==PROFILE["compose_service"]:continue
+ if labels.get("com.docker.compose.project")==safety["compose_project"] and labels.get("com.docker.compose.service")==safety["compose_service"]:continue
  protected.append({{"name":str(row.get("Name","")).lstrip("/"),"id":row.get("Id"),"image":row.get("Image"),"project":labels.get("com.docker.compose.project"),"service":labels.get("com.docker.compose.service"),"status":(row.get("State") or {{}}).get("Status"),"health":((row.get("State") or {{}}).get("Health") or {{}}).get("Status"),"restart_count":row.get("RestartCount")}})
 protected=sorted(protected,key=lambda row:row["name"])
 probe=''' + repr('''import json,os
@@ -282,7 +363,7 @@ candidate_loaded=run(["docker","image","inspect","sha256:"+candidate["oci_config
 rollback_present=run(["docker","image","inspect","sha256:"+rollback["oci_config_sha256"]],allow_absent=True)!=b""
 state=target.get("State") or {{}};target_config=str(target.get("Image","")).removeprefix("sha256:")
 observed=datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
-evidence={{"schema":"{readonly.EVIDENCE_SCHEMA}","lineage":"{lineage.LINEAGE}","operation_id":REQUEST["operation_id"],"request_sha256":hashlib.sha256(canon(REQUEST)).hexdigest(),"observed_at_utc":observed,"agent_hub":{{"compose_project":PROFILE["compose_project"],"compose_service":PROFILE["compose_service"],"pinned_target_sha256":PROFILE["pinned_target_sha256"],"target_container_id":target["Id"],"target_image_config_sha256":target_config,"target_signature_sha256":digest({{"id":target["Id"],"image":target.get("Image"),"state":state,"restart_count":target.get("RestartCount")}}),"protected_service_count":len(protected),"protected_services_sha256":digest(protected),"healthy":((state.get("Health") or {{}}).get("Status")=="healthy"),"ready":state.get("Running") is True,"restart_count":target.get("RestartCount"),"runtime_mode":"phase9_creation","scheduler_enabled":False,"external_writes_enabled":False,"claim_absent":not os.path.lexists(PROFILE["claim_path"]),"candidate_staged":os.path.lexists(PROFILE["stage_path"]),"delivery_absent":not os.path.lexists(PROFILE["delivery_receipt_path"]) }},"candidate":{{"identity":candidate,"archive_verified":True,"custody_manifest_verified":True,"staged":os.path.lexists(PROFILE["stage_path"]),"loaded":candidate_loaded}},"rollback":{{"identity":rollback,"archive_verified":True,"custody_manifest_verified":True,"image_present":rollback_present,"current_target":target_config==rollback["oci_config_sha256"]}},"video_factory_db0":{{"scope_receipt_sha256":REQUEST["db0_scope_receipt_sha256"],"counter_names":COUNTERS,"counters":dict(zip(COUNTERS,values)),"query_command":"EVAL_RO","database":0,"server_enforced_readonly":True,"eval_fallback_used":False,"raw_keys_values_credentials_or_job_payloads_emitted":False,"video_factory_workstream_opened":False,"video_factory_writes":0}},"effects":{{"production_read_only":True,"production_mutation":False,"business_system_write":False,"claim_created":False,"stage_performed":False,"image_loaded":False,"delivery_posted":False,"provider_calls":0,"video_factory_writes":0}},"scope_authority_class":"{readonly.SCOPE_AUTHORITY_FIXTURE_ONLY}","human_owner_approval_source_verified":False,"production_execution_approval":"NOT_GRANTED"}}
+evidence={{"schema":"{readonly.EVIDENCE_SCHEMA}","lineage":"{lineage.LINEAGE}","operation_id":REQUEST["operation_id"],"request_sha256":hashlib.sha256(canon(REQUEST)).hexdigest(),"observed_at_utc":observed,"agent_hub":{{"compose_project":safety["compose_project"],"compose_service":safety["compose_service"],"pinned_target_sha256":PROFILE["pinned_target_sha256"],"target_container_id":target["Id"],"target_image_config_sha256":target_config,"target_signature_sha256":digest({{"id":target["Id"],"image":target.get("Image"),"state":state,"restart_count":target.get("RestartCount"),"safety":safety}}),"protected_service_count":len(protected),"protected_services_sha256":digest(protected),"healthy":((state.get("Health") or {{}}).get("Status")=="healthy"),"ready":state.get("Running") is True,"restart_count":target.get("RestartCount"),"runtime_mode":safety["runtime_mode"],"scheduler_enabled":safety["scheduler_enabled"],"external_writes_enabled":safety["external_writes_enabled"],"safety_metadata_sources":safety["metadata_source"],"claim_absent":not os.path.lexists(PROFILE["claim_path"]),"candidate_staged":os.path.lexists(PROFILE["stage_path"]),"delivery_absent":not os.path.lexists(PROFILE["delivery_receipt_path"]) }},"candidate":{{"identity":candidate,"archive_verified":True,"custody_manifest_verified":True,"staged":os.path.lexists(PROFILE["stage_path"]),"loaded":candidate_loaded}},"rollback":{{"identity":rollback,"archive_verified":True,"custody_manifest_verified":True,"image_present":rollback_present,"current_target":target_config==rollback["oci_config_sha256"]}},"video_factory_db0":{{"scope_receipt_sha256":REQUEST["db0_scope_receipt_sha256"],"counter_names":COUNTERS,"counters":dict(zip(COUNTERS,values)),"query_command":"EVAL_RO","database":0,"server_enforced_readonly":True,"eval_fallback_used":False,"raw_keys_values_credentials_or_job_payloads_emitted":False,"video_factory_workstream_opened":False,"video_factory_writes":0}},"effects":{{"production_read_only":True,"production_mutation":False,"business_system_write":False,"claim_created":False,"stage_performed":False,"image_loaded":False,"delivery_posted":False,"provider_calls":0,"video_factory_writes":0}},"scope_authority_class":"{readonly.SCOPE_AUTHORITY_FIXTURE_ONLY}","human_owner_approval_source_verified":False,"production_execution_approval":"NOT_GRANTED"}}
 sys.stdout.buffer.write(canon(evidence)+b"\\n")
 '''
     return source.encode("utf-8")

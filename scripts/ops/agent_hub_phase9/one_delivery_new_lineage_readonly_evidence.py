@@ -526,6 +526,7 @@ def _verify_evidence(
             "runtime_mode",
             "scheduler_enabled",
             "external_writes_enabled",
+            "safety_metadata_sources",
             "claim_absent",
             "candidate_staged",
             "delivery_absent",
@@ -547,6 +548,17 @@ def _verify_evidence(
         "READONLY_AGENT_HUB_TARGET_INVALID",
     )
     rollback_request = request["rollback_identity"]
+    safety_sources = _exact(
+        agent.get("safety_metadata_sources"),
+        {
+            "compose_project",
+            "compose_service",
+            "runtime_mode",
+            "scheduler_enabled",
+            "external_writes_enabled",
+        },
+        "READONLY_AGENT_HUB_SAFETY_SOURCE_INVALID",
+    )
     lineage.require(
         agent.get("compose_project") == "npd-agent-hub-prod"
         and agent.get("compose_service") == "agent-hub"
@@ -565,6 +577,18 @@ def _verify_evidence(
         and agent.get("runtime_mode") == "phase9_creation"
         and agent.get("scheduler_enabled") is False
         and agent.get("external_writes_enabled") is False
+        and safety_sources
+        == {
+            "compose_project": "docker_label:com.docker.compose.project",
+            "compose_service": "docker_label:com.docker.compose.service",
+            "runtime_mode": "docker_env:AGENT_RUNTIME_MODE",
+            "scheduler_enabled": (
+                "docker_env:AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED"
+            ),
+            "external_writes_enabled": (
+                "docker_label:npd.agent-hub.external-writes-enabled"
+            ),
+        }
         and agent.get("claim_absent") is True
         and agent.get("candidate_staged") is False
         and agent.get("delivery_absent") is True,

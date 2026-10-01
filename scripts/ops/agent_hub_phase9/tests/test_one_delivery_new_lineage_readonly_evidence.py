@@ -125,6 +125,17 @@ def fixture() -> tuple[dict, dict, dict, bytes]:
             "runtime_mode": "phase9_creation",
             "scheduler_enabled": False,
             "external_writes_enabled": False,
+            "safety_metadata_sources": {
+                "compose_project": "docker_label:com.docker.compose.project",
+                "compose_service": "docker_label:com.docker.compose.service",
+                "runtime_mode": "docker_env:AGENT_RUNTIME_MODE",
+                "scheduler_enabled": (
+                    "docker_env:AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED"
+                ),
+                "external_writes_enabled": (
+                    "docker_label:npd.agent-hub.external-writes-enabled"
+                ),
+            },
             "claim_absent": True,
             "candidate_staged": False,
             "delivery_absent": True,

@@ -6,7 +6,9 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import threading
@@ -26,6 +28,24 @@ from test_one_delivery_new_lineage import HEAD, OPERATION, SIGNING_KEY, package_
 NOW = datetime(2026, 10, 1, 9, 0, 0, tzinfo=timezone.utc)
 CANDIDATE_ARCHIVE = b"offline-candidate-oci-archive-v1"
 ROLLBACK_ARCHIVE = b"offline-rollback-oci-archive-v1"
+
+
+def create_directory_link(link: Path, target: Path) -> None:
+    if os.name == "nt":
+        completed = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(target)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            text=True,
+        )
+        if completed.returncode != 0:
+            raise AssertionError(
+                "temporary junction creation failed: "
+                + (completed.stderr or completed.stdout)
+            )
+    else:
+        link.symlink_to(target, target_is_directory=True)
 
 
 def identity(raw: bytes, *, source_head: str, config: str, prefix: str) -> dict:
@@ -86,6 +106,39 @@ def profile_fixture() -> dict[str, object]:
         "read_scope_authority": "NOT_GRANTED_STRUCTURAL_FIXTURE_ONLY",
         "execution_authority": "NOT_GRANTED",
     }
+
+
+def target_inspect_fixture() -> dict[str, object]:
+    return {
+        "Id": "1" * 64,
+        "Image": "sha256:" + "6" * 64,
+        "Config": {
+            "Labels": {
+                "com.docker.compose.project": "npd-agent-hub-prod",
+                "com.docker.compose.service": "agent-hub",
+                transport.EXTERNAL_WRITES_LABEL: "false",
+            },
+            "Env": [
+                "AGENT_RUNTIME_MODE=phase9_creation",
+                "AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED=false",
+                "AGENT_OWNER_TOKEN=must-not-be-selected-or-emitted",
+            ],
+        },
+    }
+
+
+def rendered_target_safety(profile: dict[str, object]):
+    """Load only the rendered collector's pure inspect parser, never its runtime."""
+    tree = ast.parse(transport.render_readonly_collector(profile).decode("utf-8"))
+    function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "target_safety"
+    )
+    isolated = ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[]))
+    namespace = {"PROFILE": deepcopy(profile)}
+    exec(compile(isolated, "<rendered-target-safety>", "exec"), namespace)
+    return namespace["target_safety"]
 
 
 def request_fixture(profile: dict[str, object]) -> dict[str, object]:
@@ -258,6 +311,14 @@ class RuntimePathTests(unittest.TestCase):
         self.assertIn("CUSTODY_BINDING_MISMATCH", collector_source)
         self.assertIn("ARTIFACT_NOT_REGULAR_FILE", collector_source)
         self.assertIn("os.path.lexists", collector_source)
+        self.assertIn('"runtime_mode":safety["runtime_mode"]', collector_source)
+        self.assertIn(
+            '"scheduler_enabled":safety["scheduler_enabled"]', collector_source
+        )
+        self.assertIn(
+            '"external_writes_enabled":safety["external_writes_enabled"]',
+            collector_source,
+        )
         with self.assertRaisesRegex(
             lineage.NewLineageStop, "REAL_TRANSPORT_RUNTIME_NOT_AUTHORIZED"
         ):
@@ -266,6 +327,58 @@ class RuntimePathTests(unittest.TestCase):
             lineage.NewLineageStop, "REAL_EXECUTION_RUNTIME_NOT_AUTHORIZED"
         ):
             executor.refuse_real_runtime()
+
+    def test_target_safety_facts_are_observed_and_unsafe_or_missing_fail_closed(self):
+        target = target_inspect_fixture()
+        rendered_observer = rendered_target_safety(self.profile)
+        observers = (
+            (
+                "module",
+                lambda value: transport.observe_target_safety(value, self.profile),
+            ),
+            ("rendered_collector", rendered_observer),
+        )
+        for observer_name, observer in observers:
+            with self.subTest(observer=observer_name):
+                observed = observer(target)
+                self.assertEqual(observed["compose_project"], "npd-agent-hub-prod")
+                self.assertEqual(observed["compose_service"], "agent-hub")
+                self.assertEqual(observed["runtime_mode"], "phase9_creation")
+                self.assertFalse(observed["scheduler_enabled"])
+                self.assertFalse(observed["external_writes_enabled"])
+                self.assertNotIn("AGENT_OWNER_TOKEN", json.dumps(observed))
+
+        unsafe_cases: list[dict[str, object]] = []
+        unsafe_mode = deepcopy(target)
+        unsafe_mode["Config"]["Env"][0] = "AGENT_RUNTIME_MODE=normal"
+        unsafe_cases.append(unsafe_mode)
+        scheduler_enabled = deepcopy(target)
+        scheduler_enabled["Config"]["Env"][1] = (
+            "AGENT_PROVIDER_HEALTH_SCHEDULER_ENABLED=true"
+        )
+        unsafe_cases.append(scheduler_enabled)
+        wrong_compose = deepcopy(target)
+        wrong_compose["Config"]["Labels"]["com.docker.compose.project"] = (
+            "substituted-project"
+        )
+        unsafe_cases.append(wrong_compose)
+        external_writes = deepcopy(target)
+        external_writes["Config"]["Labels"][
+            transport.EXTERNAL_WRITES_LABEL
+        ] = "true"
+        unsafe_cases.append(external_writes)
+        missing = deepcopy(target)
+        del missing["Config"]
+        for observer_name, observer in observers:
+            for unsafe in unsafe_cases:
+                with self.subTest(observer=observer_name, unsafe=unsafe):
+                    with self.assertRaisesRegex(
+                        Exception, "TARGET_SAFETY_METADATA_UNSAFE"
+                    ):
+                        observer(unsafe)
+            with self.subTest(observer=observer_name, missing_config=True):
+                with self.assertRaisesRegex(Exception, "TARGET_CONFIG_MISSING"):
+                    observer(missing)
 
     def test_complete_offline_actual_path_passes_once_with_source_receipt(self):
         result = self.rehearse("NONE", "sandbox-pass")
@@ -290,7 +403,7 @@ class RuntimePathTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(
             lineage.NewLineageStop,
-            "OFFLINE_PREFLIGHT_ABSENCE_FAILED|OFFLINE_RUNTIME_CLAIM_EXISTS",
+            "OFFLINE_SANDBOX_ROOT_EXISTS",
         ):
             self.rehearse("NONE", "sandbox-pass")
 
@@ -356,10 +469,68 @@ class RuntimePathTests(unittest.TestCase):
             thread.join()
         self.assertEqual(outcomes.count("PASS"), 1)
         self.assertEqual(len(outcomes), 2)
-        self.assertTrue(
-            "OFFLINE_RUNTIME_CLAIM_EXISTS" in outcomes
-            or "OFFLINE_PREFLIGHT_ABSENCE_FAILED" in outcomes
+        self.assertIn("OFFLINE_SANDBOX_ROOT_EXISTS", outcomes)
+
+    def test_operation_and_root_junctions_fail_before_any_outside_write(self):
+        for attack in ("root", "operation"):
+            with self.subTest(attack=attack):
+                sandbox = self.parent / f"sandbox-junction-{attack}"
+                outside = self.parent / f"outside-junction-{attack}"
+                sandbox.mkdir()
+                outside.mkdir()
+                runtime_root = sandbox / executor.OFFLINE_RUNTIME_DIRECTORY
+                if attack == "root":
+                    create_directory_link(runtime_root, outside)
+                else:
+                    runtime_root.mkdir()
+                    create_directory_link(runtime_root / OPERATION, outside)
+                with self.assertRaisesRegex(
+                    lineage.NewLineageStop, "OFFLINE_RUNTIME_REPARSE_DENIED"
+                ):
+                    rehearsal.rehearse_offline_runtime_path(
+                        sandbox,
+                        base_package=self.base_package,
+                        runtime_review_package=self.runtime_package,
+                        expected_base_manifest_sha256=self.base[
+                            "package_manifest_sha256"
+                        ],
+                        expected_runtime_manifest_sha256=self.runtime[
+                            "package_manifest_sha256"
+                        ],
+                        expected_head=HEAD,
+                        runtime_binding=self.runtime["runtime_binding"],
+                        candidate_archive=CANDIDATE_ARCHIVE,
+                        rollback_archive=ROLLBACK_ARCHIVE,
+                        signing_key=SIGNING_KEY,
+                        observed_at="2026-10-01T09:00:00Z",
+                        fault_mode="AFTER_CLAIM",
+                    )
+                self.assertEqual(list(outside.iterdir()), [])
+
+    def test_recovery_junction_fails_terminal_verification_without_outside_write(self):
+        rehearsed = self.rehearse("AFTER_STAGE", "sandbox-recovery-junction")
+        self.assertEqual(
+            rehearsed["terminal"]["terminal_state"], "RECOVERED_PRE_POST"
         )
+        operation = (
+            self.parent
+            / "sandbox-recovery-junction"
+            / executor.OFFLINE_RUNTIME_DIRECTORY
+            / OPERATION
+        )
+        recovery = operation / "recovery"
+        recovery.rename(operation / "recovery.original")
+        outside = self.parent / "outside-recovery-junction"
+        outside.mkdir()
+        create_directory_link(recovery, outside)
+        with self.assertRaisesRegex(
+            lineage.NewLineageStop, "OFFLINE_RUNTIME_REPARSE_DENIED"
+        ):
+            executor.verify_offline_runtime_terminal(
+                self.parent / "sandbox-recovery-junction",
+                runtime_binding=self.runtime["runtime_binding"],
+            )
+        self.assertEqual(list(outside.iterdir()), [])
 
     def test_runtime_package_path_digest_and_source_tamper_fail_closed(self):
         collector = self.runtime_package / "READONLY_COLLECTOR.py"
