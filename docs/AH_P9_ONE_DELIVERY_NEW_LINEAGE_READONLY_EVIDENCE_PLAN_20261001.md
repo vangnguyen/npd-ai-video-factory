@@ -133,12 +133,17 @@ after source review, package review and exact-head CI.
 
 ## Next safe action
 
-Independently review source commit
-`e2339d4debb6e6736beb8b94a23cf01931055a96`. Keep the transport,
-collector, state-machine, recovery and production-review builder work on hold
-until both High findings are confirmed closed. Only afterward resume that one
-agreed implementation scope. Request the bounded read-only scope only when the
-candidate and rollback OCI/custody identities and a trusted human-approval
-verification path are ready, so the 600-second JIT evidence is not collected
-prematurely. Keep R5 uncreated, Phase 9 open with four outcomes remaining and
-Phase 10 `NO-GO`.
+Independent review confirmed both High findings closed at
+`e2339d4debb6e6736beb8b94a23cf01931055a96`. The follow-on transport,
+collector, offline state-machine, recovery boundary and production-review
+builder milestone is implemented and locally verified at
+`2faa60c456ed666e423fafc300201fefd2bdace8`. The generated collector and strict
+argv were sealed but not executed; real entry points still refuse execution.
+
+Independently review exact source commit `2faa60c`. If accepted, publish it for
+exact-head CI. Do not request or spend the bounded 600-second evidence-only read
+scope until current candidate/rollback OCI and custody bytes plus a trusted
+human-approval verification path exist. The later production transport driver,
+capture wrapper and claim/stage/load/delivery/recovery executors require their
+own source/package review. Keep R5 uncreated, keep the execution gate separate,
+keep Phase 9 open with four outcomes remaining and keep Phase 10 `NO-GO`.

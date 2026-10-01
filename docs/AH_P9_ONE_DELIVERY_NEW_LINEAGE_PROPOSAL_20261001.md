@@ -180,18 +180,40 @@ The minimum design choice is satisfied: new lineage was selected. Historical
 R4 approval remains expired and non-reusable; the new decision cannot create
 R5 or authorize execution.
 
-The next source milestone remains one agreed four-component scope: (1) the
-transport-profile verifier, deterministic strict-argv renderer and rendered
-read-only collector; (2) the claim/stage state machine; (3) the recovery
-boundary; and (4) the production-review builder. It is on hold until
-independent review confirms both High findings in the prior read-only contract
-are closed by source commit
-`e2339d4debb6e6736beb8b94a23cf01931055a96`. Promotion remains HOLD until a
-bounded scope from a separately verified human-approval source can bind fresh
-protected services, current candidate/rollback artifacts, custody and the four
-retained Video Factory DB0 safety aggregates. Only after those source bytes,
-bindings and exact-head CI are reviewed may a fresh execution package/window
-and separate Owner execution gate be requested.
+Independent review confirmed both High findings in the prior read-only contract
+closed at source commit
+`e2339d4debb6e6736beb8b94a23cf01931055a96`. The agreed four-component
+source-only milestone is now implemented at exact tested commit
+`2faa60c456ed666e423fafc300201fefd2bdace8`:
+
+1. an exact source-only transport profile, deterministic strict-argv template
+   and rendered collector bound to the request, profile, target and collector
+   hashes; the collector verifies regular-file archive/custody bytes, protected
+   18 and the narrow DB0 `EVAL_RO` aggregates, but is rendered and sealed only;
+2. an executable file-backed **offline sandbox** state machine covering
+   `PREFLIGHT -> CLAIMED -> STAGED -> PRE_POST_INTENT -> POST_OBSERVED ->
+   PASS/HOLD`, with an atomic claim and at most one simulated POST attempt;
+3. recovery limited to the local sandbox before the pre-POST boundary, with
+   every later ambiguity held for Owner review and no retry or automatic
+   rollback; and
+4. an exact-allowlist package builder that seals the reviewed source, request,
+   profile, collector and argv bytes and verifies the package before and after
+   atomic publication.
+
+The offline rehearsal exercises the sealed package through every modeled fault
+terminal. It never runs the generated collector/argv, opens a connection or
+performs a real POST. Real transport and executor entry points remain explicitly
+fail-closed. Source receipt:
+`docs/evidence/AH_P9_NEW_LINEAGE_RUNTIME_PATH_TEST_RECEIPT_20261001.json`.
+
+This completes the bounded source milestone, not production qualification. The
+production transport/capture driver, trusted human-scope verifier, fresh real
+candidate and rollback OCI/custody bytes, protected/target and DB0 receipts,
+and reviewed production claim/stage/load/delivery/recovery executors do not yet
+exist under this lineage. Exact-head CI also remains unavailable until the
+source is published. Independent exact-source review of `2faa60c` is the next
+gate. Only after those missing bytes, bindings, review and CI pass may a fresh
+operation/window and separate Owner execution gate be proposed.
 
 Phase 9 remains open with four acceptance outcomes remaining, Phase 10 remains
 `NO-GO`, and production writes, provider calls, customer actions and Video

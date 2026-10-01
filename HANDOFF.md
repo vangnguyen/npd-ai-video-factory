@@ -791,3 +791,46 @@ NEXT_SAFE_ACTION:
   After source/package/exact-head CI review, request a new, separate bounded
   Owner execution gate. Phase 9 still has four acceptance outcomes remaining;
   Phase 10 remains `NO-GO`.
+
+## New-lineage four-component offline runtime path - 2026-10-01
+
+- Independent review confirmed both prior read-only High findings closed at
+  `e2339d4debb6e6736beb8b94a23cf01931055a96`, allowing the already adopted
+  source-only roadmap scope to continue.
+- Exact tested source commit
+  `2faa60c456ed666e423fafc300201fefd2bdace8` implements the four bounded
+  components: source-only transport profile/strict argv/rendered collector;
+  offline claim/stage state machine; pre-POST-only local recovery boundary; and
+  exact-allowlist production-review package builder.
+- Request, profile, target, rendered collector and argv hashes are bound. The
+  collector checks exact archive size/hash, exact custody-manifest hash and
+  regular files, protected 18, Agent Hub state and only the four DB0 `EVAL_RO`
+  aggregates. It is rendered and sealed but was not executed.
+- The offline runtime uses an exclusive durable claim, immutable state chain,
+  source/request/archive-bound terminal receipt and one-attempt model. All six
+  modeled outcomes were exercised. Recovery occurs only after local staging and
+  before `PRE_POST_INTENT`; after that boundary every uncertainty terminates at
+  `HOLD_OWNER_REVIEW`, with no retry and no automatic rollback.
+- The package is verified before and after atomic local publication and rejects
+  overwrite, extras, traversal, digest/source/render substitution and malformed
+  canonical inputs. Real transport and executor entry points remain explicitly
+  fail-closed.
+- Exact-source local results: 53 focused PASS; Phase-9 ops 253 PASS / 1 existing
+  Windows skip; Agent Hub 510/510 PASS with one existing Starlette deprecation
+  warning; evaluator 20/20 PASS; source compile PASS; bounded changed-file
+  high-confidence secret-pattern scan PASS. Receipt:
+  `docs/evidence/AH_P9_NEW_LINEAGE_RUNTIME_PATH_TEST_RECEIPT_20261001.json`.
+- This is not historical R4 recovery, R5, a production package or authority.
+  R5 remains `HOLD / NOT_CREATED / NOT_CLAIMED / NOT_EXECUTED`; production and
+  Video Factory writes, provider calls, generated-command execution and cost
+  remain zero. Phase 10 remains `NO-GO`.
+- Production qualification remains blocked on independent exact-source review,
+  published exact-head CI, a trusted human read-scope verifier, a fresh pinned
+  transport/capture driver, real candidate/rollback OCI and custody bytes,
+  current target/protected/DB0 evidence and reviewed production
+  claim/stage/load/delivery/recovery executors. A later execution gate must be
+  separate and explicit.
+- NEXT_SAFE_ACTION: independently review exact source commit `2faa60c`. If it
+  passes, publish it for exact-head CI. Do not collect short-lived JIT evidence
+  until the trusted scope and real artifact bytes exist; do not create R5 or an
+  execution window/approval from this source milestone.
