@@ -741,25 +741,35 @@ NEXT_SAFE_ACTION:
   callback, network or subprocess surface; it records one synthetic observed
   attempt, zero module POSTs, no retry and no automatic rollback. Ambiguity
   terminates at `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW`.
+- The second adopted source milestone adds a pure fresh-read-only evidence
+  request/scope/capture verifier. It requires protected 18, exact candidate and
+  rollback OCI/custody bindings, a 600-second raw capture, and exactly four
+  server-enforced DB0 `EVAL_RO` aggregate counters under a separate bounded
+  evidence-only Owner scope. It has no transport/process/network surface and
+  cannot claim, stage, load, deliver or grant execution. Exact dependency,
+  legacy collector and minimum-scope inventory:
+  `docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_READONLY_EVIDENCE_PLAN_20261001.md`.
 - Exact tested source commit:
-  `f281694441d7d7ee82e5414dbedecbe63f4ca46b`. Local verification on that
-  commit: Phase-9 ops 229 PASS / 1 Windows skip; 30 focused new-lineage,
+  `54f050903e2b92acb570407be7849a28f2168739`. Local verification on that
+  commit: Phase-9 ops 239 PASS / 1 Windows skip; 40 focused new-lineage,
   builder/rehearsal and current-store tests PASS; Agent Hub 510/510 PASS with
   one existing
   Starlette deprecation warning; evaluator 20/20 PASS. The pre-existing Agent
   Hub Python 3.12.14 virtual environment was invoked by absolute path because
   Python is not on PATH; no install, WSL or host/security configuration change
   was made. Test receipt:
-  `docs/evidence/AH_P9_NEW_LINEAGE_BUILDER_REHEARSAL_TEST_RECEIPT_20261001.json`.
+  `docs/evidence/AH_P9_NEW_LINEAGE_READONLY_EVIDENCE_CONTRACT_TEST_RECEIPT_20261001.json`.
   New exact-head CI is required after review/publication; historical exact-head
   CI is not substituted.
 - Production access/writes, claim, stage, image load, deployment, delivery,
   provider/customer action, Video Factory action and actual cost: all zero.
 - DESIGN CHOICE: `ADOPT_NEW_LINEAGE_SOURCE_ONLY` is satisfied. Production
   authority remains `NOT_GRANTED`.
-- NEXT_SAFE_ACTION: prepare the remaining concrete transport/JIT/claim/stage/
-  recovery source only when it can bind the required protected-service,
-  candidate/rollback, custody and retained DB0 counter evidence. Keep HOLD on
-  missing evidence. After source/package/exact-head CI review, request a new,
-  separate bounded Owner execution gate. Phase 9 still has four acceptance
-  outcomes remaining; Phase 10 remains `NO-GO`.
+- NEXT_SAFE_ACTION: review this evidence contract, then implement the offline
+  transport-profile verifier, rendered collector and pure claim/stage/recovery
+  state machine. Request one short evidence-only read scope only after exact
+  candidate/rollback OCI and custody identities exist; do not spend the
+  600-second JIT window early. Keep HOLD on missing evidence. After
+  source/package/exact-head CI review, request a new, separate bounded Owner
+  execution gate. Phase 9 still has four acceptance outcomes remaining; Phase
+  10 remains `NO-GO`.

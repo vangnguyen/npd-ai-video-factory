@@ -96,6 +96,26 @@ These artifacts remain offline review tools. They do not implement or claim a
 sealed concrete SSH transport, remote JIT collector, production claim/stage
 executor or evidence-bound production recovery executor.
 
+## Read-only evidence contract milestone
+
+`one_delivery_new_lineage_readonly_evidence.py` now defines the exact intake
+contract for the next fresh JIT observation without implementing any transport.
+It binds a new operation, candidate HEAD, transport profile, collector source,
+protected-service anchor, exact candidate/rollback OCI plus custody identities,
+and a separate Owner evidence-only DB0 scope receipt. It then verifies raw
+capture bytes, exit/UUID/timestamps, exact 600-second freshness, protected 18,
+the healthy `phase9_creation` target, claim/stage/delivery absence, OCI/custody
+verification, and only the four server-enforced DB0 `EVAL_RO` aggregates.
+
+Any raw key/value/credential/job-payload export, `EVAL` fallback, nonzero
+queue/processing/in-flight counter, protected/candidate/rollback drift, stale
+capture or write/claim/stage/load/delivery flag fails closed. Its only PASS is
+`READONLY_EVIDENCE_VERIFIED_EXECUTION_NOT_AUTHORIZED`; execution authority
+remains `NOT_GRANTED`. The module contains no SSH, subprocess, socket, HTTP,
+Redis or other live-access surface. The dependency and minimum-scope inventory
+is recorded in
+`docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_READONLY_EVIDENCE_PLAN_20261001.md`.
+
 ## Explicit evidence gap
 
 The historical package used Video Factory DB0 counters as a safety input. This
@@ -146,13 +166,15 @@ The minimum design choice is satisfied: new lineage was selected. Historical
 R4 approval remains expired and non-reusable; the new decision cannot create
 R5 or authorize execution.
 
-The next source milestone requires concrete production-review bindings for the
-transport, remote JIT collector, claim/stage executor and recovery executor.
-Promotion remains HOLD until the independently authorized read-only evidence
-can bind protected services, current candidate/rollback artifacts, custody and
-the retained Video Factory DB0 safety counters. Only after those source bytes,
-bindings and exact-head CI are reviewed may a fresh execution package/window
-and separate Owner execution gate be requested.
+The next source milestone is a new-lineage transport-profile verifier,
+deterministic strict-argv renderer, rendered read-only collector and pure
+claim/stage/recovery state machine. Their source and synthetic failure tests do
+not require volatile production values. Promotion remains HOLD until a bounded
+evidence-only scope can bind fresh protected services, current
+candidate/rollback artifacts, custody and the four retained Video Factory DB0
+safety aggregates. Only after those source bytes, bindings and exact-head CI
+are reviewed may a fresh execution package/window and separate Owner execution
+gate be requested.
 
 Phase 9 remains open with four acceptance outcomes remaining, Phase 10 remains
 `NO-GO`, and production writes, provider calls, customer actions and Video
