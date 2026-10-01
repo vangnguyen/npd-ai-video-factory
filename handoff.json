@@ -1,6 +1,6 @@
 {
   "schema": "npd.repository-handoff.v1",
-  "updated_at_utc": "2026-09-25T14:01:49.0600717Z",
+  "updated_at_utc": "2026-10-01T06:37:43.5135013Z",
   "repository": {
     "name": "vangnguyen/npd-ai-video-factory",
     "remote": "https://github.com/vangnguyen/npd-ai-video-factory.git",
@@ -56,7 +56,7 @@
   },
   "workstreams": {
     "agent_hub": {
-      "state": "GATE_C_PASS_GATE2_R4_APPROVED_WAITING_FOR_WINDOW",
+      "state": "GATE_C_PASS_GATE2_HOLD_NEW_LINEAGE_OFFLINE_REVIEW",
       "authorized_target": "npd-agent-hub-prod/agent-hub",
       "automation_authorized": false,
       "phase10_authorized": false,
@@ -80,7 +80,7 @@
       "operation_reusable": false,
       "observation": "NOT_STARTED",
       "phase9_uat_business_acceptance": "NOT_COMPLETED",
-      "current_authority": "OWNER_GATE_2_R4_APPROVED_WINDOW_NOT_OPEN",
+      "current_authority": "NONE_R4_TERMINAL_NEW_LINEAGE_PROPOSAL_NOT_AUTHORITY",
       "historical_execution_window_expired": true,
       "source_capture_candidate": {
         "path": "scripts/ops/agent_hub_phase9/remote_preflight_capture.py",
@@ -91,11 +91,11 @@
         "adopted_into_readonly_evidence_collectors": true,
         "full_snapshot_and_package_binding_required": true
       },
-      "fresh_gate_preparation": "APPROVED_WAITING_FOR_AUTHORIZED_WINDOW",
-      "fresh_operation_created": true,
-      "fresh_approval_created": true,
+      "fresh_gate_preparation": "HOLD_NEW_LINEAGE_OFFLINE_REVIEW",
+      "fresh_operation_created": false,
+      "fresh_approval_created": false,
       "fresh_confirmation_token_created": false,
-      "fresh_window_bound": true,
+      "fresh_window_bound": false,
       "sales_sla_evidence": "READY_FOR_AUTHENTIC_DELIVERY_AND_RESPONSE_EVIDENCE",
       "backup_copy2": "OPEN",
       "ah_t01b_observation": "OPEN",
@@ -123,7 +123,7 @@
         "FULL_EXECUTION_SNAPSHOT.json": "693863efb0c9d78b5c668369b17913ef41ef60992d181e2ad055820006d9929a",
         "DISPATCHER_ADOPTION_REVIEW.json": "97bc67b32cb894e6a6044bd7e713cc433c61ee23d25d9e3064f9e0102f440ce0"
       },
-      "owner_execution_approval": "APPROVED_FOR_R4_NOT_EXECUTED",
+      "owner_execution_approval": "HISTORICAL_R4_EXPIRED_NOT_REUSABLE",
       "immutable_terminal_operation_provenance": {
         "operation_id": "PHASE9-LIMITED-PILOT-FRESH-V2-20260911-d55d6333-c18f-4069-91bb-00ebee26abb5",
         "execution_window_ict": "2026-09-11T20:00:00+07:00/2026-09-11T22:00:00+07:00",
@@ -133,9 +133,9 @@
         "sealed_protected_service_sha256": "dafe99c16a9f3059cb20d5d5e746c35ae5438668fe8155d5df034a87b02d9302",
         "dispatch_started_at_utc": "2026-09-11T13:00:19.4406767Z"
       },
-      "operation_id": "AH-P9-ONE-DELIVERY-6369ae1d-4b41-4d47-8463-24deacfec75c",
-      "operation_execution": "NOT_STARTED",
-      "execution_window": "APPROVED_2026-09-26T13:00:00Z_2026-09-26T14:30:00Z_LATEST_MUTATION_START_EXCLUSIVE_13:20:00Z",
+      "operation_id": null,
+      "operation_execution": "NOT_CREATED_NEW_LINEAGE",
+      "execution_window": "NONE_NEW_LINEAGE_NOT_CREATED",
       "owner_evidence_only_exception_sha256": "f523cc2a7df00459fab545e1a4d8e3a82733555efe09acf93fa819fbf247e4e6",
       "video_factory_workstream_opened": false,
       "fresh_evidence_pointers": {
@@ -454,7 +454,7 @@
     "owner_consent_received_sha256": "28f85014ceaa1ad7cb4b7a75474d6b40fe3915256648175e01a78841b5875d13",
     "next_safe_action": "WAIT_FOR_APPROVED_WINDOW; FRESH_JIT_VALIDATE; EXECUTE_ONCE_ONLY_IF_ALL_BINDINGS_PASS; DO_NOT_PRESTAGE"
   },
-  "latest_milestone": {
+  "canonical_reconciliation_milestone_at_a417b7c": {
     "task": "AH-P9-CANONICAL-LINEAGE-RECONCILIATION-AND-RESUME",
     "verdict": "BLOCKED_GATE_0",
     "old_static_head": "e5d3510d0b7e38a18990cdd27a56cc2491e0b295",
@@ -519,7 +519,58 @@
     "phase10": "NO_GO",
     "next_safe_action": "RESTORE_EXACT_SSH_TRUST_AND_IDENTITY_BINDINGS_AND_R5_INPUTS; RERUN_GATE_0_FROM_START; PREPARE_FRESH_R5_ONLY_AFTER_PASS"
   },
+  "latest_milestone": {
+    "task": "AH-P9-ONE-DELIVERY-NEW-LINEAGE-OFFLINE-CONTRACT",
+    "verdict": "OFFLINE_CONTRACT_IMPLEMENTED_REVIEW_REQUIRED",
+    "source_baseline": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
+    "working_branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
+    "remote_recheck": {
+      "fix_agent_hub_head": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
+      "main_head": "43a1cca354d12893ee33b6e43cd9117794f78e04"
+    },
+    "latest_operational_evidence": {
+      "source": "2026-09-30 local recovery handoff",
+      "gate0": "PASS_2026-09-30T14:07:43Z",
+      "production_readonly": "PASS_PINNED_SSH_2026-09-30T14:09:02Z",
+      "protected_services": 18,
+      "candidate_protected_sha256": "ada185efdf1398bd4053d1301882b18f1bdf439f2f649b6396900296a73caac6",
+      "r4_runner": "MISSING_UNRECOVERABLE_IN_ACCESSIBLE_PROVENANCE",
+      "r4_manifest_rollback_preflight": "MISSING_OR_UNKNOWN",
+      "r5": "HOLD_NOT_CREATED_NOT_CLAIMED_NOT_EXECUTED"
+    },
+    "replacement": {
+      "lineage": "AH_P9_ONE_DELIVERY_NEW_LINEAGE_V1",
+      "historical_equivalence": false,
+      "r5_created": false,
+      "production_capable": false,
+      "execution_approval": "NOT_GRANTED",
+      "real_transport": "ABSENT_BY_DESIGN_OFFLINE_MILESTONE",
+      "post_outcome_ambiguous": "HOLD_OWNER_REVIEW",
+      "automatic_retry": false,
+      "automatic_rollback_after_post": false,
+      "video_factory_db0_counter_evidence": "OUT_OF_SCOPE_NOT_COLLECTED",
+      "production_qualification": "BLOCKED_EXTERNAL_READONLY_EVIDENCE_REQUIRED",
+      "proposal": "docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_PROPOSAL_20261001.md"
+    },
+    "tests": {
+      "new_lineage_focused": "10/10 PASS",
+      "current_store_integration": "1/1 PASS",
+      "phase9_ops": "211 PASS / 1 WINDOWS SKIP",
+      "agent_hub_regression": "510/510 PASS",
+      "business_evaluator": "20/20 PASS",
+      "new_exact_head_ci": "REQUIRED_NOT_RUN_UNPUBLISHED_SOURCE"
+    },
+    "owner_decision_required": "ADOPT_NEW_LINEAGE_DESIGN_OR_REQUIRE_EXACT_NONSECRET_R4_ARCHIVE_BUILDER",
+    "production_writes": 0,
+    "claim_stage_image_load_deploy_delivery": 0,
+    "provider_customer_video_factory_actions": 0,
+    "actual_cost": 0,
+    "remaining_phase9_outcomes": 4,
+    "phase10": "NO_GO",
+    "next_safe_action": "REVIEW_OFFLINE_CONTRACT_AND_OBTAIN_ONE_DESIGN_CHOICE; IF_ADOPTED_IMPLEMENT_MISSING_NEW_LINEAGE_PRODUCTION_REVIEW_COMPONENTS_WITHOUT_EXECUTION"
+  },
   "evidence_pointers": [
+    "docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_PROPOSAL_20261001.md",
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-gate-20260910-d55d6333",
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-owner-approval-20260911-d55d6333",
     "outputs/agent-hub-phase9-limited-pilot-fresh-v2-owner-approval-20260911-d55d6333/LIMITED_PHASE9_PILOT_ABORTED_20260911.json",

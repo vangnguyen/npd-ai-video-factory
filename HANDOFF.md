@@ -683,3 +683,51 @@ NEXT_SAFE_ACTION:
   `known_hosts`, fingerprint/profile hashes and R5 package inputs; rerun Gate 0
   from the start. Only after Gate 0 PASS may a brand-new R5 be prepared and a
   fresh Owner gate requested. Phase 10 remains `NO-GO`.
+
+## Agent Hub takeover and new-lineage offline contract - 2026-10-01
+
+- Remote source was rechecked read-only: branch
+  `fix/agent-hub-p9-preflight-capture-20260912` remains at canonical
+  `a417b7caea23f4e886ba3b4100e18d8adec1c679`; `main` remains at `43a1cca3`.
+- The latest accessible operational handoff from 2026-09-30 supersedes the
+  older Gate-0 stop above: local Gate 0 passed at 21:07 ICT and pinned-SSH
+  production read-only qualification passed at 21:09 ICT. Protected 18,
+  candidate baseline `ada185efdf1398bd4053d1301882b18f1bdf439f2f649b6396900296a73caac6`,
+  healthy `phase9_creation` runtime, scheduler false and zero production writes
+  were preserved.
+- The same recovery handoff exhaustively classified the historical R4 runner
+  and helper as `MISSING_UNRECOVERABLE` in accessible provenance and the exact
+  manifest, rollback and preflight/JIT sources as missing or unknown. Generic
+  RCA05/RCA06 pilot tooling is not an equivalent one-delivery runner. R4 is
+  terminal/non-reusable; R5 remains `HOLD / NOT_CREATED / NOT_CLAIMED /
+  NOT_EXECUTED`.
+- A source-only replacement proposal is now implemented under the distinct
+  lineage `AH_P9_ONE_DELIVERY_NEW_LINEAGE_V1`; it is not historical recovery,
+  R5, a production package or execution authority. See
+  `docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_PROPOSAL_20261001.md`.
+- The offline verifier requires exact inventory/hash/path/JSON bindings,
+  rejects R4/RCA identities and missing preflight/recovery/image bindings,
+  preserves raw-HTTP versus semantic digest domains, enforces one attempt with
+  no retry, writes a durable pre-POST intent, and sends uncertain post-POST
+  outcomes to `HOLD_OWNER_REVIEW` without automatic rollback. Its readback
+  contract is bound to the existing delivery fence, atomic store, signed
+  receipt, source-event/touchpoint indexes, two Campaign audit records and
+  capacity guard.
+- Video Factory was not accessed. Historical DB0 counter evidence is recorded
+  as `OUT_OF_SCOPE_NOT_COLLECTED`, so production qualification remains blocked
+  pending reviewed resolution; no dependency is silently removed.
+- Local verification on the changed source: focused new-lineage 10/10 PASS;
+  current-store integration 1/1 PASS; Phase-9 ops 211 PASS / 1 Windows skip;
+  Agent Hub 510/510 PASS; evaluator 20/20 PASS. New exact-head CI is required
+  after review/publication; historical exact-head CI is not substituted.
+- Production access/writes, claim, stage, image load, deployment, delivery,
+  provider/customer action, Video Factory action and actual cost: all zero.
+- OWNER DECISION REQUIRED before expanding the replacement: either adopt the
+  new lineage and its `POST_OUTCOME_AMBIGUOUS_HOLD`/no-auto-rollback semantics
+  for continued source-only implementation, or require the exact non-secret R4
+  archive/builder. Adoption is not production execution approval.
+- NEXT_SAFE_ACTION: review this offline contract and obtain that single design
+  choice. If adopted, implement and test the missing new-lineage production
+  transport/JIT/claim/stage/recovery/terminal-verifier/builder components, then
+  reseal and request a fresh bounded Owner execution gate. Phase 9 still has
+  four acceptance outcomes remaining; Phase 10 remains `NO-GO`.
