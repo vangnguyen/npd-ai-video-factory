@@ -1,8 +1,8 @@
 # Agent Hub Phase-9 new-lineage read-only evidence plan
 
-Date: 2026-10-01  
-Lineage: `AH_P9_ONE_DELIVERY_NEW_LINEAGE_V1`  
-Disposition: `SOURCE_CONTRACT_PASS_LIVE_EVIDENCE_NOT_COLLECTED`  
+Date: 2026-10-01
+Lineage: `AH_P9_ONE_DELIVERY_NEW_LINEAGE_V1`
+Disposition: `SOURCE_CONTRACT_PASS_LIVE_EVIDENCE_NOT_COLLECTED`
 Production execution authority: `NOT_GRANTED`
 
 ## Current status
