@@ -1,0 +1,112 @@
+{
+  "schema": "npd.agent-hub.local-test-receipt.v1",
+  "generated_at_utc": "2026-10-01T09:38:00.4099552Z",
+  "scope": "AGENT_HUB_NEW_LINEAGE_FOUR_COMPONENT_OFFLINE_RUNTIME_PATH",
+  "tested_source_commit": "2faa60c456ed666e423fafc300201fefd2bdace8",
+  "source_parent": "8b5a077ebe482e7f400eaab1a452001d2218e72a",
+  "canonical_source_baseline": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
+  "branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
+  "review_prerequisite": {
+    "readonly_contract_source_commit": "e2339d4debb6e6736beb8b94a23cf01931055a96",
+    "prior_high_findings": 2,
+    "independent_review_disposition": "BOTH_CLOSED",
+    "scope_binding": "CLOSED",
+    "capture_timeline": "CLOSED"
+  },
+  "milestone": {
+    "lineage": "AH_P9_ONE_DELIVERY_NEW_LINEAGE_V1",
+    "transport_profile": "EXACT_SOURCE_ONLY_PROFILE_PINNED_TARGET_STRICT_SSH_POLICY_AND_DISTINCT_REMOTE_PATHS",
+    "strict_argv": "DETERMINISTIC_TEMPLATE_BOUND_TO_REQUEST_PROFILE_COLLECTOR_AND_TARGET_HASHES",
+    "collector": "RENDERED_BYTES_ONLY_NOT_EXECUTED_ARCHIVE_AND_CUSTODY_HASHES_REGULAR_FILES_PROTECTED18_DB0_EVAL_RO",
+    "collector_request_binding": "REQUEST_CONTAINS_EXACT_RENDERED_COLLECTOR_SHA256_NO_CIRCULAR_HASH",
+    "state_machine": "FILE_BACKED_OFFLINE_PREFLIGHT_CLAIMED_STAGED_PRE_POST_INTENT_POST_OBSERVED_TERMINAL",
+    "attempt_model": "MAX_ONE_SIMULATED_POST_ATTEMPT_REAL_POST_ATTEMPTS_ZERO_NO_RETRY",
+    "recovery": "AUTOMATIC_LOCAL_SANDBOX_ONLY_BEFORE_PRE_POST_INTENT_POST_BOUNDARY_ALWAYS_HOLD_OWNER_REVIEW",
+    "terminal_verifier": "SOURCE_REQUEST_ARCHIVE_AND_IMMUTABLE_STATE_CHAIN_BOUND_WITH_STATE_SEMANTICS_AND_ARTIFACT_DIGEST_CHECKS",
+    "package_builder": "EXACT_ALLOWLIST_SOURCE_AND_RENDERED_BYTES_PREPUBLISH_AND_POSTPUBLISH_VERIFIED_ATOMIC_NO_OVERWRITE",
+    "offline_rehearsal": "COMPLETE_SEALED_PACKAGE_TO_TERMINAL_PATH_WITH_FAULT_MODEL_NO_COMMAND_EXECUTION",
+    "fault_modes": [
+      "NONE",
+      "AFTER_CLAIM",
+      "AFTER_STAGE",
+      "AFTER_PRE_POST_INTENT",
+      "POST_OUTCOME_AMBIGUOUS",
+      "READBACK_INVALID"
+    ],
+    "atomic_claim_race": "ONE_WINNER_OTHER_CONTENDER_FAILS_CLOSED",
+    "historical_equivalence": false,
+    "r5_created": false,
+    "production_capable": false,
+    "read_scope_authority": "NOT_GRANTED_STRUCTURAL_FIXTURE_ONLY",
+    "execution_approval": "NOT_GRANTED"
+  },
+  "commands": [
+    {
+      "name": "focused_new_lineage_runtime_path",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest -q scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage.py scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage_builder_rehearsal.py scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage_readonly_evidence.py scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage_runtime_path.py",
+      "exit_code": 0,
+      "output_summary_utf8": "53 passed in 10.41s\n"
+    },
+    {
+      "name": "phase9_ops_exact_source",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest -q scripts/ops/agent_hub_phase9/tests",
+      "exit_code": 0,
+      "output_summary_utf8": "253 passed, 1 skipped in 38.44s\n",
+      "skip": "Existing Windows-specific skip; no failure."
+    },
+    {
+      "name": "agent_hub_regression_exact_source",
+      "working_directory": "services/agent_hub",
+      "command": "<interpreter> -m pytest -q",
+      "exit_code": 0,
+      "output_summary_utf8": "510 passed, 1 warning in 6.49s\n",
+      "warning": "Existing StarletteDeprecationWarning from fastapi.testclient; no failure."
+    },
+    {
+      "name": "business_evaluator_exact_source",
+      "working_directory": "services/agent_hub",
+      "command": "<interpreter> -m npd_agent_hub.evals --minimum-pass-rate 1.0",
+      "exit_code": 0,
+      "output_summary_utf8": "{\"passed\":20,\"total\":20,\"pass_rate\":1.0}\n"
+    },
+    {
+      "name": "source_compile",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m py_compile <six changed Python files>",
+      "exit_code": 0,
+      "output_summary_utf8": "PY_COMPILE_PASS\n"
+    }
+  ],
+  "supplemental_secret_pattern_scan": {
+    "scope": "six source/test files in tested_source_commit",
+    "result": "PASS_NO_HIGH_CONFIDENCE_PATTERNS",
+    "authoritative_third_party_scan": false
+  },
+  "network_or_external_effects": {
+    "network": "NOT_USED",
+    "ssh": "NOT_USED",
+    "generated_collector_or_argv_executed": false,
+    "production_access": "NOT_USED",
+    "production_writes": 0,
+    "provider_calls": 0,
+    "video_factory_actions": 0,
+    "actual_cost": 0
+  },
+  "remaining_production_dependencies": [
+    "INDEPENDENT_EXACT_SOURCE_REVIEW_OF_2FAA60C",
+    "PUBLISHED_EXACT_HEAD_CI",
+    "TRUSTED_HUMAN_READ_SCOPE_VERIFIER",
+    "FRESH_PINNED_TRANSPORT_AND_CAPTURE_DRIVER",
+    "REAL_CANDIDATE_AND_ROLLBACK_OCI_PLUS_CUSTODY_BYTES",
+    "FRESH_PROTECTED18_AND_AGENT_HUB_TARGET_RECEIPT",
+    "AUTHORIZED_FOUR_COUNTER_VIDEO_FACTORY_DB0_EVAL_RO_RECEIPT",
+    "REVIEWED_PRODUCTION_CLAIM_STAGE_LOAD_DELIVERY_AND_RECOVERY_EXECUTORS",
+    "SEPARATE_OWNER_EXECUTION_APPROVAL_AND_FRESH_WINDOW"
+  ],
+  "production_qualification": "HOLD_SOURCE_REVIEW_CI_TRUSTED_READ_SCOPE_FRESH_EVIDENCE_REAL_EXECUTORS_AND_SEPARATE_EXECUTION_GATE_REQUIRED",
+  "ci": "NOT_RUN_UNPUBLISHED_LOCAL_SOURCE",
+  "authority": "SOURCE_ONLY_OFFLINE_REVIEW_EVIDENCE_NOT_READ_ACCESS_OR_PRODUCTION_EXECUTION_APPROVAL",
+  "next_safe_action": "INDEPENDENTLY_REVIEW_EXACT_SOURCE_COMMIT_2FAA60C; IF_ACCEPTED_PUBLISH_FOR_EXACT_HEAD_CI; DO_NOT_COLLECT_JIT_EVIDENCE_UNTIL_TRUSTED_SCOPE_AND_REAL_ARTIFACTS_EXIST; KEEP_EXECUTION_GATE_SEPARATE"
+}

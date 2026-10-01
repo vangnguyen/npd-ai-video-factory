@@ -1,0 +1,108 @@
+{
+  "schema": "npd.agent-hub.local-test-receipt.v1",
+  "generated_at_utc": "2026-10-01T10:10:32.2431776Z",
+  "scope": "AGENT_HUB_NEW_LINEAGE_RUNTIME_PATH_TWO_HIGH_REMEDIATION",
+  "tested_source_commit": "09beb25e1d35a24a87c1671cca00b6218652c890",
+  "source_parent": "476214d93abb38e040176e49401d490323a6a037",
+  "reviewed_pre_fix_source_commit": "2faa60c456ed666e423fafc300201fefd2bdace8",
+  "canonical_source_baseline": "a417b7caea23f4e886ba3b4100e18d8adec1c679",
+  "branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
+  "review_disposition": {
+    "material_findings": 2,
+    "severity": "HIGH",
+    "windows_junction_reparse_escape": "REMEDIATED_LOCALLY_PENDING_INDEPENDENT_EXACT_SOURCE_REVIEW",
+    "collector_unobserved_safety_facts": "REMEDIATED_LOCALLY_PENDING_INDEPENDENT_EXACT_SOURCE_REVIEW",
+    "publish_gate": "BLOCKED_PENDING_INDEPENDENT_REVIEW_AND_EXACT_HEAD_CI"
+  },
+  "remediation": {
+    "runtime_paths": "EVERY_EXISTING_COMPONENT_LSTAT_REPARSE_DENIAL_EXCLUSIVE_OWNED_DIRECTORY_CREATION_DIRECTORY_IDENTITY_REVALIDATION_TERMINAL_AND_RECOVERY_ARTIFACT_VALIDATION",
+    "windows_negative_tests": "REAL_TEMPORARY_JUNCTIONS_ROOT_OPERATION_RECOVERY_NO_PLATFORM_SKIP_NO_OUTSIDE_WRITES",
+    "collector_safety": "ACTUAL_DOCKER_INSPECT_WHITELISTED_LABELS_AND_ENV_REQUIRED_UNSAFE_OR_MISSING_FAIL_CLOSED",
+    "collector_binding": "OBSERVED_COMPOSE_RUNTIME_SCHEDULER_EXTERNAL_WRITES_AND_SOURCE_DESCRIPTORS_BOUND_IN_EVIDENCE_AND_TARGET_SIGNATURE",
+    "mock_inspect_coverage": "MODULE_HELPER_AND_RENDERED_COLLECTOR_PARSER_SAFE_UNSAFE_MODE_SCHEDULER_TRUE_WRONG_COMPOSE_EXTERNAL_WRITES_TRUE_MISSING_CONFIG",
+    "unrelated_environment_emitted": false,
+    "generated_collector_executed": false,
+    "historical_equivalence": false,
+    "r5_created": false,
+    "production_capable": false,
+    "execution_approval": "NOT_GRANTED"
+  },
+  "commands": [
+    {
+      "name": "focused_new_lineage_runtime_path",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest -q scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage.py scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage_builder_rehearsal.py scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage_readonly_evidence.py scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage_runtime_path.py",
+      "exit_code": 0,
+      "output_summary_utf8": "56 passed in 8.84s\n"
+    },
+    {
+      "name": "phase9_ops_exact_source_partition_a",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest -q <first exact partition of scripts/ops/agent_hub_phase9/tests>",
+      "exit_code": 0,
+      "output_summary_utf8": "153 passed in 26.09s\n"
+    },
+    {
+      "name": "phase9_ops_exact_source_partition_b",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest -q <second exact partition of scripts/ops/agent_hub_phase9/tests>",
+      "exit_code": 0,
+      "output_summary_utf8": "103 passed, 1 skipped in 12.36s\n",
+      "skip": "Existing Windows-specific skip unrelated to the new junction tests; the real junction negative tests ran and passed."
+    },
+    {
+      "name": "agent_hub_regression_exact_source",
+      "working_directory": "services/agent_hub",
+      "command": "<interpreter> -m pytest -q",
+      "exit_code": 0,
+      "output_summary_utf8": "510 passed, 1 warning in 7.36s\n",
+      "warning": "Existing StarletteDeprecationWarning from fastapi.testclient; no failure."
+    },
+    {
+      "name": "business_evaluator_exact_source",
+      "working_directory": "services/agent_hub",
+      "command": "<interpreter> -m npd_agent_hub.evals --minimum-pass-rate 1.0",
+      "exit_code": 0,
+      "output_summary_utf8": "{\"passed\":20,\"total\":20,\"pass_rate\":1.0}\n"
+    },
+    {
+      "name": "source_compile",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m py_compile <five changed Python files>",
+      "exit_code": 0,
+      "output_summary_utf8": "PY_COMPILE_PASS\n"
+    }
+  ],
+  "supplemental_secret_pattern_scan": {
+    "scope": "five source/test files in tested source commit",
+    "result": "PASS_NO_HIGH_CONFIDENCE_PATTERNS",
+    "authoritative_third_party_scan": false
+  },
+  "network_or_external_effects": {
+    "network": "NOT_USED",
+    "ssh": "NOT_USED",
+    "generated_collector_or_argv_executed": false,
+    "production_access": "NOT_USED",
+    "production_writes": 0,
+    "provider_calls": 0,
+    "video_factory_actions": 0,
+    "actual_cost": 0
+  },
+  "remaining_production_dependencies": [
+    "INDEPENDENT_EXACT_SOURCE_REVIEW_OF_09BEB25_AND_CLOSURE_OF_BOTH_HIGH_FINDINGS",
+    "PUBLISHED_EXACT_HEAD_CI",
+    "TRUSTED_HUMAN_READ_SCOPE_VERIFIER",
+    "FRESH_PINNED_TRANSPORT_AND_CAPTURE_DRIVER",
+    "REAL_CANDIDATE_AND_ROLLBACK_OCI_PLUS_CUSTODY_BYTES",
+    "FRESH_PROTECTED18_AND_AGENT_HUB_TARGET_RECEIPT",
+    "AUTHORIZED_FOUR_COUNTER_VIDEO_FACTORY_DB0_EVAL_RO_RECEIPT",
+    "REVIEWED_PRODUCTION_CLAIM_STAGE_LOAD_DELIVERY_AND_RECOVERY_EXECUTORS",
+    "SEPARATE_OWNER_EXECUTION_APPROVAL_AND_FRESH_WINDOW"
+  ],
+  "production_qualification": "HOLD_INDEPENDENT_SOURCE_REVIEW_CI_TRUSTED_READ_SCOPE_FRESH_EVIDENCE_REAL_EXECUTORS_AND_SEPARATE_EXECUTION_GATE_REQUIRED",
+  "r5": "HOLD_NOT_CREATED_NOT_CLAIMED_NOT_EXECUTED",
+  "phase10": "NO_GO",
+  "ci": "NOT_RUN_UNPUBLISHED_LOCAL_SOURCE",
+  "authority": "SOURCE_ONLY_OFFLINE_REMEDIATION_EVIDENCE_NOT_READ_ACCESS_OR_PRODUCTION_EXECUTION_APPROVAL",
+  "next_safe_action": "INDEPENDENTLY_REVIEW_EXACT_SOURCE_COMMIT_09BEB25; IF BOTH HIGH FINDINGS CLOSE PUBLISH THAT EXACT COMMIT FOR EXACT_HEAD_CI; KEEP_JIT_R5_AND_EXECUTION_GATE_ON_HOLD"
+}

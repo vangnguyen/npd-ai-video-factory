@@ -1,0 +1,90 @@
+{
+  "schema": "npd.agent-hub.local-test-receipt.v1",
+  "generated_at_utc": "2026-10-01T08:57:50.4991936Z",
+  "scope": "AGENT_HUB_NEW_LINEAGE_READONLY_EVIDENCE_V2_HIGH_REMEDIATION",
+  "tested_source_commit": "e2339d4debb6e6736beb8b94a23cf01931055a96",
+  "source_baseline": "74049efe844beca6827aa3748737e9ce0304d6d0",
+  "branch": "codex/agent-hub-p9-one-delivery-nl1-20261001",
+  "independent_review_of_baseline": {
+    "reviewed_source_commit": "54f050903e2b92acb570407be7849a28f2168739",
+    "material_findings": "2 HIGH",
+    "reproduction": "BOTH_REPRODUCED_BEFORE_FIX_WHILE_40_FOCUSED_TESTS_PASSED",
+    "scope_binding_finding": "FIXED_IN_TESTED_SOURCE_COMMIT_PENDING_INDEPENDENT_REVIEW",
+    "capture_timeline_finding": "FIXED_IN_TESTED_SOURCE_COMMIT_PENDING_INDEPENDENT_REVIEW",
+    "note": "This receipt reports local remediation validation only; it is not an independent review of the tested source commit."
+  },
+  "milestone": {
+    "request_contract": "NONCIRCULAR_EXACT_INTENT_BINDS_OPERATION_PAYLOAD_TRANSPORT_PROFILE_COLLECTOR_BYTES_PINNED_TARGET_IMAGES_AND_POLICY",
+    "scope_fixture": "STRUCTURAL_FIXTURE_ONLY_BINDS_EXACT_INTENT_AND_REPEATED_TRANSPORT_PROFILE_COLLECTOR_BYTES_TARGET_HASHES",
+    "owner_scope_authority": "NOT_GRANTED_TRUSTED_EXTERNAL_HUMAN_APPROVAL_SOURCE_REQUIRED",
+    "real_approval_generation": "NOT_IMPLEMENTED_AND_NOT_CLAIMED",
+    "capture": "RAW_STDOUT_STDERR_LENGTH_HASH_EXIT_UUID_CANONICAL_PAYLOAD_INTENT_TRANSPORT_PROFILE_COLLECTOR_BYTES_AND_PINNED_TARGET_BOUND",
+    "freshness_seconds": 600,
+    "clock_skew_seconds": 0,
+    "timeline": "SCOPE_START_LE_STARTED_LE_OBSERVED_LE_COMPLETED_LE_SCOPE_END_AND_COMPLETED_LE_NOW",
+    "protected_services": 18,
+    "db0_query": "SERVER_ENFORCED_EVAL_RO_NO_EVAL_FALLBACK",
+    "historical_equivalence": false,
+    "r5_created": false,
+    "production_capable": false,
+    "execution_approval": "NOT_GRANTED",
+    "transport_or_network_surface": "ABSENT"
+  },
+  "commands": [
+    {
+      "name": "focused_new_lineage_across_ops_and_store_integration",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage.py scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage_builder_rehearsal.py scripts/ops/agent_hub_phase9/tests/test_one_delivery_new_lineage_readonly_evidence.py services/agent_hub/tests/test_phase9_one_delivery_new_lineage_integration.py -q",
+      "exit_code": 0,
+      "output_summary_utf8": "45 passed, 1 warning in 4.03s\n",
+      "output_summary_sha256": "b82974738eb5c395c454ee6d5dd7ed660bab50f7b258b3828ea49415c91a9c77"
+    },
+    {
+      "name": "phase9_ops",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest scripts/ops/agent_hub_phase9/tests -q",
+      "exit_code": 0,
+      "output_summary_utf8": "244 passed, 1 skipped in 30.18s\n",
+      "output_summary_sha256": "0e6f0c503aee631f5a9dac49ff82d48cb10471596de33621412f006073e0141b"
+    },
+    {
+      "name": "agent_hub_regression",
+      "working_directory": "repository root",
+      "command": "<interpreter> -m pytest services/agent_hub/tests -q",
+      "exit_code": 0,
+      "output_summary_utf8": "510 passed, 1 warning in 6.97s\n",
+      "output_summary_sha256": "52d9e50f084dad0c849db24d4a523692fb22fd4be066caac3bd4d41487b2339f",
+      "warning": "Existing StarletteDeprecationWarning from fastapi.testclient; no failure."
+    },
+    {
+      "name": "business_evaluator",
+      "working_directory": "services/agent_hub",
+      "command": "<interpreter> -m npd_agent_hub.evals --minimum-pass-rate 1.0",
+      "exit_code": 0,
+      "output_summary_utf8": "{\"passed\":20,\"total\":20,\"pass_rate\":1.0}\n",
+      "output_summary_sha256": "593f1e23f5d1d489d529da17ee7abea20ef3ca71667f410bf687aed4c9c677fb"
+    }
+  ],
+  "network_or_external_effects": {
+    "network": "NOT_USED",
+    "ssh": "NOT_USED",
+    "production_access": "NOT_USED",
+    "production_writes": 0,
+    "provider_calls": 0,
+    "video_factory_actions": 0,
+    "actual_cost": 0
+  },
+  "current_evidence_status": {
+    "protected_services": "DATED_REPORTED_ANCHOR_ONLY_FRESH_RECEIPT_REQUIRED",
+    "candidate_oci_and_custody": "ABSENT_FROM_CURRENT_WORKTREE_OTHER_LOCAL_LOCATIONS_UNRESOLVED",
+    "rollback_oci_and_custody": "ABSENT_FROM_CURRENT_WORKTREE_OTHER_LOCAL_LOCATIONS_UNRESOLVED_OR_UNBOUND_TO_NEW_LINEAGE",
+    "canonical_nonsecret_historical_paths": "NOT_PRESENT_AT_EXACT_RECORDED_PATHS_NO_WHOLE_MACHINE_CLAIM",
+    "secret_identity_files": "NOT_READ",
+    "db0_counters": "OUT_OF_SCOPE_NOT_COLLECTED",
+    "transport_profile": "NOT_BOUND_TO_NEW_LINEAGE",
+    "live_jit": "NOT_RUN"
+  },
+  "production_qualification": "HOLD_INDEPENDENT_REVIEW_TRUSTED_HUMAN_SCOPE_SOURCE_FRESH_READONLY_EVIDENCE_AND_SEPARATE_EXECUTION_GATE_REQUIRED",
+  "ci": "NOT_RUN_UNPUBLISHED_LOCAL_SOURCE",
+  "authority": "SOURCE_ONLY_DESIGN_ADOPTION_NOT_PRODUCTION_OR_READONLY_ACCESS_APPROVAL"
+}

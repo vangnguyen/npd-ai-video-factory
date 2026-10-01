@@ -674,8 +674,10 @@ NEXT_SAFE_ACTION:
   Network, pinned SSH, authenticated remote read and bounded-stability probes
   were not run. Verdict: `EXECUTION_ENVIRONMENT_GATE_0=FAIL_MISSING_SSH_MATERIAL`.
 - R5 was not created, package integrity is not applicable, and Owner approval
-  was not requested. The historical R4 package is absent on this host and is
-  not a substitute for a fresh R5.
+  was not requested. The historical R4 package was absent from the exact
+  canonical evidence paths checked in that Gate-0 workspace; this is not a
+  claim about every location on the host and is not a substitute for a fresh
+  R5.
 - Downstream readiness is preserved: SLA
   `READY_FOR_AUTHENTIC_DELIVERY_RECEIPT`, UAT `READY_FOR_REAL_SLA_RESULT`,
   acceptance dossier `READY_FOR_FINAL_EVIDENCE`, failure contracts `READY`.
@@ -683,3 +685,227 @@ NEXT_SAFE_ACTION:
   `known_hosts`, fingerprint/profile hashes and R5 package inputs; rerun Gate 0
   from the start. Only after Gate 0 PASS may a brand-new R5 be prepared and a
   fresh Owner gate requested. Phase 10 remains `NO-GO`.
+
+## Agent Hub takeover and new-lineage offline contract - 2026-10-01
+
+- Remote source was rechecked read-only: branch
+  `fix/agent-hub-p9-preflight-capture-20260912` remains at canonical
+  `a417b7caea23f4e886ba3b4100e18d8adec1c679`; `main` remains at `43a1cca3`.
+- The latest accessible operational handoff from 2026-09-30 supersedes the
+  older Gate-0 stop above: local Gate 0 passed at 21:07 ICT and pinned-SSH
+  production read-only qualification passed at 21:09 ICT. Protected 18,
+  candidate baseline `ada185efdf1398bd4053d1301882b18f1bdf439f2f649b6396900296a73caac6`,
+  healthy `phase9_creation` runtime, scheduler false and zero production writes
+  were preserved.
+- The same recovery handoff exhaustively classified the historical R4 runner
+  and helper as `MISSING_UNRECOVERABLE` in accessible provenance and the exact
+  manifest, rollback and preflight/JIT sources as missing or unknown. Generic
+  RCA05/RCA06 pilot tooling is not an equivalent one-delivery runner. R4 is
+  terminal/non-reusable; R5 remains `HOLD / NOT_CREATED / NOT_CLAIMED /
+  NOT_EXECUTED`.
+- A source-only replacement proposal is now implemented under the distinct
+  lineage `AH_P9_ONE_DELIVERY_NEW_LINEAGE_V1`; it is not historical recovery,
+  R5, a production package or execution authority. See
+  `docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_PROPOSAL_20261001.md`.
+- The offline verifier requires exact inventory/hash/path/JSON bindings,
+  rejects R4/RCA identities and missing preflight/recovery/image bindings,
+  preserves raw-HTTP versus semantic digest domains, enforces one attempt with
+  no retry, creates an operation-bound atomic local fixture claim/pre-POST
+  intent, and sends every uncertain post-observation result to
+  `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW` without automatic rollback. This
+  local journal is offline evidence, not a production-durability claim. There
+  is no injected transport/callback and the module performs no POST. The HOLD
+  boundary now starts at post-observation entry: observation-claim write or
+  collision, crash re-entry, package reverify and evidence-store re-resolution
+  failures all preserve the original cause and durably journal HOLD whenever
+  the operation-bound local store remains writable.
+- Cohort/binding/envelope/timestamp/receipt checks now reproduce the relevant
+  strict field, type, pattern and timezone invariants of the current models.
+  Receipt acceptance requires both a bound
+  canonical verification result and an independently recomputed HMAC; a true
+  boolean alone cannot pass. Readback counts must be exact and uncapped, with
+  tested 1,998/1,999/2,000 audit-cap boundaries. The current-store integration
+  no longer derives counts from the 1,000-row list view.
+- Package privacy flags are structural assertions only, not independent proof
+  of secret absence. A separate bounded changed-file high-confidence pattern
+  scan found no matches; it is not represented as a third-party secret scan.
+- Video Factory was not accessed. Historical DB0 counter evidence is recorded
+  as `OUT_OF_SCOPE_NOT_COLLECTED`, so production qualification remains blocked
+  pending reviewed resolution; no dependency is silently removed.
+- Owner design adoption is now recorded from the direct 2026-10-01T07:48:36Z
+  reply `Xác nhận đồng ý` to the explicit new-lineage proposal. It authorizes
+  continued source-only implementation; it is not R5 creation, production
+  execution approval, a window or permission to access Video Factory.
+- The first adopted source milestone adds a deterministic exact-allowlist
+  package builder, a closed in-process end-to-end rehearsal and a terminal
+  PASS/HOLD verifier. The builder refuses overwrite, partial publication,
+  extra artifacts and historical identities. The rehearsal has no transport,
+  callback, network or subprocess surface; it records one synthetic observed
+  attempt, zero module POSTs, no retry and no automatic rollback. Ambiguity
+  terminates at `POST_OUTCOME_AMBIGUOUS_HOLD_OWNER_REVIEW`.
+- Review of the first read-only contract found two High issues: the scope did
+  not bind the exact request/transport/collector/pinned target, and the capture
+  timeline could begin before the scope or complete in the future. Both were
+  reproduced locally before remediation; the previously reported 40 focused
+  passes did not cover these cases.
+- The remediated v2 contract binds a complete non-circular authorization
+  intent plus repeated transport-profile/collector-bytes/pinned-target hashes
+  through the
+  scope, request, capture and raw evidence. A scope cannot be reused for a
+  same-operation substitution. Synthetic scope dictionaries are explicitly
+  `STRUCTURAL_FIXTURE_ONLY`; they cannot certify human Owner approval or mint
+  access authority. A genuine future read requires a separately trusted human-
+  approval verifier, which this module intentionally does not implement.
+- The entire timeline must satisfy
+  `scope_start <= started <= observed <= completed <= scope_end` and
+  `completed <= now`; all timestamps must be UTC, the whole capture must be at
+  most 600 seconds old, and future skew is zero.
+  It still requires protected 18, exact candidate and rollback OCI/custody
+  bindings, and exactly four server-enforced DB0 `EVAL_RO` aggregate counters.
+  It has no transport/process/network surface and cannot claim, stage, load,
+  deliver or grant execution. Exact dependency, legacy collector and minimum-
+  scope inventory:
+  `docs/AH_P9_ONE_DELIVERY_NEW_LINEAGE_READONLY_EVIDENCE_PLAN_20261001.md`.
+- Exact tested remediation source commit:
+  `e2339d4debb6e6736beb8b94a23cf01931055a96`. Local verification on that
+  commit: Phase-9 ops 244 PASS / 1 Windows skip; 45 focused new-lineage,
+  builder/rehearsal and current-store tests PASS; Agent Hub 510/510 PASS with
+  one existing
+  Starlette deprecation warning; evaluator 20/20 PASS. The pre-existing Agent
+  Hub Python 3.12.14 virtual environment was invoked by absolute path because
+  Python is not on PATH; no install, WSL or host/security configuration change
+  was made. Test receipt:
+  `docs/evidence/AH_P9_NEW_LINEAGE_READONLY_EVIDENCE_CONTRACT_TEST_RECEIPT_20261001.json`.
+  New exact-head CI is required after review/publication; historical exact-head
+  CI is not substituted.
+- Production access/writes, claim, stage, image load, deployment, delivery,
+  provider/customer action, Video Factory action and actual cost: all zero.
+- DESIGN CHOICE: `ADOPT_NEW_LINEAGE_SOURCE_ONLY` is satisfied. Production
+  authority remains `NOT_GRANTED`.
+- NEXT_SAFE_ACTION: independently review remediation commit `e2339d4`; keep the
+  agreed transport/collector, state-machine, recovery and production-review
+  builder scope on hold until both High findings are confirmed closed. Request
+  one short evidence-only read scope only after exact candidate/rollback OCI,
+  custody identities and a trusted human-approval verification path exist; do
+  not spend the 600-second JIT window early. Keep HOLD on missing evidence.
+  After source/package/exact-head CI review, request a new, separate bounded
+  Owner execution gate. Phase 9 still has four acceptance outcomes remaining;
+  Phase 10 remains `NO-GO`.
+
+## New-lineage four-component offline runtime path - 2026-10-01
+
+- Independent review confirmed both prior read-only High findings closed at
+  `e2339d4debb6e6736beb8b94a23cf01931055a96`, allowing the already adopted
+  source-only roadmap scope to continue.
+- Exact tested source commit
+  `2faa60c456ed666e423fafc300201fefd2bdace8` implements the four bounded
+  components: source-only transport profile/strict argv/rendered collector;
+  offline claim/stage state machine; pre-POST-only local recovery boundary; and
+  exact-allowlist production-review package builder.
+- Request, profile, target, rendered collector and argv hashes are bound. The
+  collector checks exact archive size/hash, exact custody-manifest hash and
+  regular files, protected 18, Agent Hub state and only the four DB0 `EVAL_RO`
+  aggregates. It is rendered and sealed but was not executed.
+- The offline runtime uses an exclusive durable claim, immutable state chain,
+  source/request/archive-bound terminal receipt and one-attempt model. All six
+  modeled outcomes were exercised. Recovery occurs only after local staging and
+  before `PRE_POST_INTENT`; after that boundary every uncertainty terminates at
+  `HOLD_OWNER_REVIEW`, with no retry and no automatic rollback.
+- The package is verified before and after atomic local publication and rejects
+  overwrite, extras, traversal, digest/source/render substitution and malformed
+  canonical inputs. Real transport and executor entry points remain explicitly
+  fail-closed.
+- Exact-source local results: 53 focused PASS; Phase-9 ops 253 PASS / 1 existing
+  Windows skip; Agent Hub 510/510 PASS with one existing Starlette deprecation
+  warning; evaluator 20/20 PASS; source compile PASS; bounded changed-file
+  high-confidence secret-pattern scan PASS. Receipt:
+  `docs/evidence/AH_P9_NEW_LINEAGE_RUNTIME_PATH_TEST_RECEIPT_20261001.json`.
+- This is not historical R4 recovery, R5, a production package or authority.
+  R5 remains `HOLD / NOT_CREATED / NOT_CLAIMED / NOT_EXECUTED`; production and
+  Video Factory writes, provider calls, generated-command execution and cost
+  remain zero. Phase 10 remains `NO-GO`.
+- Production qualification remains blocked on independent exact-source review,
+  published exact-head CI, a trusted human read-scope verifier, a fresh pinned
+  transport/capture driver, real candidate/rollback OCI and custody bytes,
+  current target/protected/DB0 evidence and reviewed production
+  claim/stage/load/delivery/recovery executors. A later execution gate must be
+  separate and explicit.
+- NEXT_SAFE_ACTION: independently review exact source commit `2faa60c`. If it
+  passes, publish it for exact-head CI. Do not collect short-lived JIT evidence
+  until the trusted scope and real artifact bytes exist; do not create R5 or an
+  execution window/approval from this source milestone.
+
+## New-lineage runtime-path High remediation - 2026-10-01
+
+- Independent review of `2faa60c456ed666e423fafc300201fefd2bdace8`
+  found two High issues, so its source-review gate did not pass: the offline
+  executor accepted Windows junction/reparse escapes under its sandbox, and the
+  rendered collector reported profile/hardcoded safety facts instead of facts
+  observed from the inspected target.
+- Exact tested remediation source commit
+  `09beb25e1d35a24a87c1671cca00b6218652c890` rejects symlinks, junctions and
+  reparse points across every existing sandbox path component, creates the
+  sandbox root/operation/state/recovery directories exclusively, pins directory
+  identity during writes, and revalidates all terminal and recovery artifacts.
+  Windows tests create real temporary junctions for root, operation and recovery
+  paths and prove fail-closed behavior with no outside writes; this coverage is
+  not hidden behind a platform skip.
+- The collector now reads only whitelisted safety fields from actual Docker
+  inspect `Config.Labels` and `Config.Env`, requires the observed project and
+  service to match the profile, requires actual `phase9_creation`, scheduler
+  disabled and explicit external-writes disabled, and binds those observed
+  values plus their sources into the evidence and target signature. Missing
+  config/metadata, unsafe mode, enabled scheduler/external writes, wrong Compose
+  identity and duplicate safety variables fail closed. Both the module helper
+  and the pure parser extracted from the rendered collector are tested against
+  mock inspect inputs; unrelated environment values are not emitted.
+- Exact-source local results: 56 focused PASS; Phase-9 ops 256 PASS / 1 existing
+  Windows-specific skip unrelated to the new junction tests; Agent Hub 510/510
+  PASS with one existing Starlette deprecation warning; evaluator 20/20 PASS;
+  source compile and bounded changed-file high-confidence secret-pattern scan
+  PASS. New receipt:
+  `docs/evidence/AH_P9_NEW_LINEAGE_RUNTIME_PATH_HIGH_FIX_TEST_RECEIPT_20261001.json`.
+  The earlier `2faa60c` receipt remains historical and is superseded for the
+  current review gate.
+- No collector, generated argv, SSH, network, production access, provider call,
+  claim, stage, image load, deploy, delivery or Video Factory action ran.
+  Production and Video Factory writes and actual cost remain zero. R5 remains
+  `HOLD / NOT_CREATED / NOT_CLAIMED / NOT_EXECUTED`; Phase 10 remains `NO-GO`.
+- The two new High findings are remediated locally but require independent
+  review of the exact fix commit before they may be marked closed. Exact-head CI
+  remains unavailable because the source is unpublished.
+- NEXT_SAFE_ACTION: independently review exact source commit `09beb25`. If and
+  only if both High findings are confirmed closed, publish that exact commit for
+  exact-head CI. Keep JIT evidence collection, R5 creation and any execution
+  window/approval on HOLD until all separate prerequisites and gates exist.
+
+## New-lineage published Windows path-alias remediation - 2026-10-01
+
+- Owner authorized one public topic branch, one draft PR and automatic PR CI;
+  no merge, manual dispatch, deployment or production action was authorized.
+  Draft PR `#68` targets canonical Agent Hub base
+  `fix/agent-hub-p9-preflight-capture-20260912@a417b7c`.
+- Initial published head `046c5f7363882805ba5c4ea4cfb8eeeca16dd213`
+  produced Phase-5 PASS, Agent Hub CI PASS, Phase-9 Ubuntu capture PASS and
+  Phase-9 Agent Hub PASS. Phase-9 Windows capture failed because the runner's
+  temporary directory used the valid 8.3 spelling `RUNNER~1` while
+  `Path.resolve()` returned the long spelling `runneradmin`; the prior textual
+  equality check incorrectly classified the same directory as an escape.
+- Exact source remediation commit
+  `3e2820a271b2f124f956953dccdf490254728aac` accepts differing lexical spellings
+  only when the already reparse-checked path and resolved path have identical
+  filesystem identity. Symlink, junction and reparse denial remains before this
+  comparison; the fix does not weaken containment or accept an outside target.
+  The evidence-directory assertion now also verifies same-file identity instead
+  of assuming Windows returns one spelling.
+- Local validation on the remediation: relevant new-lineage tests 33/33 PASS;
+  full Phase-9 ops 256 PASS / 1 existing unrelated skip; compile, diff check and
+  bounded secret-pattern scan PASS. Receipt:
+  `docs/evidence/AH_P9_NEW_LINEAGE_WINDOWS_PATH_ALIAS_CI_FIX_TEST_RECEIPT_20261001.json`.
+- Automatic exact-head PR CI must pass on the updated published head before this
+  portability issue is closed. Production/Video Factory writes, provider calls,
+  deployment, merge, manual dispatch and actual cost remain zero. R5 remains
+  `HOLD / NOT_CREATED / NOT_CLAIMED / NOT_EXECUTED`; Phase 10 remains `NO-GO`.
+- NEXT_SAFE_ACTION: publish the exact reviewed portability-fix head to draft PR
+  `#68`, allow only automatic PR CI, inspect any failure, and keep all production
+  and execution gates on HOLD.
